@@ -19,7 +19,7 @@ setup(
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
     url='https://kawin.org/',
-    version='0.0.5',
+    version='0.0.6',
     install_requires=[
         'matplotlib>=3.3',
         'numpy>=1.13',

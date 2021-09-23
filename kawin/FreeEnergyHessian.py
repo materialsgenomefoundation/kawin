@@ -134,7 +134,10 @@ def partialddx(chemical_potentials, composition_set):
 def dMudX(chemical_potentials, composition_set, refElement):
     '''
     Total derivative of chemical potential with respect to system composition
-    dmu/dx = partial dmu/dxA - partial dmu/dxR where R is reference
+    dmuA/dxB = (partial dmuA/dxB - partial dmuA/dxR) - (partial dmuR/dxB - partial dmuR/dxR) 
+    where R is reference
+
+    This more or less represents the curvature of the free energy surface with reference element R
 
     Parameters
     ----------
@@ -145,7 +148,7 @@ def dMudX(chemical_potentials, composition_set, refElement):
     
     Returns
     -------
-    Array of floats for each derivative
+    Array of floats for each derivative, (n-1 x n-1) matrix
     Derivatives will be in alphabetical order of elements
     '''
     ddx = totalddx(chemical_potentials, composition_set, refElement)
@@ -175,7 +178,7 @@ def partialdMudX(chemical_potentials, composition_set):
     
     Returns
     -------
-    Array of floats for each derivative
+    Array of floats for each derivative, (n x n) matrix
     Derivatives will be in alphabetical order of elements
     '''
     ddx = partialddx(chemical_potentials, composition_set)

@@ -133,7 +133,7 @@ def test_Mob_ternary():
     Checks value of ternary interdiffusivity calculation
     '''
     dnkj = NiCrAlTherm.getInterdiffusivity([0.08, 0.1], 1073.15)
-    assert_allclose(dnkj, [[8.81684280e-18, 6.18753651e-18], [2.41155166e-17, 5.26834399e-17]], rtol=1e-3)
+    assert_allclose(dnkj, [[8.239509e-18, 4.433713e-18], [2.339385e-17, 5.049116e-17]], rtol=1e-3)
 
 def test_Mob_ternary_output():
     '''
@@ -166,19 +166,28 @@ def test_Curv_ternary():
     '''
     n1, d1, g1, b1, ca1, cb1 = NiCrAlTherm.curvatureFactor([0.08, 0.1], 1073.15, training = True)
     n2, d2, g2, b2, ca2, cb2 = NiAlCrTherm.curvatureFactor([0.1, 0.08], 1073.15, training = True)
+    n3, d3, g3, b3, ca3, cb3 = AlCrNiTherm.curvatureFactor([0.08, 0.82], 1073.15, training = True)
 
     n2[[0,1]] = n2[[1,0]]
     g2[[0,1],:] = g2[[1,0],:]
     g2[:,[0,1]] = g2[:,[1,0]]
     ca2[[0,1]] = ca2[[1,0]]
     cb2[[0,1]] = cb2[[1,0]]
+    ca3change = [ca3[0], 1-ca3[0]-ca3[1]]
+    cb3change = [cb3[0], 1-cb3[0]-cb3[1]]
 
+    #Will only test d3, b3 and ca3,cb3
+    #n3 and g3 cannot be directly compared to n1 and g1
     assert_allclose(n1, n2, rtol=1e-3)
     assert_allclose(d1, d2, rtol=1e-3)
+    assert_allclose(d1, d3, rtol=1e-3)
     assert_allclose(g1, g2, rtol=1e-3)
     assert_allclose(b1, b2, rtol=1e-3)
+    assert_allclose(b1, b3, rtol=1e-3)
     assert_allclose(ca1, ca2, rtol=1e-3)
+    assert_allclose(ca1, ca3change, rtol=1e-3)
     assert_allclose(cb1, cb2, rtol=1e-3)
+    assert_allclose(cb1, cb3change, rtol=1e-3)
 
 def test_IC_ternary():
     '''
@@ -186,15 +195,24 @@ def test_IC_ternary():
     '''
     g1, ca1, cb1 = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
     g2, ca2, cb2 = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, training = True)
+    g3, ca3, cb3 = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, training = True)
 
+    #Change ca2,cb2 from [AL, CR] to [CR, AL]
     ca2[[0,1]] = ca2[[1,0]]
     cb2[[0,1]] = cb2[[1,0]]
 
-    assert_allclose(g1, -1.66241802e-09, rtol=1e-3)
+    #Change ca3,cb3 from [CR, NI] to [CR, AL]
+    ca3change = [ca3[0], 1-ca3[0]-ca3[1]]
+    cb3change = [cb3[0], 1-cb3[0]-cb3[1]]
+
+    assert_allclose(g1, -1.618827e-09, rtol=1e-3)
 
     assert_allclose(g1, g2, rtol=1e-3)
+    assert_allclose(g1, g3, rtol=1e-3)
     assert_allclose(ca1, ca2, rtol=1e-3)
+    assert_allclose(ca1, ca3change, rtol=1e-3)
     assert_allclose(cb1, cb2, rtol=1e-3)
+    assert_allclose(cb1, cb3change, rtol=1e-3)
 
 def test_IC_ternary_output():
     '''

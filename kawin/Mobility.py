@@ -144,6 +144,39 @@ def tracer_diffusivity(composition_set, mobility_callables = None, mobility_corr
 
     return R * T * np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
 
+def tracer_diffusivity_from_diff(composition_set, diffusivity_callables = None, diffusivity_correction = None):
+    '''
+    Tracer diffusivity from diffusivity callables
+
+    This will just return the Da as an array
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    diffusivity_callables : dict
+        Pre-computed diffusivity callables for each element
+    diffusivity_correction : dict (optional)
+        Factor to multiply diffusivity by for each given element (defaults to 1)
+
+    Returns
+    -------
+    Array of floats of diffusivity for each element (alphabetical order)
+    '''
+    if diffusivity_callables is None:
+        raise ValueError('diffusivity_callables is required')
+
+    elements = list(composition_set.phase_record.nonvacant_elements)
+
+    #Set diffusivity correction if not set
+    if diffusivity_correction is None:
+        diffusivity_correction = {A: 1 for A in elements}
+    else:
+        for A in elements:
+            if A not in diffusivity_correction:
+                diffusivity_correction[A] = 1
+
+    return np.array([diffusivity_correction[elements[A]] * diffusivity_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
+
 def mobility_matrix(composition_set, mobility_callables = None, mobility_correction = None):
     '''
     Mobility matrix
@@ -182,9 +215,9 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     for a in range(len(elements)):
         for b in range(len(elements)):
             if a == b:
-                mobMatrix[a, b] = (1 - X[b]) * mob[a]
+                mobMatrix[a, b] = (1 - X[a]) * mob[b]
             else:
-                mobMatrix[a, b] = -X[b] * mob[a]
+                mobMatrix[a, b] = -X[a] * mob[b]
 
     return mobMatrix
 

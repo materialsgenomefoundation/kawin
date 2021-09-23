@@ -1,11 +1,12 @@
 import numpy as np
+from numpy.lib.function_base import diff
 import scipy.spatial as sps
 from pycalphad import Model, Database, calculate, equilibrium, variables as v
 from pycalphad.codegen.callables import build_callables, build_phase_records
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import get_state_variables
 from pycalphad.plot.utils import phase_legend
-from kawin.Mobility import MobilityModel, interdiffusivity, interdiffusivity_from_diff, inverseMobility, inverseMobility_from_diffusivity
+from kawin.Mobility import MobilityModel, interdiffusivity, interdiffusivity_from_diff, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
 from kawin.FreeEnergyHessian import dMudX
 from kawin.LocalEquilibrium import local_equilibrium
 import matplotlib.pyplot as plt
@@ -1287,17 +1288,23 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 Dnkj, dMudxParent, invMob = inverseMobility_from_diffusivity(chemical_potentials, matrix_cs,
                                                                              self.elements[0], self.diffCallables,
                                                                              diffusivity_correction=self.mobility_correction)
+
+                #NOTE: This is note tested yet
+                Dtrace = tracer_diffusivity_from_diff(matrix_cs, self.diffCallables, diffusivity_correction=self.mobility_correction)
             else:
                 Dnkj, dMudxParent, invMob = inverseMobility(chemical_potentials, matrix_cs, self.elements[0],
                                                             self.mobCallables,
                                                             mobility_correction=self.mobility_correction)
-            xM = np.array(matrix_cs.X)
-            xM = np.delete(xM, refIndex)
+                Dtrace = tracer_diffusivity(matrix_cs, self.mobCallables, mobility_correction=self.mobility_correction)
+
+            xMFull = np.array(matrix_cs.X)
+            xM = np.delete(xMFull, refIndex)
 
             precip_cs = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase][0]
             dMudxPrec = dMudX(chemical_potentials, precip_cs, self.elements[0])
-            xP = np.array(precip_cs.X)
-            xP = np.delete(xP, refIndex)
+            xPFull = np.array(precip_cs.X)
+            xP = np.delete(xPFull, refIndex)
+            xBarFull = np.array([xPFull - xMFull])
             xBar = np.array([xP - xM])
 
             num = np.matmul(np.linalg.inv(Dnkj), xBar.T).flatten()
@@ -1312,9 +1319,8 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             else:
                 Gba = np.zeros(dMudxPrec.shape)
 
-            betaNum = xBar**2
-            betaDen = Dnkj.diagonal() * xM.flatten()
-            #betaDen = np.matmul(Dnkj, xM.T).flatten()
+            betaNum = xBarFull**2
+            betaDen = Dtrace * xMFull.flatten()
             beta = 1 / np.sum(betaNum / betaDen)
 
             self._prevDc = num[unsortIndices] / den

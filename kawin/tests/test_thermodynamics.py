@@ -85,10 +85,10 @@ def test_IC_binary():
 
 def test_IC_unstable():
     '''
-    Checks that (None, None) is returned for unstable precipitate
+    Checks that (-1, -1) is returned for unstable precipitate
     '''
     xm, xp = AlZrTherm.getInterfacialComposition(673.15, 50000)
-    assert(xm is None and xp is None)
+    assert(xm == -1 and xp == -1)
 
 def test_IC_binary_output():
     '''

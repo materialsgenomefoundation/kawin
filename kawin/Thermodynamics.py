@@ -980,7 +980,8 @@ class BinaryThermodynamics (GeneralThermodynamics):
                 
                 return xParent, xPrec
 
-        return None, None
+        #return None, None
+        return -1, -1
 
 
     def _interfacialCompositionFromCurvature(self, T, gExtra = 0, precPhase = None):
@@ -1067,7 +1068,8 @@ class BinaryThermodynamics (GeneralThermodynamics):
                 
                 return xParent, xPrec
 
-        return None, None
+        #return None, None
+        return -1, -1
         
         
     def plotPhases(self, ax, T, gExtra = 0, plotGibbsOffset = False, *args, **kwargs):
@@ -1234,8 +1236,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             
             return xM, xP
 
-        else:
-            return None, None
+        return None, None
 
     def _curvatureFactorFromEq(self, chemical_potentials, composition_sets, precPhase=None, training = False):
         '''

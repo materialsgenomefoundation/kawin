@@ -208,9 +208,9 @@ class PrecipitateModel (PrecipitateBase):
 
             for n in range(self.PBM[p].bins + 1):
                 self.PSDXalpha[p][n], self.PSDXbeta[p][n] = self.interfacialComposition[p](self.T[i], self.particleGibbs(self.PBM[p].PSDbounds[n], self.phases[p]))
-                
+
                 if self.PSDXalpha[p][n] == -1 or self.PSDXalpha[p][n] is None:
-                    self.RdrivingForceLimit[p] = self.PBM.PSDbounds[p][n]
+                    self.RdrivingForceLimit[p] = self.PBM[p].PSDbounds[n]
                     self.RdrivingForceIndex[p] = n
                     
             #Sets particle radii smaller than driving force limit to driving force limit composition

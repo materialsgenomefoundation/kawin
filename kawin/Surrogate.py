@@ -395,7 +395,7 @@ class BinarySurrogate:
                 xM, xP = self.interfacialCompositionFunction(t, g)
                 
                 #If precipitate can be form at T,G, then add to training array
-                if xM is not None:
+                if xM is not None and xM > 0:
                     self.xParent.append(xM)
                     self.xPrec.append(xP)
                     

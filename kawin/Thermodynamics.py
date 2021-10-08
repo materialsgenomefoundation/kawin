@@ -520,6 +520,9 @@ class GeneralThermodynamics:
             if g < 0:
                 return g, None
             else:
+                #Get all compositions for each point and grab the composition corresponding to max driving force
+                #For ordered compounds, the composition needs to be filtered to remove any disordered points (corresponding to matrix phase)
+                #This only has to be done for composition since 'diff' is already filtered
                 if len(x) == 1:
                     betaX = self._pointsPrec[precPhase].X.sel(component=self.elements[1]).values.ravel()
                     if self.orderedPhase[precPhase]:
@@ -530,7 +533,7 @@ class GeneralThermodynamics:
                     if self.orderedPhase[precPhase]:
                         for i in range(len(x)):
                             betaX[i] = betaX[i][self._orderingPoints[precPhase].OCM.values < -1e-8]
-                        comp = [betaX[i][np.argmax(diff)] for i in range(len(x))]
+                    comp = [betaX[i][np.argmax(diff)] for i in range(len(x))]
 
                 return g, comp
         else:

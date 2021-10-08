@@ -244,6 +244,17 @@ class PopulationBalanceModel:
             Order of moment
         '''
         return np.sum(self.PSD * self.PSDsize**order)
+
+    def CumulativeMoment(self, order):
+        '''
+        Cumulative distribution using moment of specified order
+
+        Parameters
+        ----------
+        order : int
+            Order of moment
+        '''
+        return np.cumsum(self.PSD * self.PSDsize**order)
         
     def WeightedMoment(self, order, weights):
         '''
@@ -258,6 +269,20 @@ class PopulationBalanceModel:
             Array size of (bins)
         '''
         return np.sum(self.PSD * self.PSDsize**order * weights)
+
+    def CumulativeWeightedMoment(self, order, weights):
+        '''
+        Weighted moment of specified order
+
+        Parameters
+        ----------
+        order : int
+            Order of moment
+        weights : array
+            Weights to apply to each size class
+            Array size of (bins)
+        '''
+        return np.cumsum(self.PSD * self.PSDsize**order * weights)
 
     def ZeroMoment(self):
         '''
@@ -428,6 +453,29 @@ class PopulationBalanceModel:
         else:
             axes.fill_between(xCoord * scale, yCoord, np.zeros(len(yCoord)), *args, **kwargs)
         self.setAxes(axes, logX, logY)
+
+    def PlotCDF(self, axes, logX = False, scale = 1, order = 0, *args, **kwargs):
+        '''
+        Plots cumulative size distribution
+        
+        Parameters
+        ----------
+        axes : Axes
+            Axis to plot on
+        logX : bool (optional)
+            Whether to set x-axis on log scale (defaults to False)
+        scale : float (optional)
+            Scale factor for x-axis (defaults to 1)
+            Note: this is for grain boundary nucleation where the
+                reported precipitate radius differs from the radius
+                determined by precipitate curvature
+        order : int (optional)
+            Moment of specified order
+        *args, **kwargs - extra arguments for plotting
+        '''
+        axes.plot(self.PSDsize * scale, self.CumulativeMoment(order) / self.Moment(order), *args, **kwargs)
+        self.setAxes(axes, logX, False) 
+        axes.set_ylim([0, 1])
         
     def setAxes(self, axes, logX = False, logY = False): 
         '''

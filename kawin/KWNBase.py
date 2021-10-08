@@ -159,7 +159,6 @@ class PrecipitateBase:
         self.precipitateDensity = np.zeros((len(self.phases), self.steps))  #Number of nucleates
         
         self.dGs = np.zeros((len(self.phases), self.steps))                  #Driving force
-        self.BetaSum = np.zeros(len(self.phases))                            #Integral of beta for each nucleation site type (probability that nucleate will grow past nucleation barrier)
         self.incubationOffset = np.zeros(len(self.phases))                   #Offset for incubation time (temporary fix for non-isothermal precipitation)
         self.incubationSum = np.zeros(len(self.phases))                      #Sum of incubation time
 
@@ -267,7 +266,7 @@ class PrecipitateBase:
         self.maxNucleationRateChange = 0.5
         self.maxVolumeChange = 0.001
         self.maxNonIsothermalDT = 1
-        self.maxCompositionChange = 0.01
+        self.maxCompositionChange = 0.001
 
     def setConstraints(self, **kwargs):
         '''
@@ -276,7 +275,6 @@ class PrecipitateBase:
         TODO: the following constraints are not implemented
             maxDTFraction
             minDTFraction
-            maxDissolution
             maxRcritChange - will need to account for special case that driving force becomes negative
             maxNonIsothermalDT
 
@@ -935,7 +933,7 @@ class PrecipitateBase:
         '''
         pass
 
-    def _nucleationRate(self, p, i, dt):
+    def _nucleationRate(self, p, i):
         '''
         Calculates nucleation rate at current timestep (normalized to number of nucleation sites)
         This step is general to all systems except for how self._Beta is defined
@@ -985,8 +983,6 @@ class PrecipitateBase:
             #Calculate nucleation rate
             Z = self._Zeldovich(p, i)
             beta = self._Beta(p, i)
-
-            self.BetaSum[p] += beta * dt
 
             #I find just calculating tau assuming steady state seems to work better
             #I think it's because we're integrating the incubation term, where the thermocalc method of finding tau may already account for it
@@ -1053,7 +1049,7 @@ class PrecipitateBase:
         '''
         return np.exp(-tau / (self.time[i] - self.incubationOffset[p]))
     
-    def plot(self, axes, variable, bounds = None, *args, **kwargs):
+    def plot(self, axes, variable, bounds = None, timeUnits = 's', *args, **kwargs):
         '''
         Plots model outputs
         
@@ -1077,13 +1073,22 @@ class PrecipitateBase:
             Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
         *args, **kwargs - extra arguments for plotting
         '''
+        timeScale = 1
+        timeLabel = 'Time (s)'
+        if 'min' in timeUnits:
+            timeScale = 1/60
+            timeLabel = 'Time (min)'
+        if 'h' in timeUnits:
+            timeScale = 1/3600
+            timeLabel = 'Time (hrs)'
+
         if bounds is None:
             if self.t0 == 0:
-                bounds = [1e-5 * self.tf, self.tf]
+                bounds = [timeScale * 1e-5 * self.tf, timeScale * self.tf]
             else:
-                bounds = [self.t0, self.tf]
+                bounds = [timeScale * self.t0, timeScale * self.tf]
             
-        axes.set_xlabel('Time (s)')
+        axes.set_xlabel(timeLabel)
         axes.set_xlim(bounds)
 
         labels = {
@@ -1109,16 +1114,16 @@ class PrecipitateBase:
         singleVariables = ['Volume Fraction', 'Critical Radius', 'Average Radius', 'Aspect Ratio', 'Driving Force', 'Nucleation Rate', 'Precipitate Density']
 
         if variable == 'Temperature':
-            axes.semilogx(self.time, self.T, *args, **kwargs)
+            axes.semilogx(timeScale * self.time, self.T, *args, **kwargs)
             axes.set_ylabel(labels[variable])
 
         elif variable == 'Composition':
             if self.numberOfElements == 1:
-                axes.semilogx(self.time, self.xComp, *args, **kwargs)
+                axes.semilogx(timeScale * self.time, self.xComp, *args, **kwargs)
                 axes.set_ylabel('Matrix Composition (at.% ' + self.elements[0] + ')')
             else:
                 for i in range(self.numberOfElements):
-                    axes.semilogx(self.time, self.xComp[:,i], label=self.elements[i], *args, **kwargs)
+                    axes.semilogx(timeScale * self.time, self.xComp[:,i], label=self.elements[i], *args, **kwargs)
                 axes.legend(self.elements)
                 axes.set_ylabel(labels[variable])
             yRange = [np.amin(self.xComp), np.amax(self.xComp)]
@@ -1143,10 +1148,10 @@ class PrecipitateBase:
                 plotVariable = self.precipitateDensity
 
             if (len(self.phases)) == 1:
-                axes.semilogx(self.time, plotVariable[0], *args, **kwargs)
+                axes.semilogx(timeScale * self.time, plotVariable[0], *args, **kwargs)
             else:
                 for p in range(len(self.phases)):
-                    axes.semilogx(self.time, plotVariable[p], label=self.phases[p], *args, **kwargs)
+                    axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], *args, **kwargs)
                 axes.legend()
             axes.set_ylabel(labels[variable])
             axes.set_ylim([0, 1.1 * np.amax(plotVariable)])
@@ -1174,6 +1179,6 @@ class PrecipitateBase:
             elif variable == 'Total Precipitate Density':
                 plotVariable = np.sum(self.precipitateDensity, axis=0)
 
-            axes.semilogx(self.time, plotVariable, *args, **kwargs)
+            axes.semilogx(timeScale * self.time, plotVariable, *args, **kwargs)
             axes.set_ylabel(labels[variable])
             axes.set_ylim(bottom=0)

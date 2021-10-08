@@ -230,12 +230,16 @@ class PrecipitateModel (PrecipitateBase):
         '''
         Iteration function
         '''
+        #Nucleation and growth rate are independent of time increment
+        #They can be calculated first and used to determine the time increment for numerical stability
+        self._nucleate(i)
+        self._growthRate(i)
         self._timeIncrementCheck(i)
         
         postDTCheck = False
         while not postDTCheck:
             dt = self.time[i] - self.time[i-1]
-            self._nucleate(i, dt)
+            self._setNucleateRadius(i, dt)
             self._calculatePSD(i, dt)
             self._massBalance(i)
 
@@ -249,20 +253,32 @@ class PrecipitateModel (PrecipitateBase):
         Function if adaptive time stepping is not used
         Will calculated growth rate since it is done in the _checkDT function (not a good way of doing this, but works for now)
         '''
-        self.growth = self._growthRate(i)
+        return
 
     def _checkDT(self, i):
         '''
         Checks max growth rate and updates dt correspondingly
         '''
-        self.growth = self._growthRate(i)
-        growthFilter = [self.growth[p][:-1][(self.PBM[p].PSDbounds[:-1] > self.Rmin[p]) & (self.PBM[p].PSD > 1e-3 * np.amax(self.PBM[p].PSD))] for p in range(len(self.phases))]
+        #Ignore small radaii (growth rate can be really high, so this prevents dt from being too small)
+        #The radaii that are ignore are determined such that the volume CDF up to that radaii is a certain fraction of the total volume
+        #We also want to ignore radaii where the PSD is less than a certain threshold (this is useful in multi-phase systems where a phase has completely dissolved)
+        dissFrac = [self.maxDissolution * self.PBM[p].ThirdMoment() for p in range(len(self.phases))]
+        dissIndices = [np.argmax(self.PBM[p].CumulativeMoment(3) > dissFrac[p]) for p in range(len(self.phases))]
+        growthFilter = [self.growth[p][dissIndices[p]:-1][self.PBM[p].PSD[dissIndices[p]:] > 1] for p in range(len(self.phases))]
         growthFilter = np.concatenate([g for g in growthFilter])
         if len(growthFilter) == 0:
             return
         maxGrowth = np.amax(np.abs(growthFilter))
-        #maxGrowth = np.amax([np.amax(np.abs(self.growth[p][self.RdrivingForceIndex[p]+1:])) for p in range(len(self.phases))])
         dt = (self.PBM[0].PSDbounds[1] - self.PBM[0].PSDbounds[0]) / (2 * maxGrowth)
+
+        if i > 1:
+            dtPrev = self.time[i-1] - self.time[i-2]
+            dtNuc = dt * np.ones(len(self.phases))
+            for p in range(len(self.phases)):
+                if self.nucRate[p,i] > 0 and self.nucRate[p,i-1] > 0:
+                    dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
+            dt = np.amin(dtNuc)
+
         if dt < self.time[i] - self.time[i-1]:
             self._divideTimestep(i, dt)
 
@@ -279,18 +295,19 @@ class PrecipitateModel (PrecipitateBase):
 
         If contraints are not met, then remove current values and divide time step
         '''
+        #Composition and volume change are checks in absolute changes
+        #This prevents any unneccessary reduction in time increments for dilute solutions, or
+        #if there is a long incubation time until nucleations starts occuring
         if self.numberOfElements == 1:
             compCheck = np.abs(self.xComp[i] - self.xComp[i-1]) < self.maxCompositionChange
         else:
             compCheck = np.amax(np.abs(self.xComp[i,:] - self.xComp[i-1,:])) < self.maxCompositionChange
-        if all(self.nucRate[:,i-1] == 0):
-            nucRateCheck = True
-        else:
-            nucRateCheck = np.amax(np.abs(np.log(self.nucRate[:,i] / self.nucRate[:,i-1]))) < self.maxNucleationRateChange
+
         volChange = np.amax(np.abs(self.betaFrac[:,i] - self.betaFrac[:,i-1])) < self.maxVolumeChange
 
-        checks = [compCheck, nucRateCheck, volChange]
+        checks = [compCheck, volChange]
 
+        #If any test fails, then reset iteration and divide time increment
         if not any(checks):
             if self.numberOfElements == 1:
                 self.xComp[i] = 0
@@ -315,9 +332,10 @@ class PrecipitateModel (PrecipitateBase):
         else:
             return True
     
-    def _nucleate(self, i, dt):
+    def _nucleate(self, i):
         '''
         Calculates the nucleation rate at current timestep
+        This can be done before the initial time increment checks are performed
         '''
         for p in range(len(self.phases)):
             #If parent phases exists, then calculate the number of potential nucleation sites on the parent phase
@@ -344,8 +362,10 @@ class PrecipitateModel (PrecipitateBase):
                
             if nucleationSites < 0:
                 nucleationSites = 0
-            self.nucRate[p, i] = nucleationSites * self._nucleationRate(p, i, dt)
+            self.nucRate[p, i] = nucleationSites * self._nucleationRate(p, i)
 
+    def _setNucleateRadius(self, i, dt):
+        for p in range(len(self.phases)):
             #If nucleates form, then calculate radius of precipitate
             #Radius is set slightly larger so preciptate 
             if self.nucRate[p, i] * dt >= 1 and self.Rcrit[p, i] >= self.Rmin[p]:
@@ -426,7 +446,7 @@ class PrecipitateModel (PrecipitateBase):
                         y = self.VmAlpha / self.VmBeta[p] * self.GB[p].areaFactor * np.sum(self.PBM[p].PSDbounds[1:]**2 * self.PBM[p]._fv[1:] * self.PSDXbeta[p][1:,a] * (self.PBM[p].PSDbounds[1:] - self.PBM[p].PSDbounds[:-1]))
                         fConc[p,a] = self.prevFConc[0,p,a] + y
                 self.prevFConc[1,p] = copy.copy(self.prevFConc[0,p])
-                self.prevFConc[0,p] = fConc[0,p]
+                self.prevFConc[0,p] = fConc[p]
 
             #Average radius and precipitate density
             if Ntot[p] > 0:
@@ -475,7 +495,7 @@ class PrecipitateModel (PrecipitateBase):
             superSaturation = (self.xComp[i-1] - self.PSDXalpha[p]) / (self.VmAlpha * self.PSDXbeta[p] / self.VmBeta[p] - self.PSDXalpha[p])
             growthRate[p] = self.shapeFactors[p].kineticFactor(self.PBM[p].PSDbounds) * self.Diffusivity(self.xComp[i-1], self.T[i]) * superSaturation / (self.effDiffDistance(superSaturation) * self.PBM[p].PSDbounds)
             
-        return growthRate
+        self.growth = growthRate
     
     def _growthRateMulti(self, i):
         '''
@@ -492,7 +512,7 @@ class PrecipitateModel (PrecipitateBase):
             #Add shape factor to growth rate - will need to add effective diffusion distance as well
             growthRate.append(self.shapeFactors[p].kineticFactor(self.PBM[p].PSDbounds) * growth)
 
-        return growthRate
+        self.growth = growthRate
 
     def plot(self, axes, variable, bounds = None, *args, **kwargs):
         '''
@@ -563,6 +583,17 @@ class PrecipitateModel (PrecipitateBase):
             else:
                 for p in range(len(self.phases)):
                     getattr(self.PBM[p], functionName)(axes, label=self.phases[p], scale=self._GBareaRemoval(p), *args, **kwargs)
+                axes.legend()
+            axes.set_xlabel('Radius (m)')
+            axes.set_ylabel(ylabel)
+
+        elif variable == 'Cumulative Size Distribution':
+            ylabel = 'CDF'
+            if len(self.phases) == 1:
+                self.PBM[0].PlotCDF(axes, scale=self._GBareaRemoval(0), *args, **kwargs)
+            else:
+                for p in range(len(self.phases)):
+                    self.PBM[p].PlotCDF(axes, label=self.phases[p], scale=self._GBareaRemoval(p), *args, **kwargs)
                 axes.legend()
             axes.set_xlabel('Radius (m)')
             axes.set_ylabel(ylabel)

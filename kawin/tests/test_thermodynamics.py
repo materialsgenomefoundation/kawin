@@ -192,10 +192,12 @@ def test_Curv_ternary():
 def test_IC_ternary():
     '''
     Checks that order does not matter for growth and interfacial composition calculations
+    Ignore equilibrium compositions since growth and interfacial compositions depend on them anyways
+        If growth and interfacial compositions are correct, then equilibrium compositions are also correct
     '''
-    g1, ca1, cb1 = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
-    g2, ca2, cb2 = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, training = True)
-    g3, ca3, cb3 = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, training = True)
+    g1, ca1, cb1, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
+    g2, ca2, cb2, _, _ = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, training = True)
+    g3, ca3, cb3, _, _ = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, training = True)
 
     #Change ca2,cb2 from [AL, CR] to [CR, AL]
     ca2[[0,1]] = ca2[[1,0]]
@@ -221,8 +223,8 @@ def test_IC_ternary_output():
         (array, scalar, scalar, scalar, scalar) -> (scalar, array, array)
         (array, scalar, scalar, array, array) -> (array, 2D array, 2D array)
     '''
-    g, ca, cb = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
-    garray, caarray, cbarray = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], training = True)
+    g, ca, cb, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
+    garray, caarray, cbarray, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], training = True)
 
     assert np.isscalar(g) or (type(g) == np.ndarray and g.ndim == 0)
     assert hasattr(ca, '__len__') and len(ca) == 2

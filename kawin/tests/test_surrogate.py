@@ -187,25 +187,29 @@ def test_Surr_ternary_IC_output():
     This should give the same response as corresponding functions
     in Thermodynamics
 
-    Ex. f(x, T, dG, R, gE) -> (gr, xM, xP)
-        (array, scalar, scalar, scalar, scalar) -> (scalar, array, array)
-        (array, scalar, scalar, array, array) -> (array, 2D array, 2D array)
+    Ex. f(x, T, dG, R, gE) -> (gr, xM, xP, xM_EQ, xP_EQ)
+        (array, scalar, scalar, scalar, scalar) -> (scalar, array, array, array, array)
+        (array, scalar, scalar, array, array) -> (array, 2D array, 2D array, array, array)
     '''
     surr = MulticomponentSurrogate(NiCrAlTherm)
     T = [1073.15, 1123.15]
     x = [[0.06, 0.08], [0.06, 0.1], [0.06, 0.12], [0.08, 0.08], [0.08, 0.1], [0.08, 0.12], [0.1, 0.08], [0.1, 0.1], [0.1, 0.12]]
     surr.trainCurvature(x, T)
 
-    g, ca, cb = surr.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000)
-    gT, caT, cbT = NiCrAlTherm.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000, training = True)
-    garray, caarray, cbarray = surr.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500])
+    g, ca, cb, caEQ, cbEQ = surr.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000)
+    gT, caT, cbT, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000, training = True)
+    garray, caarray, cbarray, caEQarray, cbEQarray = surr.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500])
 
     assert np.isscalar(g) or (type(g) == np.ndarray and g.ndim == 0)
     assert hasattr(ca, '__len__') and len(ca) == 2
     assert hasattr(cb, '__len__') and len(cb) == 2
+    assert hasattr(caEQ, '__len__') and len(caEQ) == 2
+    assert hasattr(cbEQ, '__len__') and len(cbEQ) == 2
     assert hasattr(garray, '__len__') and len(garray) == 3
     assert caarray.shape == (3, 2)
     assert cbarray.shape == (3, 2)
+    assert hasattr(caEQarray, '__len__') and len(caEQarray) == 2
+    assert hasattr(caEQarray, '__len__') and len(caEQarray) == 2
 
     #Compare to Thermodynamics, high tolerance since we're just checking that functions are interchangeable
     assert_allclose(g, gT, rtol=1e-1)
@@ -224,14 +228,14 @@ def test_Surr_ternary_save():
     surr.trainCurvature(x, T)
 
     a, b = surr.getDrivingForce([0.08, 0.1], T[0]+25, True)
-    g, ca, cb = surr.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
+    g, ca, cb, _, _ = surr.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
     beta = surr.impingementFactor([0.08, 0.1], T[0]+25)
 
     surr.save('kawin/tests/nicral')
 
     surr2 = MulticomponentSurrogate.load('kawin/tests/nicral')
     a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25, True)
-    g2, ca2, cb2 = surr2.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
+    g2, ca2, cb2, _, _ = surr2.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
     beta2 = surr2.impingementFactor([0.08, 0.1], T[0]+25)
 
     os.remove('kawin/tests/nicral')

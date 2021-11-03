@@ -1462,7 +1462,7 @@ class MulticomponentSurrogate:
             calpha[calpha < 0] = 0
             cbeta[cbeta < 0] = 0
 
-            return gr, calpha, cbeta
+            return gr, calpha, cbeta, ca, cb
         else:
             calpha = x - dc * Rdiff
             cbeta = cb + np.matmul(gba, (calpha - ca)).flatten()
@@ -1470,7 +1470,7 @@ class MulticomponentSurrogate:
             calpha[calpha < 0] = 0
             cbeta[cbeta < 0] = 0
 
-            return gr, calpha, cbeta
+            return gr, calpha, cbeta, ca, cb
 
     def impingementFactor(self, x, T):
         '''

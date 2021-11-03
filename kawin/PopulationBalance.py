@@ -498,12 +498,14 @@ class PopulationBalanceModel:
             axes.set_xscale('log')
         else:
             axes.set_xlim([self.min, self.max])
-            
-        if logY:
-            axes.set_ylim([1e-1, np.amax([1.1 * np.max(self.PSD), 1])])
-            axes.set_yscale('log')
-        else:
-            axes.set_ylim([0, np.amax([1.1 * np.max(self.PSD), 1])])
+
+        #Don't set y limits if the PSD is empty
+        if any(self.PSD > 0): 
+            if logY:
+                axes.set_ylim([1e-1, np.amax([1.1 * np.max(self.PSD), 1])])
+                axes.set_yscale('log')
+            else:
+                axes.set_ylim([0, np.amax([1.1 * np.max(self.PSD), 1])])
         
         axes.set_ylabel('Frequency')
             

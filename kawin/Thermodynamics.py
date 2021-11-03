@@ -1093,12 +1093,12 @@ class BinaryThermodynamics (GeneralThermodynamics):
                 with no extra Gibbs free energy contributions
             Defualts to False
         '''
-        points = calculate(self.db, self.elements, self.phases[0], P=101325, T=T, GE=0, phase_records=self.phase_records, output='GM')
+        points = calculate(self.db, self.elements, self.phases[0], P=101325, T=T, GE=0, model=self.models, phase_records=self.phase_records, output='GM')
         ax.scatter(points.X.sel(component=self.elements[1]), points.GM / 1000, label=self.phases[0], *args, **kwargs)
         
         #Add gExtra to precipitate phase
         for i in range(1, len(self.phases)):
-            points = calculate(self.db, self.elements, self.phases[i], P=101325, T=T, GE=0, phase_records=self.phase_records, output='GM')
+            points = calculate(self.db, self.elements, self.phases[i], P=101325, T=T, GE=0, model=self.models, phase_records=self.phase_records, output='GM')
             ax.scatter(points.X.sel(component=self.elements[1]), (points.GM + gExtra) / 1000, label=self.phases[i], *args, **kwargs)
             
             #Plot non-offset precipitate phase
@@ -1339,8 +1339,12 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             if training:
                 return None, None, None, None, None, None
             else:
-                print('Warning: only a single phase detected in equilibrium, using results of previous calculation')
-                return self._prevDc, self._prevMc, self._prevGba, self._prevBeta, self._prevCa, self._prevCb
+                #print('Warning: only a single phase detected in equilibrium, using results of previous calculation')
+                #return self._prevDc, self._prevMc, self._prevGba, self._prevBeta, self._prevCa, self._prevCb
+
+                #If two-phase equilibrium is not found, then the temperature may have changed to where the precipitate is unstable
+                #Return None in this case
+                return None, None, None, self._prevBeta, None, None
 
 
     def curvatureFactor(self, x, T, precPhase = None, training = False):
@@ -1457,6 +1461,8 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             gExtra = np.array(gExtra)
 
         dc, mc, gba, beta, ca, cb = self.curvatureFactor(x, T, precPhase, training)
+        if dc is None:
+            return None, None, None, None, None
 
         Rdiff = (dG - gExtra)
 
@@ -1477,7 +1483,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             calpha[calpha < 0] = 0
             cbeta[cbeta < 0] = 0
 
-            return gr, calpha, cbeta
+            return gr, calpha, cbeta, ca, cb
         else:
             calpha = x - dc * Rdiff
             cbeta = cb + np.matmul(gba, (calpha - ca)).flatten()
@@ -1485,7 +1491,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             calpha[calpha < 0] = 0
             cbeta[cbeta < 0] = 0
 
-            return gr, calpha, cbeta
+            return gr, calpha, cbeta, ca, cb
 
     def impingementFactor(self, x, T, precPhase = None, training = False):
         '''

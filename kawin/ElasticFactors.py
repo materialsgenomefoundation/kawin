@@ -20,6 +20,7 @@ class StrainEnergy:
         self.eigstrain = np.zeros((3,3))
         self.appstress = np.zeros((3,3))
         self.appstrain = np.zeros((3,3))
+        self.rotation = None
 
         self.setIntegrationIntervals(8, 8)
 
@@ -179,7 +180,42 @@ class StrainEnergy:
         #Set type to something other than CONSTANT
         #Since CONSTANT is the only method not requiring the elastic tensor,
         #    we assume that the user is intending to calculate strain energy when inputting the tensor
-        self.type = self.SPHERE
+        if self.type == self.CONSTANT:
+            self.type = self.SPHERE
+
+        if self.rotation is not None:
+            self.appstrain = self._rotateRank2Tensor(self.appstrain)
+            self._c4 = self._rotateRank4Tensor(self._c4)
+
+    def setRotationMatrix(self, rot):
+        '''
+        Sets rotation matrix to be applied to the matrix
+
+        This is for cases where the axes of the precipitate does not align with the axes of the matrix
+        (e.g., the long/short axes of the precipitate is not parallel to the <100> directions of the matrix)
+        '''
+        self.rotation = np.array(rot)
+
+        if self.c is not None:
+            self._c4 = self._rotateRank4Tensor(self._c4)
+
+    def _rotateRank2Tensor(self, tensor):
+        '''
+        Rotates a 2nd rank tensor
+        T_ij = r_il * r_jk * T_lk
+        '''
+        return np.tensordot(self.rotation,
+                np.tensordot(self.rotation, tensor, axes=(1,1)), axes=(1,1))
+
+    def _rotateRank4Tensor(self, tensor):
+        '''
+        Rotates a 4th rank tensor
+        T_ijkl = r_im * r_jn * r_ok * r_lp * T_mnop
+        '''
+        return np.tensordot(self.rotation, 
+                np.tensordot(self.rotation, 
+                np.tensordot(self.rotation, 
+                np.tensordot(self.rotation, tensor, axes=(1,3)), axes=(1,3)), axes=(1,3)), axes=(1,3))
 
     def setEigenstrain(self, strain):
         strain = np.array(strain)
@@ -215,6 +251,9 @@ class StrainEnergy:
         self.appstrain = np.array([[flatStrain[0], flatStrain[5], flatStrain[4]], \
                                     [flatStrain[5], flatStrain[1], flatStrain[3]], \
                                     [flatStrain[3], flatStrain[4], flatStrain[2]]])
+
+        if self.rotation is not None:
+            self.appstrain = self._rotateRank2Tensor(self.appstrain)
 
     def _n(self, phi, theta):
         '''

@@ -74,6 +74,7 @@ class PrecipitateBase:
         self.effDiffDistance = effectiveDiffusionDistance
         self.infinitePrecipitateDiffusion = [True for i in self.phases]
         self.dTemp = 0
+        self.iterationSinceTempChange = 0
         self.GBenergy = 0.3     #J/m2
         self.parentPhases = [[] for i in self.phases]
         self.GB = [GBFactors() for p in self.phases]
@@ -144,9 +145,13 @@ class PrecipitateBase:
         self.time = np.linspace(self.t0, self.tf, self.steps) if self.linearTimeSpacing else np.logspace(np.log10(self.t0), np.log10(self.tf), self.steps)
 
         if self.numberOfElements == 1:
-            self.xComp = np.zeros(self.steps)
+            self.xComp = np.zeros(self.steps)                                #Current composition of matrix phase
+            self.xEqAlpha = np.zeros((len(self.phases), self.steps))         #Equilibrium composition of matrix phase with respect to each precipitate phase
+            self.xEqBeta = np.zeros((len(self.phases), self.steps))          #Equilibrium composition of precipitate phases
         else:
             self.xComp = np.zeros((self.steps, self.numberOfElements))
+            self.xEqAlpha = np.zeros((len(self.phases), self.steps, self.numberOfElements))
+            self.xEqBeta = np.zeros((len(self.phases), self.steps, self.numberOfElements))
             
         self.Rcrit = np.zeros((len(self.phases), self.steps))                #Critical radius
         self.Gcrit = np.zeros((len(self.phases), self.steps))                #Height of nucleation barrier
@@ -159,7 +164,8 @@ class PrecipitateBase:
         self.precipitateDensity = np.zeros((len(self.phases), self.steps))  #Number of nucleates
         
         self.dGs = np.zeros((len(self.phases), self.steps))                  #Driving force
-        self.incubationOffset = np.zeros(len(self.phases))                   #Offset for incubation time (temporary fix for non-isothermal precipitation)
+        self.betas = np.zeros((len(self.phases), self.steps))                #Impingement rates (used for non-isothermal)
+        self.incubationOffset = np.zeros(len(self.phases))                   #Offset for incubation time (for non-isothermal precipitation)
         self.incubationSum = np.zeros(len(self.phases))                      #Sum of incubation time
 
         self.prevFConc = np.zeros((2, len(self.phases), self.numberOfElements))    #Sum of precipitate composition for mass balance
@@ -177,7 +183,7 @@ class PrecipitateBase:
             If true, will save compressed .npz format
         '''
         variables = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements', \
-            'time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs']
+            'time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
         vDict = {v: getattr(self, v) for v in variables}
         if compressed:
             np.savez_compressed(filename, **vDict)
@@ -219,8 +225,12 @@ class PrecipitateBase:
 
         if self.numberOfElements == 1:
             self.xComp = np.append(self.xComp, 0)
+            self.xEqAlpha = np.append(self.xEqAlpha, np.zeros((len(self.phases), 1)), axis=1)
+            self.xEqBeta = np.append(self.xEqBeta, np.zeros((len(self.phases), 1)), axis=1)
         else:
             self.xComp = np.append(self.xComp, np.zeros((1, self.numberOfElements)), axis=0)
+            self.xEqAlpha = np.append(self.xEqAlpha, np.zeros((len(self.phases), 1, self.numberOfElements)), axis=1)
+            self.xEqBeta = np.append(self.xEqBeta, np.zeros((len(self.phases), 1, self.numberOfElements)), axis=1)
 
         #Add new element to each variable
         self.Rcrit = np.append(self.Rcrit, np.zeros((len(self.phases), 1)), axis=1)
@@ -232,6 +242,7 @@ class PrecipitateBase:
         self.nucRate = np.append(self.nucRate, np.zeros((len(self.phases), 1)), axis=1)
         self.precipitateDensity = np.append(self.precipitateDensity, np.zeros((len(self.phases), 1)), axis=1)
         self.dGs = np.append(self.dGs, np.zeros((len(self.phases), 1)), axis=1)
+        self.betas = np.append(self.betas, np.zeros((len(self.phases), 1)), axis=1)
 
         prevDT = self.time[i] - self.time[i-1]
         self.time = np.insert(self.time, i, self.time[i-1] + dt)
@@ -258,7 +269,7 @@ class PrecipitateBase:
         Default values for contraints
         '''
         self.minRadius = 5e-10
-        self.maxTempChange = 10
+        self.maxTempChange = 1
         self.maxDTFraction = 0.1
         self.minDTFraction = 1e-5
         self.maxDissolution = 0.01
@@ -276,7 +287,6 @@ class PrecipitateBase:
             maxDTFraction
             minDTFraction
             maxRcritChange - will need to account for special case that driving force becomes negative
-            maxNonIsothermalDT
 
         Possible constraints:
         ---------------------
@@ -672,7 +682,7 @@ class PrecipitateBase:
 
         self.T = np.array([temperatureFunction(t) for t in self.time])
         
-        if len(np.unique(self.T) == 1):
+        if len(np.unique(self.T)) == 1:
             self._incubation = self._incubationIsothermal
         else:
             self._incubation = self._incubationNonIsothermal
@@ -696,7 +706,7 @@ class PrecipitateBase:
             self.T[(self.time < 3600*times[i]) & (self.time >= 3600*times[i-1])] = (temperatures[i] - temperatures[i-1]) / (3600 * (times[i] - times[i-1])) * (self.time[(self.time < 3600*times[i]) & (self.time >= 3600*times[i-1])] - 3600 * times[i-1]) + temperatures[i-1]
         self.T[self.time >= 3600*times[-1]] = temperatures[-1]
         
-        if len(np.unique(self.T) == 1):
+        if len(np.unique(self.T)) == 1:
             self._incubation = self._incubationIsothermal
         else:
             self._incubation = self._incubationNonIsothermal
@@ -982,22 +992,25 @@ class PrecipitateBase:
 
             #Calculate nucleation rate
             Z = self._Zeldovich(p, i)
-            beta = self._Beta(p, i)
+            self.betas[p,i] = self._Beta(p, i)
 
             #I find just calculating tau assuming steady state seems to work better
             #I think it's because we're integrating the incubation term, where the thermocalc method of finding tau may already account for it
-            tau = 1 / (self.theta[p] * (np.pi * beta * Z**2))
+            #tau = 1 / (self.theta[p] * (np.pi * self.betas[p,i] * Z**2))
                 
             #If tau becomes super large, then add delay to the incubation time
-            if tau > 10 * self.time[-1] and self.incubationOffset[p] == 0:
-                self.incubationOffset[p] = self.time[i-1]
+            #if tau > 10 * self.time[-1] and self.incubationOffset[p] == 0:
+            #If driving force disappears, then set the offset time for incubation
+            #if self.dGs[p,i] < 0:
+            #    self.incubationOffset[p] = self.time[i-1]
+            #    self.incubationOffset[p] = np.amax([i-1, 0])
                 
             #Incubation time, either isothermal or nonisothermal
-            self.incubationSum[p] = self._incubation(tau, p, i)
+            self.incubationSum[p] = self._incubation(Z, p, i)
             if self.incubationSum[p] > 1:
                 self.incubationSum[p] = 1
             
-            return Z * beta * np.exp(-self.Gcrit[p, i] / (self.kB * self.T[i])) * self.incubationSum[p]
+            return Z * self.betas[p,i] * np.exp(-self.Gcrit[p, i] / (self.kB * self.T[i])) * self.incubationSum[p]
 
         else:
             return self._noDrivingForce(p, i)
@@ -1020,7 +1033,8 @@ class PrecipitateBase:
         '''
         #self.dGs[p, i] = 0
         self.Rcrit[p, i] = 0
-        self.incubationOffset[p] = self.time[i-1]
+        #self.incubationOffset[p] = self.time[i-1]
+        self.incubationOffset[p] = np.amax([i-1, 0])
         return 0
 
     def _Zeldovich(self, p, i):
@@ -1033,21 +1047,52 @@ class PrecipitateBase:
         if self._betaFuncs[p] is None:
             return self._defaultBeta
         else:
-            #print((self.GBfactors[p,1] * self.Rcrit[p, i]**2 / self.aAlpha**4))
-            return (self.GB[p].areaFactor * self.Rcrit[p, i]**2 / self.aAlpha**4) * self._betaFuncs[p](self.xComp[i-1], self.T[i-1])
+            beta = self._betaFuncs[p](self.xComp[i-1], self.T[i-1])
+            if beta is None:
+                return self.betas[p,i-1]
+            else:
+                return (self.GB[p].areaFactor * self.Rcrit[p, i]**2 / self.aAlpha**4) * beta
 
-    def _incubationIsothermal(self, tau, p, i):
+    def _incubationIsothermal(self, Z, p, i):
         '''
         Incubation time for isothermal conditions
         '''
+        tau = 1 / (self.theta[p] * (self.betas[p,i] * Z**2))
         return np.exp(-tau / self.time[i])
         
-    def _incubationNonIsothermal(self, tau, p, i):
+    def _incubationNonIsothermal(self, Z, p, i):
         '''
         Incubation time for non-isothermal conditions
         This must match isothermal conditions if the temperature is constant
+
+        Solve for integral(beta(t-t0)) from 0 to tau = 1/theta*Z(tau)^2
         '''
-        return np.exp(-tau / (self.time[i] - self.incubationOffset[p]))
+        LHS = 1 / (self.theta[p] * Z**2 * (self.T[i] / self.T[int(self.incubationOffset[p]):]))
+
+        RHS = np.cumsum(self.betas[p,int(self.incubationOffset[p])+1:i] * (self.time[int(self.incubationOffset[p])+1:i] - self.time[int(self.incubationOffset[p]):i-1]))
+        if len(RHS) == 0:
+            RHS = self.betas[p,i] * (self.time[int(self.incubationOffset[p]):] - self.time[int(self.incubationOffset[p])])
+        else:
+            RHS = np.concatenate((RHS, RHS[-1] + self.betas[p,i] * (self.time[i-1:] - self.time[int(self.incubationOffset[p])])))
+
+        #Test for intersection
+        diff = RHS - LHS
+        signChange = np.sign(diff[:-1]) != np.sign(diff[1:])
+
+        #If no intersection
+        if not any(signChange):
+            #If RHS > LHS, then intersection is at t = 0
+            if diff[0] > 0:
+                tau = 0
+            #Else, RHS intersects LHS beyond simulation time
+            #Extrapolate integral of RHS from last point to intersect LHS
+            #integral(beta(t-t0)) from t0 to ti + beta_i * (tau - (ti - t0)) = 1 / theta * Z(tau+t0)^2
+            else:
+                tau = LHS[-1] / self.betas[p,i] - RHS[-1] / self.betas[p,i] + (self.time[i] - self.time[int(self.incubationOffset[p])])
+        else:
+            tau = self.time[int(self.incubationOffset[p]):-1][signChange][0] - self.time[int(self.incubationOffset[p])]
+
+        return np.exp(-tau / (self.time[i] - self.time[int(self.incubationOffset[p])]))
     
     def plot(self, axes, variable, bounds = None, timeUnits = 's', *args, **kwargs):
         '''
@@ -1108,10 +1153,18 @@ class PrecipitateBase:
             'Total Precipitate Density': 'Precipitate Density (#/m$^3$)',
             'Temperature': 'Temperature (K)',
             'Composition': 'Matrix Composition (at.%)',
+            'Eq Composition Alpha': 'Matrix Composition (at.%)',
+            'Eq Composition Beta': 'Matrix Composition (at.%)',
+            'Supersaturation': 'Supersaturation',
+            'Eq Volume Fraction': 'Volume Fraction'
         }
 
-        totalVariables = ['Total Volume Fraction', 'Total Average Radius', 'Total Aspect Ratio', 'Total Nucleation Rate', 'Total Precipitate Density']
-        singleVariables = ['Volume Fraction', 'Critical Radius', 'Average Radius', 'Aspect Ratio', 'Driving Force', 'Nucleation Rate', 'Precipitate Density']
+        totalVariables = ['Total Volume Fraction', 'Total Average Radius', 'Total Aspect Ratio', \
+                            'Total Nucleation Rate', 'Total Precipitate Density']
+        singleVariables = ['Volume Fraction', 'Critical Radius', 'Average Radius', 'Aspect Ratio', \
+                            'Driving Force', 'Nucleation Rate', 'Precipitate Density']
+        eqCompositions = ['Eq Composition Alpha', 'Eq Composition Beta']
+        saturations = ['Supersaturation', 'Eq Volume Fraction']
 
         if variable == 'Temperature':
             axes.semilogx(timeScale * self.time, self.T, *args, **kwargs)
@@ -1123,11 +1176,91 @@ class PrecipitateBase:
                 axes.set_ylabel('Matrix Composition (at.% ' + self.elements[0] + ')')
             else:
                 for i in range(self.numberOfElements):
-                    axes.semilogx(timeScale * self.time, self.xComp[:,i], label=self.elements[i], *args, **kwargs)
+                    #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
+                    if 'color' in kwargs:
+                        axes.semilogx(timeScale * self.time, self.xComp[:,i], label=self.elements[i], *args, **kwargs)
+                    else:
+                        axes.semilogx(timeScale * self.time, self.xComp[:,i], label=self.elements[i], color='C'+str(i), *args, **kwargs)
                 axes.legend(self.elements)
                 axes.set_ylabel(labels[variable])
             yRange = [np.amin(self.xComp), np.amax(self.xComp)]
             axes.set_ylim([yRange[0] - 0.1 * (yRange[1] - yRange[0]), yRange[1] + 0.1 * (yRange[1] - yRange[0])])
+
+        elif variable in eqCompositions:
+            if variable == 'Eq Composition Alpha':
+                plotVariable = self.xEqAlpha
+            elif variable == 'Eq Composition Beta':
+                plotVariable = self.xEqBeta
+
+            if len(self.phases) == 1:
+                if self.numberOfElements == 1:
+                    axes.semilogx(timeScale * self.time, plotVariable[0], *args, **kwargs)
+                    axes.set_ylabel('Matrix Composition (at.% ' + self.elements[0] + ')')
+                else:
+                    for i in range(self.numberOfElements):
+                        #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
+                        if 'color' in kwargs:
+                            axes.semilogx(timeScale * self.time, plotVariable[0,:,i], label=self.elements[i]+'_Eq', *args, **kwargs)
+                        else:
+                            axes.semilogx(timeScale * self.time, plotVariable[0,:,i], label=self.elements[i]+'_Eq', color='C'+str(i), *args, **kwargs)
+                    axes.legend()
+                    axes.set_ylabel(labels[variable])
+            else:
+                if self.numberOfElements == 1:
+                    for p in range(len(self.phases)):
+                        #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
+                        if 'color' in kwargs:
+                            axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p]+'_Eq', *args, **kwargs)
+                        else:
+                            axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p]+'_Eq', color='C'+str(p), *args, **kwargs)
+                    axes.legend()
+                    axes.set_ylabel('Matrix Composition (at.% ' + self.elements[0] + ')')
+                else:
+                    cIndex = 0
+                    for p in range(len(self.phases)):
+                        for i in range(self.numberOfElements):
+                            #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
+                            if 'color' in kwargs:
+                                axes.semilogx(timeScale * self.time, plotVariable[p,:,i], label=self.phases[p]+'_'+self.elements[i]+'_Eq', *args, **kwargs)
+                            else:
+                                axes.semilogx(timeScale * self.time, plotVariable[p,:,i], label=self.phases[p]+'_'+self.elements[i]+'_Eq', color='C'+str(cIndex), *args, **kwargs)
+                            cIndex += 1
+                    axes.legend()
+                    axes.set_ylabel(labels[variable])
+
+        elif variable in saturations:
+            #Since supersaturation is calculated in respect to the tie-line, it is the same for each element
+            #Thus only a single element is needed
+            plotVariable = np.zeros(self.betaFrac.shape)
+            for p in range(len(self.phases)):
+                if self.numberOfElements == 1:
+                    if variable == 'Eq Volume Fraction':
+                        num = self.xComp[0] - self.xEqAlpha[p]
+                    else:
+                        num = self.xComp - self.xEqAlpha[p]
+                    den = self.xEqBeta[p] - self.xEqAlpha[p]
+                else:
+                    if variable == 'Eq Volume Fraction':
+                        num = self.xComp[0,0] - self.xEqAlpha[p,:,0]
+                    else:
+                        num = self.xComp[:,0] - self.xEqAlpha[p,:,0]
+                    den = self.xEqBeta[p,:,0] - self.xEqAlpha[p,:,0]
+                #If precipitate is unstable, both xEqAlpha and xEqBeta are set to 0
+                #For these cases, change the values of numerator and denominator so that supersaturation is 0 instead of undefined
+                num[den == 0] = 0
+                den[den == 0] = 1
+                plotVariable[p] = num / den
+            
+            if len(self.phases) == 1:
+                axes.semilogx(timeScale * self.time, plotVariable[0], *args, **kwargs)
+            else:
+                for p in range(len(self.phases)):
+                    if 'color' in kwargs:
+                        axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], *args, **kwargs)
+                    else:
+                        axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], color='C'+str(p), *args, **kwargs)
+                axes.legend()
+            axes.set_ylabel(labels[variable])
 
         elif variable in singleVariables:
             if variable == 'Volume Fraction':
@@ -1151,7 +1284,7 @@ class PrecipitateBase:
                 axes.semilogx(timeScale * self.time, plotVariable[0], *args, **kwargs)
             else:
                 for p in range(len(self.phases)):
-                    axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], *args, **kwargs)
+                    axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], color='C'+str(p), *args, **kwargs)
                 axes.legend()
             axes.set_ylabel(labels[variable])
             axes.set_ylim([0, 1.1 * np.amax(plotVariable)])

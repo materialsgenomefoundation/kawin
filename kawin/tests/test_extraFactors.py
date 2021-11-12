@@ -11,13 +11,11 @@ def test_SphericalOutput():
     Tests output of spherical shape factors given a single radius or list of radii
     Since these factors are constant, all factors should give a scaler value
 
-    Exceptions are the normalRadii and aspectRatio methods
-
-    The aspectRatio method returns (to keep general across all shapes)
+    The aspectRatio, eqRadius, kineticFactor and thermoFactor methods returns
         a) a scalar for a single radius
         b) a list or corresponding length for a list of radii
 
-    The normalRaii method returns
+    The normalRadii method returns
         a) a list of length 3 for a single radius
         b) an array of size (n x 3) for a list of radii of length n
     '''
@@ -42,13 +40,13 @@ def test_SphericalOutput():
     assert np.isscalar(arSingle) or (type(arSingle) == np.ndarray and arSingle.ndim == 0)
     assert arArray.shape == (10,)
     assert np.isscalar(eqRsingle) or (type(eqRsingle) == np.ndarray and eqRsingle.ndim == 0)
-    assert np.isscalar(eqRarray) or (type(eqRarray) == np.ndarray and eqRarray.ndim == 0)
+    assert eqRarray.shape == (10,)
     assert radiiSingle.shape == (3,)
     assert radiiArray.shape == (10,3)
     assert np.isscalar(thermoSingle) or (type(thermoSingle) == np.ndarray and thermoSingle.ndim == 0)
-    assert np.isscalar(thermoArray) or (type(thermoArray) == np.ndarray and thermoArray.ndim == 0)
+    assert thermoArray.shape == (10,)
     assert np.isscalar(kineticSingle) or (type(kineticSingle) == np.ndarray and kineticSingle.ndim == 0)
-    assert np.isscalar(kineticArray) or (type(kineticArray) == np.ndarray and kineticArray.ndim == 0)
+    assert kineticArray.shape == (10,)
 
 def test_NeedleOutput():
     '''
@@ -58,7 +56,7 @@ def test_NeedleOutput():
         a) a scalar for a single radius
         b) a list or corresponding length for a list of radii
 
-    The normalRaii method returns
+    The normalRadii method returns
         a) a list of length 3 for a single radius
         b) an array of size (n x 3) for a list of radii of length n
     '''
@@ -99,7 +97,7 @@ def test_PlateOutput():
         a) a scalar for a single radius
         b) a list or corresponding length for a list of radii
 
-    The normalRaii method returns
+    The normalRadii method returns
         a) a list of length 3 for a single radius
         b) an array of size (n x 3) for a list of radii of length n
     '''
@@ -140,7 +138,7 @@ def test_CuboidalOutput():
         a) a scalar for a single radius
         b) a list or corresponding length for a list of radii
 
-    The normalRaii method returns
+    The normalRadii method returns
         a) a list of length 3 for a single radius
         b) an array of size (n x 3) for a list of radii of length n
     '''

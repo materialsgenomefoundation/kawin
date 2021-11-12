@@ -3,14 +3,15 @@ Databases for unit testing
 '''
 
 ALZR_TDB = """
-$MG-SI database
-$From X. Y. Yan et al
+$Al-Zr database
+$From T. Wang, Z. Jin, J. Zhao, Journal of Phase Equilibria, 22 (2001) p. 544
 $
 TEMP_LIM 298.15 6000 !
-ELEMENT  /-   ELECTRON_GAS        0.0         0.0         0.0 !
-ELEMENT  VA   VACUUM              0.0000E+00  0.0000E+00  0.0000E+00 !
-ELEMENT  AL   FCC_A1              2.6982E+01  4.5773E+03  2.8322E+01 !
-ELEMENT  ZR   HCP_A3              9.1224E+01  5.5663E+03  3.9181E+01 !
+$Element     Standard state       mass [g/mol]     H_298      S_298
+ELEMENT  /-   ELECTRON_GAS        0.0             0.0         0.0 !
+ELEMENT  VA   VACUUM              0.0000E+00      0.0000E+00  0.0000E+00 !
+ELEMENT  AL   FCC_A1              2.6982E+01      4.5773E+03  2.8322E+01 !
+ELEMENT  ZR   HCP_A3              9.1224E+01      5.5663E+03  3.9181E+01 !
 $
 $
  TYPE_DEFINITION % SEQ *!
@@ -42,33 +43,22 @@ FUNCTION GHSERZR 130.00 -7827.595+125.64905*T-24.1618*T*LOG(T)
                             -4.37791E-3*T**2+34971*T**(-1);
             2128.00 Y -26085.921+262.724183*T-42.144*T*LOG(T)
                             -1342.895E28*T**(-9); 6000.00 N !
+
 $
-$
-$
-$LATTICE STABILITIES
-$
-$
-$PHASE FCC_A1
+$                                                                       PHASE FCC_A1
 $
 PARAMETER G(FCC_A1,AL:VA;0) 298.15 GHSERAL; 6000.00 N !
 PARAMETER G(FCC_A1,ZR:VA;0) 298.15 7600.00-0.9*T+GHSERZR; 6000.00 N !
+PARAMETER G(FCC_A1,AL,ZR:VA;0)  298.15 -152947+21.3*T;    6000.00  N !
+
 $
-$
-$PHASE AL3ZR
+$                                                                       PHASE AL3ZR
 $
 PARAMETER G(AL3ZR,AL:ZR;0)  298.15 -47381 - 24.373*T + 3.894*T*LOG(T)
                               +0.75*GHSERAL+0.25*GHSERZR;  6000.00  N !
+
 $
-$
-$
-$SYSTEM
-$
-$PHASE FCC_A1
-PARAMETER G(FCC_A1,AL,ZR:VA;0)  298.15 -152947+21.3*T;    6000.00  N !
-$
-$
-$
-$ Diffusion parameters
+$                                                                       Diffusion parameters
 $
 PARAMETER DF(FCC_A1&ZR,*:VA;0) 298.15 -2.56655 * 8.314 * T; 6000 N !
 PARAMETER DQ(FCC_A1&ZR,*:VA;0) 298.15 -242000; 6000 N !
@@ -81,12 +71,12 @@ $ N. Dupin, I. Ansara, Thermodynamic Re-Assessment of the Ternary System
 $ Al-Cr-Ni, Calphad, 25 (2), 279-298 (2001).
 $
 
-
- ELEMENT /-   ELECTRON_GAS               .0000E+00   .0000E+00   .0000E+00!
- ELEMENT VA   VACUUM                     .0000E+00   .0000E+00   .0000E+00!
- ELEMENT AL   FCC_A1                    2.6982E+01  4.5773E+03  2.8322E+01!
- ELEMENT CR   BCC_A2                    5.1996E+01  4.0500E+03  2.3560E+01!
- ELEMENT NI   FCC_A1                    5.8690E+01  4.7870E+03  2.9796E+01!
+$Element     Standard state             mass [g/mol]    H_298       S_298
+ ELEMENT /-   ELECTRON_GAS               .0000E+00       .0000E+00   .0000E+00!
+ ELEMENT VA   VACUUM                     .0000E+00       .0000E+00   .0000E+00!
+ ELEMENT AL   FCC_A1                    2.6982E+01      4.5773E+03  2.8322E+01!
+ ELEMENT CR   BCC_A2                    5.1996E+01      4.0500E+03  2.3560E+01!
+ ELEMENT NI   FCC_A1                    5.8690E+01      4.7870E+03  2.9796E+01!
 
  SPECIES AL2                         AL2!
  SPECIES CR2                         CR2!
@@ -160,11 +150,9 @@ $ TYPE_DEFINITION W GES A_P_D BCC_B2 MAJ 1 CR:CR:VA !
  PHASE HCP_A3  %A  2 1   .5 !
  CONST HCP_A3  :AL,CR,NI : VA% :  !
 
-$ PHASE BCC_B2  %BCFW  3 .5 .5    3 !
  PHASE BCC_B2  %BC  3 .5 .5    3 !
  CONST BCC_B2  :AL,CR,NI%,VA : AL%,CR,NI,VA : VA: !
 
-$ PHASE FCC_L12  %ADG  3 .75   .25   1 !
  PHASE FCC_L12  %AD  3 .75   .25   1 !
  CONST FCC_L12  :AL,CR,NI : AL,CR,NI : VA :  !
 
@@ -1216,5 +1204,4 @@ $****************************************************************************
    REF7553  'NI2<G> T.C.R.A.S Class: 5 
          Data provided by T.C.R.A.S. October 1996'
   ! 
-
 """

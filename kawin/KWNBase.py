@@ -6,6 +6,8 @@ from kawin.ElasticFactors import StrainEnergy
 from kawin.GrainBoundaries import GBFactors
 import copy
 import time
+import csv
+from itertools import zip_longest
 
 class PrecipitateBase:
     '''
@@ -68,6 +70,7 @@ class PrecipitateBase:
         
         #Default variables, these terms won't have to be set before simulation
         self.strainEnergy = [StrainEnergy() for i in self.phases]
+        self.calculateAspectRatio = [False for i in self.phases]
         self.RdrivingForceLimit = np.zeros(len(self.phases), dtype=np.float32)
         self.shapeFactors = [ShapeFactor() for i in self.phases]
         self.theta = 2 * np.ones(len(self.phases), dtype=np.float32)
@@ -170,25 +173,60 @@ class PrecipitateBase:
 
         self.prevFConc = np.zeros((2, len(self.phases), self.numberOfElements))    #Sum of precipitate composition for mass balance
 
-    def save(self, filename, compressed = False):
+    def save(self, filename, compressed = False, toCSV = False):
         '''
-        Save results into a numpy .npz format
-
-        TODO: possibly add support to save to CSV
+        Save results into a numpy .npz or .csv format
 
         Parameters
         ----------
         filename : str
         compressed : bool
             If true, will save compressed .npz format
+        toCSV : bool
+            If true, will save to .csv
         '''
         variables = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements', \
             'time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
         vDict = {v: getattr(self, v) for v in variables}
-        if compressed:
-            np.savez_compressed(filename, **vDict)
+        
+        if toCSV:
+            vDict['t0'] = np.array([vDict['t0']])
+            vDict['tf'] = np.array([vDict['tf']])
+            vDict['steps'] = np.array([vDict['steps']])
+            vDict['linearTimeSpacing'] = np.array([vDict['linearTimeSpacing']])
+            if self.numberOfElements == 2:
+                vDict['xComp'] = vDict['xComp'].T
+            arrays = []
+            headers = []
+            for v in vDict:
+                vDict[v] = np.array(vDict[v])
+                if len(vDict[v].shape) == 2:
+                    for i in range(len(vDict[v])):
+                        arrays.append(vDict[v][i])
+                        headers.append(v + str(i))
+                        if v == 'xComp':
+                            headers.append(v + '_' + self.elements[i])
+                        else:
+                            headers.append(v + '_' + self.phases[i])
+                elif v == 'xEqAlpha' or v == 'xEqBeta':
+                    for i in range(len(self.phases)):
+                        for j in range(self.numberOfElements):
+                            arrays.append(vDict[v][i,:,j])
+                            headers.append(v + '_' + self.phases[i] + '_' + self.elements[j])
+                else:
+                    arrays.append(vDict[v])
+                    headers.append(v)
+            rows = zip_longest(*arrays, fillvalue='')
+            if '.csv' not in filename.lower():
+                filename = filename + '.csv'
+            with open(filename, 'w', newline='') as f:
+                csv.writer(f).writerow(headers)
+                csv.writer(f).writerows(rows)
         else:
-            np.savez(filename, **vDict)
+            if compressed:
+                np.savez_compressed(filename, **vDict)
+            else:
+                np.savez(filename, **vDict)
 
     def load(filename):
         '''
@@ -203,12 +241,66 @@ class PrecipitateBase:
         PrecipitateBase object
             Note: this will only contain model outputs which can be used for plotting
         '''
-        data = np.load(filename)
         setupVars = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements']
-        model = PrecipitateBase(data['t0'], data['tf'], data['steps'], data['phases'], data['linearTimeSpacing'], data['elements'])
-        for d in data:
-            if d not in setupVars:
-                setattr(model, d, data[d])
+        if '.np' in filename.lower():
+            data = np.load(filename)
+            model = PrecipitateBase(data['t0'], data['tf'], data['steps'], data['phases'], data['linearTimeSpacing'], data['elements'])
+            for d in data:
+                if d not in setupVars:
+                    setattr(model, d, data[d])
+        elif '.csv' in filename.lower():
+            with open(filename, 'r') as csvFile:
+                data = csv.reader(csvFile, delimiter=',')
+                i = 0
+                headers = []
+                columns = {}
+                #Grab all columns
+                for row in data:
+                    if i == 0:
+                        headers = row
+                        columns = {h: [] for h in headers}
+                    else:
+                        for j in range(len(row)):
+                            if row[j] != '':
+                                columns[headers[j]].append(row[j])
+                    i += 1
+
+                t0, tf, steps, phases, elements = float(columns['t0'][0]), float(columns['tf'][0]), int(columns['steps'][0]), columns['phases'], columns['elements']
+                linearTimeSpacing = True if columns['linearTimeSpacing'][0] == 'True' else False
+                model = PrecipitateBase(t0, tf, steps, phases, linearTimeSpacing, elements)
+
+                restOfVariables = ['time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
+                restOfColumns = {v: [] for v in restOfVariables}
+                for d in columns:
+                    if d not in setupVars:
+                        if d == 'time':
+                            restOfColumns[d] = np.array(columns[d], dtype='float')
+                        elif d == 'xComp':
+                            if model.numberOfElements == 1:
+                                restOfColumns[d] = np.array(columns[d], dtype='float')
+                            else:
+                                restOfColumns['xComp'].append(columns[d], dtype='float')
+                        else:
+                            selectedVar = ''
+                            for r in restOfVariables:
+                                if r in d:
+                                    selectedVar = r
+                            restOfColumns[selectedVar].append(np.array(columns[d], dtype='float'))
+                for d in restOfColumns:
+                    restOfColumns[d] = np.array(restOfColumns[d])
+                    setattr(model, d, restOfColumns[d])
+
+                #For multicomponent systems, adjust as necessary such that number of elements will be the last axis
+                if model.numberOfElements > 1:
+                    model.xComp = model.xComp.T
+                    if len(model.phases) == 1:
+                        model.xEqAlpha = np.expand_dims(model.xEqAlpha, 0)
+                        model.xEqBeta = np.expand_dims(model.xEqBeta, 0)
+                    else:
+                        model.xEqAlpha = np.reshape(model.xEqAlpha, ((len(model.phases), model.numberOfElements, len(model.time))))
+                        model.xEqBeta = np.reshape(model.xEqBeta, ((len(model.phases), model.numberOfElements, len(model.time))))
+                    model.xEqAlpha = np.transpose(model.xEqAlpha, (0, 2, 1))
+                    model.xEqBeta = np.transpose(model.xEqBeta, (0, 2, 1))
         return model
         
     def _divideTimestep(self, i, dt):
@@ -275,6 +367,7 @@ class PrecipitateBase:
         self.maxDissolution = 0.01
         self.maxRcritChange = 0.01
         self.maxNucleationRateChange = 0.5
+        self.minNucleationRate = 1e-5
         self.maxVolumeChange = 0.001
         self.maxNonIsothermalDT = 1
         self.maxCompositionChange = 0.001
@@ -291,12 +384,13 @@ class PrecipitateBase:
         Possible constraints:
         ---------------------
         minRadius - minimum radius to be considered a precipitate - default is 5e-10 m^3
-        maxTempChange - maximum temperature change before lookup table is updated (only for Euler in binary case) - default is 10 K
+        maxTempChange - maximum temperature change before lookup table is updated (only for Euler in binary case) - default is 1 K
         maxDTFraction - maximum time increment allowed as a fraction of total simulation time - default is 0.1
         minDTFraction - minimum time increment allowed as a fraction of total simulation time - default is 1e-5
         maxDissolution - maximum volume fraction of precipitates allowed to dissolve in a single time step - default is 0.01
         maxRcritChange - maximum change in critical radius (as a fraction) per single time step - default is 0.01
         maxNucleationRateChange - maximum change in nucleation rate (on log scale) per single time step - default is 0.5
+        minNucleationRate - minimum nucleation rate to be considered for checking time intervals - 1e-5
         maxVolumeChange - maximum absolute value that volume fraction can change per single time step - default is 0.001
         maxNonIsothermalDT - maximum time step when temperature is changing - default is 1 s
         maxCompositionChange - maximum change in composition in single time step - default is 0.01
@@ -349,7 +443,7 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.shapeFactors[index].setSpherical()
         
-    def setAspectRatioNeedle(self, ratio, phase = None):
+    def setAspectRatioNeedle(self, ratio=1, phase = None):
         '''
         Consider specified precipitate phase as needle-shaped
         with specified aspect ratio
@@ -366,7 +460,7 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.shapeFactors[index].setNeedleShape(ratio)
         
-    def setAspectRatioPlate(self, ratio, phase = None):
+    def setAspectRatioPlate(self, ratio=1, phase = None):
         '''
         Consider specified precipitate phase as plate-shaped
         with specified aspect ratio
@@ -383,7 +477,7 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.shapeFactors[index].setPlateShape(ratio)
         
-    def setAspectRatioCuboidal(self, ratio, phase = None):
+    def setAspectRatioCuboidal(self, ratio=1, phase = None):
         '''
         Consider specified precipitate phase as cuboidal-shaped
         with specified aspect ratio
@@ -711,12 +805,13 @@ class PrecipitateBase:
         else:
             self._incubation = self._incubationNonIsothermal
 
-    def setStrainEnergy(self, strainEnergy, phase = None):
+    def setStrainEnergy(self, strainEnergy, phase = None, calculateAspectRatio = False):
         '''
         Sets strain energy class to precipitate
         '''
         index = self.phaseIndex(phase)
         self.strainEnergy[index] = strainEnergy
+        self.calculateAspectRatio[index] = calculateAspectRatio
 
     def _setupStrainEnergyFactors(self):
         #For each phase, the strain energy calculation will be set to assume
@@ -976,7 +1071,8 @@ class PrecipitateBase:
             #For bulk or dislocation nucleation sites, the precipitate can be any shape,
             # so we need to solve for the critical radius in case the aspect ratio is not constant
             if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
-                self.Rcrit[p, i] = self.shapeFactors[p].findRcrit(2 * self.gamma[p] / self.dGs[p, i], 20 * self.gamma[p] / self.dGs[p, i])
+                #self.Rcrit[p, i] = self.shapeFactors[p].findRcrit(2 * self.gamma[p] / self.dGs[p, i], 20 * self.gamma[p] / self.dGs[p, i])
+                self.Rcrit[p, i] = 2 * self.shapeFactors[p].thermoFactor(self.Rcrit[p, i-1]) * self.gamma[p] / self.dGs[p, i]
                 if self.Rcrit[p, i] < self.Rmin[p]:
                     self.Rcrit[p, i] = self.Rmin[p]
                 
@@ -1037,8 +1133,13 @@ class PrecipitateBase:
         self.incubationOffset[p] = np.amax([i-1, 0])
         return 0
 
+    def _nucleateFreeEnergy(self, Rsph, p, i):
+        volContribution = 4/3 * np.pi * Rsph**3 * (self.dGs[p,i] + self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(Rsph)))
+        areaContribution = 4 * np.pi * self.gamma[p] * Rsph**2 * self.shapeFactors[p].thermoFactor(Rsph)
+        return -volContribution + areaContribution
+
     def _Zeldovich(self, p, i):
-        return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VaBeta[p] * np.sqrt(self.gamma[p] / (self.kB * self.T[i])) / (2 * np.pi * self.Rcrit[p,i]**2)
+        return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * self.T[i])) / (2 * np.pi * self.avo * self.Rcrit[p,i]**2)
         
     def _BetaBinary(self, p, i):
         return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * self.xComp[0] * self.Diffusivity(self.xComp[i], self.T[i]) / self.aAlpha**4
@@ -1287,7 +1388,8 @@ class PrecipitateBase:
                     axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], color='C'+str(p), *args, **kwargs)
                 axes.legend()
             axes.set_ylabel(labels[variable])
-            axes.set_ylim([0, 1.1 * np.amax(plotVariable)])
+            yb = 1 if variable == 'Aspect Ratio' else 0
+            axes.set_ylim([yb, 1.1 * np.amax(plotVariable)])
 
         elif variable in totalVariables:
             if variable == 'Total Volume Fraction':
@@ -1314,4 +1416,5 @@ class PrecipitateBase:
 
             axes.semilogx(timeScale * self.time, plotVariable, *args, **kwargs)
             axes.set_ylabel(labels[variable])
-            axes.set_ylim(bottom=0)
+            yb = 1 if variable == 'Total Aspect Ratio' else 0
+            axes.set_ylim(bottom=yb)

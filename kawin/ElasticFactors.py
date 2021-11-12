@@ -22,7 +22,7 @@ class StrainEnergy:
         self.appstrain = np.zeros((3,3))
         self.rotation = None
 
-        self.setIntegrationIntervals(8, 8)
+        self.setIntegrationIntervals(32, 32)
 
         self._strainEnergyGeneric = self._strainEnergyConstant
         self.type = self.CONSTANT
@@ -31,6 +31,12 @@ class StrainEnergy:
         self._prevEnergy = 0
 
         self._gElasticConstant = 0
+
+        #Cached values for calculating equilibrium aspect ratio
+        self._aspectRatios = None
+        self._normEnergies = None
+        self._cachedRange = 5
+        self._cachedIntervals = 100
 
     def setSpherical(self):
         self._strainEnergyGeneric = self._strainEnergySphere
@@ -70,6 +76,11 @@ class StrainEnergy:
         self.dtheta = np.pi/2 / thetaInt
         self.midPhi = np.linspace(self.dphi/2, np.pi/2 - self.dphi/2, phiInt)
         self.midTheta = np.linspace(self.dtheta/2, np.pi/2 - self.dtheta/2, thetaInt)
+
+        #Cartesian product of phi and theta intervals
+        self.midPhiGrid, self.midThetaGrid = np.meshgrid(self.midPhi, self.midTheta)
+        self.midPhiGrid = self.midPhiGrid.ravel()
+        self.midThetaGrid = self.midThetaGrid.ravel()
 
     def setElasticTensor(self, tensor):
         '''
@@ -291,20 +302,51 @@ class StrainEnergy:
         Integrates over spherical surface given function that takes in (phi, theta)
         '''
         intSum = 0
-        for i, j in itertools.product(range(self.phiInt), range(self.thetaInt)):
-            intSum += func(self.midPhi[i], self.midTheta[j])
+        for i in range(len(self.midThetaGrid)):
+            intSum += func(self.midPhiGrid[i], self.midThetaGrid[i])
         intSum *= self.dtheta * self.dphi
 
         return 8*intSum
 
     def Dfunc(self, phi, theta):
+        '''
+        Term inside integral for calculating Dijkl
+        '''
         n = self._n(phi, theta)
         endTerm = np.sin(theta) / self._beta(self.r[0], self.r[1], self.r[2], phi, theta)**3
         d = np.tensordot(self._OhmGeneral(n), np.tensordot(n, n, axes=0), axes=0) * endTerm
         return d
 
+    def sphInt(self):
+        '''
+        Faster version of calculating the Dijkl, which avoids
+        using a for loop to iterate across phi and theta
+        '''
+        #Normal vector (1 x 3 x n) where n is number of integration points
+        n = self._n(self.midPhiGrid, self.midThetaGrid)
+        nexp = np.expand_dims(n, axis=0)
+
+        #n_i*n_j for each grid point (n x 3 x 1) x (n x 1 x 3) = (n x 3 x 3) -> (3 x 3 x n)
+        nProd = np.matmul(np.transpose(nexp, (2,1,0)), np.transpose(nexp, (2,0,1))).transpose((1,2,0))
+
+        #End term inside integral = sin(theta) / beta**3
+        endTerm = np.sin(self.midThetaGrid) / self._beta(self.r[0], self.r[1], self.r[2], self.midPhiGrid, self.midThetaGrid)**3
+
+        #Ohm term (Ohm_ij = inverse(C_iklj * n_k * n_l))
+        #For all grid points (Ohm_ijn = inverse(C_iklj) * nProd_kln)
+        invOhm = np.tensordot(self._c4, nProd, axes=[[1,2], [0,1]])
+        ohm = np.linalg.inv(invOhm.T).T
+
+        #Tensor product (D_ijkl = intergral(ohm_ij * n_k * n_l * endTerm))
+        #For summing over grid points (D_ijkl = ohm_ij * nProd_kln * endTerm_n)
+        d = np.tensordot(ohm, np.multiply(nProd, endTerm), axes=[[2], [2]])
+
+        #Multiply by differential area and across the 8 quadrants
+        return 8*d*self.dtheta*self.dphi
+
     def Dijkl(self):
-        return -np.product(self.r)/(4*np.pi) * self.sphericalIntegral(self.Dfunc)
+        #return -np.product(self.r)/(4*np.pi) * self.sphericalIntegral(self.Dfunc)
+        return -np.product(self.r)/(4*np.pi) * self.sphInt()
 
     def Sijmn(self, D):
         '''
@@ -398,7 +440,6 @@ class StrainEnergy:
     def _OhmCubic(self, n):
         '''
         Ohm term for cubic crystal symmetry
-        We can use this to check validity of _OhmGeneral
         '''
         ohm = np.zeros((3,3))
         jk = [(1,2), (0,2), (0,1)]
@@ -425,4 +466,115 @@ class StrainEnergy:
     @property
     def _xi(self):
         return (self.c[0,0] - self.c[0,1] - 2*self.c[3,3]) / self.c[3,3]
+
+    #Equilibrium aspect ratios
+    #Determined by minimum of strain energy + interfacial energy
+    def eqAR_byGR(self, Rsph, gamma, shpFactor, a=1.001, b=100):
+        '''
+        Golden ratio search
+
+        Parameters
+        ----------
+        Rsph : float or array
+            Equivalent spherical radius
+        gamma : float
+            Interfacial energy
+        shpFactor : ShapeFactor object
+        a, b : float
+            Min and max bounds
+            Default is 1.001 and 100
+        '''
+        normR = shpFactor._normalRadiiEquation
+        interfacial = shpFactor._eqRadiusEquation
+        if hasattr(Rsph, '__len__'):
+            eqAR = np.ones(len(Rsph))
+            for i in range(len(Rsph)):
+                eqAR[i] = self._GRsearch(Rsph[i], gamma, interfacial, normR, a, b)
+        else:
+            eqAR = self._GRsearch(Rsph, gamma, interfacial, normR, a, b)
+
+        return eqAR
+
+    def _GRsearch(self, Rsph, gamma, interfacial, normR, a, b):
+        '''
+        Golden ratio search for a single radius
+        '''
+        f = lambda ar: self.strainEnergy(normR(ar))*(4/3)*np.pi*Rsph**3 + gamma*interfacial(ar)*4*np.pi*Rsph**2
+    
+        tol = 1e-3
+        invphi = (np.sqrt(5) - 1) / 2
+        invphi2 = (3 - np.sqrt(5)) / 2
+        h = b - a
+        c, d = a+invphi2*h, a+invphi*h
+        fc, fd = f(c), f(d)
+
+        while abs(h) > tol:
+            if fc < fd:
+                b, d, fd = d, c, fc
+                h *= invphi
+                c = a + invphi2 * h
+                fc = f(c)  
+            else:
+                a, c, fc = c, d, fd
+                h *= invphi
+                d = a + invphi * h
+                fd = f(d)
+
+        return (c+d)/2
+
+    def updateCache(self, normR):
+        '''
+        Update cached calculations
+        '''
+        if self._aspectRatios is None:
+            self._aspectRatios = np.linspace(1 + 1/self._cachedIntervals, 1+self._cachedRange, int(self._cachedRange*self._cachedIntervals))
+            self._normEnergies = self.strainEnergy(normR(self._aspectRatios))
+        else:
+            addedAspectRatios = np.linspace(self._aspectRatios[-1] + 1/self._cachedIntervals, self._aspectRatios[-1] + self._cachedRange, int(self._cachedRange*self._cachedIntervals))
+            addedNormEnergies = self.strainEnergy(normR(addedAspectRatios))
+            self._aspectRatios = np.concatenate((self._aspectRatios, addedAspectRatios))
+            self._normEnergies = np.concatenate((self._normEnergies, addedNormEnergies))
+
+    def eqAR_bySearch(self, Rsph, gamma, shpFactor):
+        '''
+        Cached search
+
+        Parameters
+        ----------
+        Rsph : float or array
+            Equivalent spherical radius
+        gamma : float
+            Interfacial energy
+        shpFactor : ShapeFactor object
+        '''
+        normR = shpFactor._normalRadiiEquation
+        interfacial = shpFactor._eqRadiusEquation
+        if hasattr(Rsph, '__len__'):
+            eqAR = np.ones(len(Rsph))
+            for i in range(len(Rsph)):
+                eqAR[i] = self._cachedSearch(Rsph[i], gamma, interfacial, normR)
+        else:
+            eqAR = self._cachedSearch(Rsph, gamma, interfacial, normR)
+        return eqAR
+
+    def _cachedSearch(self, Rsph, gamma, interfacial, normR):
+        '''
+        Cached search for a single radius
+        '''
+        if self._aspectRatios is None:
+            self.updateCache(normR)
+        
+        Vsph = 4/3*np.pi*Rsph**3
+        Asph = 4*np.pi*Rsph**2
+        eInter = Asph*interfacial(self._aspectRatios)*gamma
+        eqAR = self._aspectRatios[np.argmin(self._normEnergies*Vsph+eInter)]
+
+        #If eqAR is on the upper end (3/4) of the cached aspect ratios, then
+        #added to the cached arrays until it's not
+        while eqAR > self._aspectRatios[int(-self._cachedIntervals/4)]:
+            self.updateCache(normR)
+            eInter = Asph*interfacial(self._aspectRatios)*gamma
+            eqAR = self._aspectRatios[np.argmin(self._normEnergies*Vsph+eInter)]
+
+        return eqAR
 

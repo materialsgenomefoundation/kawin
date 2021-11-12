@@ -5,6 +5,8 @@ from kawin.PopulationBalance import PopulationBalanceModel
 from kawin.EffectiveDiffusion import effectiveDiffusionDistance, noDiffusionDistance
 from kawin.GrainBoundaries import GBFactors
 import copy
+import csv
+from itertools import zip_longest
 
 class PrecipitateModel (PrecipitateBase):
     '''
@@ -54,6 +56,9 @@ class PrecipitateModel (PrecipitateBase):
         #Index of particle size classes which below, precipitates are unstable
         self.RdrivingForceIndex = np.zeros(len(self.phases), dtype=np.int32)
 
+        #Aspect ratio
+        self.eqAspectRatio = [[] for p in self.phases]
+
         #Adaptive time stepping
         self._postTimeIncrementCheck = self._noPostCheckDT
 
@@ -66,30 +71,65 @@ class PrecipitateModel (PrecipitateBase):
         for i in range(len(self.phases)):
             self.PBM[i].reset()
 
-    def save(self, filename, compressed = False):
+    def save(self, filename, compressed = False, toCSV = False):
         '''
         Save results into a numpy .npz format
-
-        TODO: add CSV support
 
         Parameters
         ----------
         filename : str
         compressed : bool
             If true, will save compressed .npz format
+        toCSV : bool
+            If true, wil save to .csv
         '''
         variables = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements', \
             'time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
         vDict = {v: getattr(self, v) for v in variables}
-        for i in range(len(self.phases)):
-            vDict['PSDdata'+str(i)] = [self.PBM[i].min, self.PBM[i].max, self.PBM[i].bins]
-            vDict['PSD' + str(i)] = self.PBM[i].PSD
-            vDict['PSDsize' + str(i)] = self.PBM[i].PSDsize
-            vDict['PSDbounds' + str(i)] = self.PBM[i].PSDbounds
-        if compressed:
-            np.savez_compressed(filename, **vDict)
+        for p in range(len(self.phases)):
+            vDict['PSDdata_'+self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
+            vDict['PSDsize_' + self.phases[p]] = self.PBM[p].PSDsize
+            vDict['PSD_' + self.phases[p]] = self.PBM[p].PSD
+            vDict['eqAspectRatio_' + self.phases[p]] = self.eqAspectRatio[p]
+            vDict['PSDbounds_' + self.phases[p]] = self.PBM[p].PSDbounds
+
+        if toCSV:
+            vDict['t0'] = np.array([vDict['t0']])
+            vDict['tf'] = np.array([vDict['tf']])
+            vDict['steps'] = np.array([vDict['steps']])
+            vDict['linearTimeSpacing'] = np.array([vDict['linearTimeSpacing']])
+            if self.numberOfElements == 2:
+                vDict['xComp'] = vDict['xComp'].T
+            arrays = []
+            headers = []
+            for v in vDict:
+                vDict[v] = np.array(vDict[v])
+                if len(vDict[v].shape) == 2:
+                    for i in range(len(vDict[v])):
+                        arrays.append(vDict[v][i])
+                        if v == 'xComp':
+                            headers.append(v + '_' + self.elements[i])
+                        else:
+                            headers.append(v + '_' + self.phases[i])
+                elif v == 'xEqAlpha' or v == 'xEqBeta':
+                    for i in range(len(self.phases)):
+                        for j in range(self.numberOfElements):
+                            arrays.append(vDict[v][i,:,j])
+                            headers.append(v + '_' + self.phases[i] + '_' + self.elements[j])
+                else:
+                    arrays.append(vDict[v])
+                    headers.append(v)
+            rows = zip_longest(*arrays, fillvalue='')
+            if '.csv' not in filename.lower():
+                filename = filename + '.csv'
+            with open(filename, 'w', newline='') as f:
+                csv.writer(f).writerow(headers)
+                csv.writer(f).writerows(rows)
         else:
-            np.savez(filename, **vDict)
+            if compressed:
+                np.savez_compressed(filename, **vDict)
+            else:
+                np.savez(filename, **vDict)
 
     def load(filename):
         '''
@@ -104,21 +144,91 @@ class PrecipitateModel (PrecipitateBase):
         PrecipitateModel object
             Note: this will only contain model outputs which can be used for plotting
         '''
-        data = np.load(filename)
         setupVars = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements']
+        if '.np' in filename.lower():
+            data = np.load(filename)
+            
+            #Input arbitrary values for PSD parameters (rMin, rMax, bins) since this will be changed shortly after
+            model = PrecipitateModel(data['t0'], data['tf'], data['steps'], 0, 1, 1, data['phases'], data['linearTimeSpacing'], data['elements'])
+            for p in range(len(model.phases)):
+                PSDvars = ['PSDdata_' + model.phases[p], 'PSD_' + model.phases[p], 'PSDsize_' + model.phases[p], 'eqAspectRatio_' + model.phases[p], 'PSDbounds_' + model.phases[p]]
+                #For back compatibility
+                if PSDvars[0] not in data:
+                    PSDvars = ['PSDdata' + str(p), 'PSD' + str(p), 'PSDsize' + str(p), 'eqAspectRatio' + str(p), 'PSDbounds' + str(p)]
+                setupVars = np.concatenate((setupVars, PSDvars))
+                model.PBM[p] = PopulationBalanceModel(data[PSDvars[0]][0], data[PSDvars[0]][1], int(data[PSDvars[0]][2]), True)
+                model.PBM[p].PSD = data[PSDvars[1]]
+                model.PBM[p].PSDsize = data[PSDvars[2]]
+                model.eqAspectRatio[p] = data[PSDvars[3]]
+                model.PBM[p].PSDbounds = data[PSDvars[4]]
+            for d in data:
+                if d not in setupVars:
+                    setattr(model, d, data[d])
+        elif '.csv' in filename.lower():
+            with open(filename, 'r') as csvFile:
+                data = csv.reader(csvFile, delimiter=',')
+                i = 0
+                headers = []
+                columns = {}
+                #Grab all columns
+                for row in data:
+                    if i == 0:
+                        headers = row
+                        columns = {h: [] for h in headers}
+                    else:
+                        for j in range(len(row)):
+                            if row[j] != '':
+                                columns[headers[j]].append(row[j])
+                    i += 1
 
-        #Input arbitrary values for PSD parameters (rMin, rMax, bins) since this will be changed shortly after
-        model = PrecipitateModel(data['t0'], data['tf'], data['steps'], 0, 1, 1, data['phases'], data['linearTimeSpacing'], data['elements'])
-        for i in range(len(model.phases)):
-            PSDvars = ['PSDdata' + str(i), 'PSD' + str(i), 'PSDsize' + str(i), 'PSDbounds' + str(i)]
-            setupVars = np.concatenate((setupVars, PSDvars))
-            model.PBM[i] = PopulationBalanceModel(data[PSDvars[0]][0], data[PSDvars[0]][1], int(data[PSDvars[0]][2]), True)
-            model.PBM[i].PSD = data[PSDvars[1]]
-            model.PBM[i].PSDsize = data[PSDvars[2]]
-            model.PBM[i].PSDbounds = data[PSDvars[3]]
-        for d in data:
-            if d not in setupVars:
-                setattr(model, d, data[d])
+                t0, tf, steps, phases, elements = float(columns['t0'][0]), float(columns['tf'][0]), int(columns['steps'][0]), columns['phases'], columns['elements']
+                linearTimeSpacing = True if columns['linearTimeSpacing'][0] == 'True' else False
+                model = PrecipitateModel(t0, tf, steps, 0, 1, 1, phases, linearTimeSpacing, elements)
+
+                for p in range(len(model.phases)):
+                    PSDvars = ['PSDdata_' + model.phases[p], 'PSD_' + model.phases[p], 'PSDsize_' + model.phases[p], 'eqAspectRatio_' + model.phases[p], 'PSDbounds_' + model.phases[p]]
+                    #For back compatibility
+                    if PSDvars[0] not in columns:
+                        PSDvars = ['PSDdata' + str(p), 'PSD' + str(p), 'PSDsize' + str(p), 'eqAspectRatio' + str(p), 'PSDbounds' + str(p)]
+                    setupVars = np.concatenate((setupVars, PSDvars))
+                    model.PBM[p] = PopulationBalanceModel(float(columns[PSDvars[0]][0]), float(columns[PSDvars[0]][1]), int(float(columns[PSDvars[0]][2])), True)
+                    model.PBM[p].PSD = np.array(columns[PSDvars[1]], dtype='float')
+                    model.PBM[p].PSDsize = np.array(columns[PSDvars[2]], dtype='float')
+                    model.eqAspectRatio[p] = np.array(columns[PSDvars[3]], dtype='float')
+                    model.PBM[p].PSDbounds = np.array(columns[PSDvars[4]], dtype='float')
+
+                restOfVariables = ['time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
+                restOfColumns = {v: [] for v in restOfVariables}
+                for d in columns:
+                    if d not in setupVars:
+                        if d == 'time':
+                            restOfColumns[d] = np.array(columns[d], dtype='float')
+                        elif d == 'xComp':
+                            if model.numberOfElements == 1:
+                                restOfColumns[d] = np.array(columns[d], dtype='float')
+                            else:
+                                restOfColumns['xComp'].append(columns[d], dtype='float')
+                        else:
+                            selectedVar = ''
+                            for r in restOfVariables:
+                                if r in d:
+                                    selectedVar = r
+                            restOfColumns[selectedVar].append(np.array(columns[d], dtype='float'))
+                for d in restOfColumns:
+                    restOfColumns[d] = np.array(restOfColumns[d])
+                    setattr(model, d, restOfColumns[d])
+
+                #For multicomponent systems, adjust as necessary such that number of elements will be the last axis
+                if model.numberOfElements > 1:
+                    model.xComp = model.xComp.T
+                    if len(model.phases) == 1:
+                        model.xEqAlpha = np.expand_dims(model.xEqAlpha, 0)
+                        model.xEqBeta = np.expand_dims(model.xEqBeta, 0)
+                    else:
+                        model.xEqAlpha = np.reshape(model.xEqAlpha, ((len(model.phases), model.numberOfElements, len(model.time))))
+                        model.xEqBeta = np.reshape(model.xEqBeta, ((len(model.phases), model.numberOfElements, len(model.time))))
+                    model.xEqAlpha = np.transpose(model.xEqAlpha, (0, 2, 1))
+                    model.xEqBeta = np.transpose(model.xEqBeta, (0, 2, 1))
         return model
 
     def adaptiveTimeStepping(self, adaptive = True):
@@ -235,6 +345,19 @@ class PrecipitateModel (PrecipitateBase):
             
     def setup(self):
         super().setup()
+
+        #Equilibrium aspect ratio
+        #If calculateAspectRatio is True, then use strain energy to calculate aspect ratio for each size class in PSD
+        #Else, then use aspect ratio defined in shape factors
+        self.eqAspectRatio = [None for p in range(len(self.phases))]
+        for p in range(len(self.phases)):
+            if self.calculateAspectRatio[p]:
+                self.eqAspectRatio[p] = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDsize, self.gamma[p], self.shapeFactors[p])
+                arFunc = lambda R, p1=p : self._interpolateAspectRatio(R, p1)
+                self.shapeFactors[p].setAspectRatio(arFunc)
+            else:
+                self.eqAspectRatio[p] = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDsize)
+
         #Only create lookup table for binary system
         if self.numberOfElements == 1:
             self.createLookup(0)
@@ -249,7 +372,12 @@ class PrecipitateModel (PrecipitateBase):
                 if xEqAlpha is not None:
                     self.xEqAlpha[p,0] = xEqAlpha
                     self.xEqBeta[p,0] = xEqBeta
-            
+
+    def _interpolateAspectRatio(self, R, p):
+        '''
+        Linear interpolation between self.eqAspectRatio and self.PBM[p].PSDsize
+        '''
+        return np.interp(R, self.PBM[p].PSDsize, self.eqAspectRatio[p])
 
     def _iterate(self, i):
         '''
@@ -290,7 +418,7 @@ class PrecipitateModel (PrecipitateBase):
         #We also want to ignore radaii where the PSD is less than a certain threshold (this is useful in multi-phase systems where a phase has completely dissolved)
         dissFrac = [self.maxDissolution * self.PBM[p].ThirdMoment() for p in range(len(self.phases))]
         dissIndices = [np.amax([np.argmax(self.PBM[p].CumulativeMoment(3) > dissFrac[p]), self.RdrivingForceIndex[p]]) for p in range(len(self.phases))]
-        growthFilter = [self.growth[p][dissIndices[p]:-1][self.PBM[p].PSD[dissIndices[p]:] > 1] for p in range(len(self.phases))]
+        growthFilter = [self.growth[p][dissIndices[p]:-1][self.PBM[p].PSD[dissIndices[p]:] > 0] for p in range(len(self.phases))]
         
         gFilter = []
         for g in growthFilter:
@@ -311,9 +439,9 @@ class PrecipitateModel (PrecipitateBase):
             dtPrev = self.time[i-1] - self.time[i-2]
 
             #Nucleation rate constraint
-            dtNuc = dt * np.ones(len(self.phases))
+            dtNuc = dt * np.ones(len(self.phases)+1)
             for p in range(len(self.phases)):
-                if self.nucRate[p,i] > 0 and self.nucRate[p,i-1] > 0 and self.nucRate[p,i-1] != self.nucRate[p,i]:
+                if self.nucRate[p,i] > self.minNucleationRate and self.nucRate[p,i-1] > self.minNucleationRate and self.nucRate[p,i-1] != self.nucRate[p,i]:
                     dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
             dt = np.amin(dtNuc)
 
@@ -435,6 +563,14 @@ class PrecipitateModel (PrecipitateBase):
             #Will have to update PSDXalpha and PSDXbeta as well
             if self.PBM[p].PSD[-1] > 1:
                 self.PBM[p].addSizeClass()
+
+                #Add aspect ratio, do this before growth rate and interfacial composition since those are dependent on this
+                if self.calculateAspectRatio[p]:
+                    newAspectRatio = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDsize[-1], self.gamma[p], self.shapeFactors[p])
+                else:
+                    newAspectRatio = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDsize[-1])
+                self.eqAspectRatio[p] = np.append(self.eqAspectRatio[p], newAspectRatio)
+
                 self.growth[p] = np.append(self.growth[p], 0)
                 if self.numberOfElements == 1:
                     newXalpha, newXbeta = self.interfacialComposition[p](self.T[i], self.particleGibbs(self.PBM[p].PSDbounds[-1], self.phases[p]))
@@ -670,6 +806,20 @@ class PrecipitateModel (PrecipitateBase):
                 axes.legend()
             axes.set_xlabel('Radius (m)')
             axes.set_ylabel(ylabel)
+
+        elif variable == 'Aspect Ratio Distribution':
+            if len(self.phases) == 1:
+                axes.plot(self.PBM[0].PSDsize, self.eqAspectRatio[0], *args, **kwargs)
+            else:
+                for p in range(len(self.phases)):
+                    axes.plot(self.PBM[p].PSDsize, self.eqAspectRatio[p], label=self.phases[p], *args, **kwargs)
+                axes.legend()
+            axes.set_xlim([0, np.amax(self.PBM[0].PSDsize)])
+            axes.set_ylim(bottom=1)
+            axes.set_xlabel('Radius (m)')
+            axes.set_ylabel('Aspect ratio distribution')
             
         else:
             super().plot(axes, variable, bounds, *args, **kwargs)
+
+        

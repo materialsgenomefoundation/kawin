@@ -4,12 +4,12 @@ $ N. Dupin, I. Ansara, Thermodynamic Re-Assessment of the Ternary System
 $ Al-Cr-Ni, Calphad, 25 (2), 279-298 (2001).
 $
 
-
- ELEMENT /-   ELECTRON_GAS               .0000E+00   .0000E+00   .0000E+00!
- ELEMENT VA   VACUUM                     .0000E+00   .0000E+00   .0000E+00!
- ELEMENT AL   FCC_A1                    2.6982E+01  4.5773E+03  2.8322E+01!
- ELEMENT CR   BCC_A2                    5.1996E+01  4.0500E+03  2.3560E+01!
- ELEMENT NI   FCC_A1                    5.8690E+01  4.7870E+03  2.9796E+01!
+$Element     Standard state             mass [g/mol]    H_298       S_298
+ ELEMENT /-   ELECTRON_GAS               .0000E+00       .0000E+00   .0000E+00!
+ ELEMENT VA   VACUUM                     .0000E+00       .0000E+00   .0000E+00!
+ ELEMENT AL   FCC_A1                    2.6982E+01      4.5773E+03  2.8322E+01!
+ ELEMENT CR   BCC_A2                    5.1996E+01      4.0500E+03  2.3560E+01!
+ ELEMENT NI   FCC_A1                    5.8690E+01      4.7870E+03  2.9796E+01!
 
  SPECIES AL2                         AL2!
  SPECIES CR2                         CR2!
@@ -83,11 +83,9 @@ $ TYPE_DEFINITION W GES A_P_D BCC_B2 MAJ 1 CR:CR:VA !
  PHASE HCP_A3  %A  2 1   .5 !
  CONST HCP_A3  :AL,CR,NI : VA% :  !
 
-$ PHASE BCC_B2  %BCFW  3 .5 .5    3 !
  PHASE BCC_B2  %BC  3 .5 .5    3 !
  CONST BCC_B2  :AL,CR,NI%,VA : AL%,CR,NI,VA : VA: !
 
-$ PHASE FCC_L12  %ADG  3 .75   .25   1 !
  PHASE FCC_L12  %AD  3 .75   .25   1 !
  CONST FCC_L12  :AL,CR,NI : AL,CR,NI : VA :  !
 

@@ -15,7 +15,13 @@ class ShapeFactor:
             Equivalent radius factor = 1
             Kinetic factor = 1
             Thermodynamic factor = 1
-            
+
+    NOTE:
+    normalRadaii, eqRadiusFactor, kineticFactor and thermoFactor 
+        take in R and output the corresponding factors
+
+    _normalRadaiiEquation, __eqRadiusEquation, _kineticEquation and _thermoEquation
+        take in aspect ratio and output the corresponding factors
     '''
     
     #Particle shape types
@@ -27,6 +33,9 @@ class ShapeFactor:
     def __init__(self):
         self.setSpherical()
         self.setAspectRatio(1)
+
+        #This is the same for all equations
+        self.eqRadiusFactorMin = 1
         self.tol = 1e-3
         
     def setAspectRatio(self, ar):
@@ -61,33 +70,22 @@ class ShapeFactor:
         Sets factors for spherical precipitates
         '''
         self.particleType = self.SPHERE
-        self.eqRadiusFactor = self._eqRadiusFactorSphere
+        self._eqRadiusEquation = self._eqRadiusFactorSphere
         self._normalRadiiEquation = self._normalRadiiSphere
-        self.kineticFactor = self._kineticFactorSphere
-        self.thermoFactor = self._thermoFactorSphere
-        self.setAspectRatio(ar)
-        
-        self.kineticEquation = None
-        self.thermoEquation = None
+        self._kineticEquation = self._kineticFactorSphere
+        self._thermoEquation = self._thermoFactorSphere
+        self.setAspectRatio(1)
         
         self.kineticFactorMin = 1
         self.thermoFactorMin = 1
         
-    def setGeneric(self, ar):
-        '''
-        Factors for generic precipitates
-        '''
-        self.kineticFactor = self._kineticFactorGeneric
-        self.thermoFactor = self._thermoFactorGeneric
-        self.setAspectRatio(ar)
-        
-    def setNeedleShape(self, ar):
+    def setNeedleShape(self, ar = 1):
         '''
         Factors for needle shaped precipitates
         '''
         self.particleType = self.NEEDLE
-        self.setGeneric(ar)
-        self.eqRadiusFactor = self._eqRadiusFactorNeedle
+        self.setAspectRatio(ar)
+        self._eqRadiusEquation = self._eqRadiusFactorNeedle
         self._normalRadiiEquation = self._normalRadiiNeedle
         self._kineticEquation = self._kineticFactorEquationNeedle
         self._thermoEquation = self._thermoFactorEquationNeedle
@@ -95,13 +93,13 @@ class ShapeFactor:
         self.kineticFactorMin = 1
         self.thermoFactorMin = 1
         
-    def setPlateShape(self, ar):
+    def setPlateShape(self, ar = 1):
         '''
         Factors for plate shaped precipitates
         '''
         self.particleType = self.PLATE
-        self.setGeneric(ar)
-        self.eqRadiusFactor = self._eqRadiusFactorPlate
+        self.setAspectRatio(ar)
+        self._eqRadiusEquation = self._eqRadiusFactorPlate
         self._normalRadiiEquation = self._normalRadiiPlate
         self._kineticEquation = self._kineticFactorEquationPlate
         self._thermoEquation = self._thermoFactorEquationPlate
@@ -109,13 +107,13 @@ class ShapeFactor:
         self.kineticFactorMin = 1
         self.thermoFactorMin = 1
         
-    def setCuboidalShape(self, ar):
+    def setCuboidalShape(self, ar = 1):
         '''
         Factors for cuboidal shaped precipitates
         '''
         self.particleType = self.CUBIC
-        self.setGeneric(ar)
-        self.eqRadiusFactor = self._eqRadiusFactorCuboidal
+        self.setAspectRatio(ar)
+        self._eqRadiusEquation = self._eqRadiusFactorCuboidal
         self._normalRadiiEquation = self._normalRadiiCuboidal
         self._kineticEquation = self._kineticFactorEquationCuboidal
         self._thermoEquation = self._thermoFactorEquationCuboidal
@@ -123,11 +121,21 @@ class ShapeFactor:
         self.kineticFactorMin = 1
         
         #Thermodynamic factor for cuboidal precipitates is not 1 when aspect ratio is 1
-        self.thermoFactorMin = self._thermoFactorEquationCuboidal(1, 0)
+        self.thermoFactorMin = self._thermoFactorEquationCuboidal(1)
 
     def normalRadii(self, R):
         '''
         Radius along the 3 axis to give a spherical volume of 1
+
+        Parameters
+        ----------
+        R : float or array
+            Equivalent spherical radius
+
+        Returns
+        -------
+        3 length array for each axis if R is scalar
+        n x 3 array if R is an array
         '''
         ar = self.aspectRatio(R)
 
@@ -138,40 +146,78 @@ class ShapeFactor:
             ar = 1 if ar < 1 else ar
             
         return self._normalRadiiEquation(ar)
+
+    def eqRadiusFactor(self, R):
+        '''
+        Equivalent spherical radius factor for generic precipitates
+
+        Parameters
+        ----------
+        R : float or array
+            Equivalent spherical radius
+
+        Returns
+        -------
+        Eq. radius factor with same shape as R
+        '''
+        ar = self.aspectRatio(R)
+        if hasattr(ar, '__len__'):
+            factor = self.eqRadiusFactorMin * np.ones(len(ar))
+            factor[ar > 1] = self._eqRadiusEquation(ar[ar > 1])
+            return factor
+        else:
+            if ar <= 1:
+                return self.eqRadiusFactorMin
+            else:
+                return self._eqRadiusEquation(ar)
         
-    def _kineticFactorGeneric(self, R):
+    def kineticFactor(self, R):
         '''
         Kinetic factor for generic precipitates
+
+        Parameters
+        ----------
+        R : float or array
+            Equivalent spherical radius
+
+        Returns
+        -------
+        Kinetic factor with same shape as R
         '''
         ar = self.aspectRatio(R)
         if hasattr(ar, '__len__'):
             factor = self.kineticFactorMin * np.ones(len(ar))
-            ecc = self.eccentricity(ar[ar > 1])
-            factor[ar > 1] = self._kineticEquation(ar[ar > 1], ecc)
+            factor[ar > 1] = self._kineticEquation(ar[ar > 1])
             return factor
         else:
             if ar <= 1:
                 return self.kineticFactorMin
             else:
-                ecc = self.eccentricity(ar)
-                return self._kineticEquation(ar, ecc)
+                return self._kineticEquation(ar)
                 
-    def _thermoFactorGeneric(self, R):
+    def thermoFactor(self, R):
         '''
         Thermodynamic factor for generic precipitates
+
+        Parameters
+        ----------
+        R : float or array
+            Equivalent spherical radius
+
+        Returns
+        -------
+        Thermodynamic factor with same shape as R
         '''
         ar = self.aspectRatio(R)
         if hasattr(ar, '__len__'):
             factor = self.thermoFactorMin * np.ones(len(ar))
-            ecc = self.eccentricity(ar[ar > 1])
-            factor[ar > 1] = self._thermoEquation(ar[ar > 1], ecc)
+            factor[ar > 1] = self._thermoEquation(ar[ar > 1])
             return factor
         else:
             if ar <= 1:
                 return self.thermoFactorMin
             else:
-                ecc = self.eccentricity(ar)
-                return self._thermoEquation(ar, ecc)
+                return self._thermoEquation(ar)
                 
     def eccentricity(self, ar):
         '''
@@ -180,31 +226,28 @@ class ShapeFactor:
         return np.sqrt(1 - 1 / ar**2)
         
     # Equivalent spherical radius ----------------------------------------
-    def _eqRadiusFactorSphere(self, R):
+    def _eqRadiusFactorSphere(self, ar):
         '''
         Equivalent radius for a sphere (returns 1)
         '''
         return 1
 
-    def _eqRadiusFactorNeedle(self, R):
+    def _eqRadiusFactorNeedle(self, ar):
         '''
         Equivalent radius for needle shaped precipitate
         '''
-        ar = self.aspectRatio(R)
         return np.cbrt(ar)
 
-    def _eqRadiusFactorPlate(self, R):
+    def _eqRadiusFactorPlate(self, ar):
         '''
         Equivalent radius for plate shaped precipitate
         '''
-        ar = self.aspectRatio(R)
         return np.cbrt(ar**2)
 
-    def _eqRadiusFactorCuboidal(self, R):
+    def _eqRadiusFactorCuboidal(self, ar):
         '''
         Equivalent radius for cuboidal shaped precipitate
         '''
-        ar = self.aspectRatio(R)
         return np.cbrt(3 * ar / (4 * np.pi))
 
     # Normalized radaii --------------------------------------------------
@@ -248,50 +291,54 @@ class ShapeFactor:
             return np.array([scale, scale, scale * ar])
 
     # Kinetic factor -----------------------------------------------------        
-    def _kineticFactorSphere(self, R):
+    def _kineticFactorSphere(self, ar):
         '''
         Kinetic factor for a sphere (returns 1)
         '''
         return 1
 
-    def _kineticFactorEquationNeedle(self, ar, ecc):
+    def _kineticFactorEquationNeedle(self, ar):
         '''
         Kinetic factor for needle shaped precipitate
         '''
+        ecc = self.eccentricity(ar)
         return 2 * np.cbrt(ar**2) * ecc / (np.log(1 + ecc) - np.log(1 - ecc))
 
-    def _kineticFactorEquationPlate(self, ar, ecc):
+    def _kineticFactorEquationPlate(self, ar):
         '''
         Kinetic factor for plate shaped precipitate
         '''
+        ecc = self.eccentricity(ar)
         return ecc * np.cbrt(ar) / (np.arccos(0) - np.arccos(ecc))
 
-    def _kineticFactorEquationCuboidal(self, ar, ecc):
+    def _kineticFactorEquationCuboidal(self, ar):
         '''
         Kinetic factor for cuboidal shaped precipitate
         '''
         return 0.1 * np.exp(-0.091 * (ar - 1)) + 1.736 * np.sqrt(ar**2 - 1) / (np.cbrt(ar) * np.log(2 * ar**2 + 2 * ar * np.sqrt(ar**2 - 1) - 1))
 
     # Thermodynamic factor -----------------------------------------------
-    def _thermoFactorSphere(self, R):
+    def _thermoFactorSphere(self, ar):
         '''
         Thermodynamic factor for a sphere (returns 1)
         '''
         return 1
         
-    def _thermoFactorEquationNeedle(self, ar, ecc):
+    def _thermoFactorEquationNeedle(self, ar):
         '''
         Thermodynamic factor for needle shaped precipitate
         '''
+        ecc = self.eccentricity(ar)
         return (1 / (2 * ar**(2/3))) * (1 + ar / ecc * np.arcsin(ecc))
         
-    def _thermoFactorEquationPlate(self, ar, ecc):
+    def _thermoFactorEquationPlate(self, ar):
         '''
         Thermodynamic factor for plate shaped precipitate
         '''
+        ecc = self.eccentricity(ar)
         return (1 / (2 * ar**(4/3))) * (ar**2 + (1 / (2 * ecc)) * np.log((1 + ecc) / (1 - ecc)))
         
-    def _thermoFactorEquationCuboidal(self, ar, ecc):
+    def _thermoFactorEquationCuboidal(self, ar):
         '''
         Thermodynamic factor for cuboidal shaped precipitate
         '''
@@ -309,14 +356,14 @@ class ShapeFactor:
         Critical radius given aspect ratio as a function of radius
         Found by bisection method
         '''
-        min = RcritSphere
-        max = Rmax
-        mid = (min + max) / 2
+        minR = RcritSphere
+        maxR = Rmax
+        mid = (minR + maxR) / 2
         
         #Objective function is R = R_sphere * thermoFactor(ar(R))
         #Or R / (R_sphere * thermoFactor(ar(R))) - 1 = 0, this requires that the radius is within tol percent of true value
-        fMin = min / (RcritSphere * self.thermoFactor(min)) - 1
-        fMax = max / (RcritSphere * self.thermoFactor(max)) - 1
+        fMin = minR / (RcritSphere * self.thermoFactor(minR)) - 1
+        fMax = maxR / (RcritSphere * self.thermoFactor(maxR)) - 1
         fMid = mid / (RcritSphere * self.thermoFactor(mid)) - 1
 
         #fMin = min / (RcritSphere * self.eqRadiusFactor(min)) - 1
@@ -326,13 +373,13 @@ class ShapeFactor:
         n = 0
         while np.abs(fMid) > self.tol:
             if fMin * fMid >= 0:
-                min = mid
+                minR = mid
                 fMin = fMid
             else:
-                max = mid
+                maxR = mid
                 fMax = fMid
                 
-            mid = (min + max) / 2
+            mid = (minR + maxR) / 2
             fMid = mid / (RcritSphere * self.thermoFactor(mid)) - 1
             #fMid = mid / (RcritSphere * self.eqRadiusFactor(mid)) - 1
             

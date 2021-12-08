@@ -90,8 +90,8 @@ class PrecipitateModel (PrecipitateBase):
             vDict['PSDdata_'+self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
             vDict['PSDsize_' + self.phases[p]] = self.PBM[p].PSDsize
             vDict['PSD_' + self.phases[p]] = self.PBM[p].PSD
-            vDict['eqAspectRatio_' + self.phases[p]] = self.eqAspectRatio[p]
             vDict['PSDbounds_' + self.phases[p]] = self.PBM[p].PSDbounds
+            vDict['eqAspectRatio_' + self.phases[p]] = self.eqAspectRatio[p]
 
         if toCSV:
             vDict['t0'] = np.array([vDict['t0']])
@@ -352,11 +352,11 @@ class PrecipitateModel (PrecipitateBase):
         self.eqAspectRatio = [None for p in range(len(self.phases))]
         for p in range(len(self.phases)):
             if self.calculateAspectRatio[p]:
-                self.eqAspectRatio[p] = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDsize, self.gamma[p], self.shapeFactors[p])
+                self.eqAspectRatio[p] = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDbounds, self.gamma[p], self.shapeFactors[p])
                 arFunc = lambda R, p1=p : self._interpolateAspectRatio(R, p1)
                 self.shapeFactors[p].setAspectRatio(arFunc)
             else:
-                self.eqAspectRatio[p] = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDsize)
+                self.eqAspectRatio[p] = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds)
 
         #Only create lookup table for binary system
         if self.numberOfElements == 1:
@@ -375,9 +375,9 @@ class PrecipitateModel (PrecipitateBase):
 
     def _interpolateAspectRatio(self, R, p):
         '''
-        Linear interpolation between self.eqAspectRatio and self.PBM[p].PSDsize
+        Linear interpolation between self.eqAspectRatio and self.PBM[p].PSDbounds
         '''
-        return np.interp(R, self.PBM[p].PSDsize, self.eqAspectRatio[p])
+        return np.interp(R, self.PBM[p].PSDbounds, self.eqAspectRatio[p])
 
     def _iterate(self, i):
         '''
@@ -566,9 +566,9 @@ class PrecipitateModel (PrecipitateBase):
 
                 #Add aspect ratio, do this before growth rate and interfacial composition since those are dependent on this
                 if self.calculateAspectRatio[p]:
-                    newAspectRatio = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDsize[-1], self.gamma[p], self.shapeFactors[p])
+                    newAspectRatio = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDbounds[-1], self.gamma[p], self.shapeFactors[p])
                 else:
-                    newAspectRatio = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDsize[-1])
+                    newAspectRatio = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds[-1])
                 self.eqAspectRatio[p] = np.append(self.eqAspectRatio[p], newAspectRatio)
 
                 self.growth[p] = np.append(self.growth[p], 0)
@@ -723,7 +723,7 @@ class PrecipitateModel (PrecipitateBase):
 
         self.growth = growthRate
 
-    def plot(self, axes, variable, bounds = None, *args, **kwargs):
+    def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
         '''
         Plots model outputs
         
@@ -751,10 +751,28 @@ class PrecipitateModel (PrecipitateBase):
                     
         bounds : tuple (optional)
             Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
+        radius : str (optional)
+            For non-spherical precipitates, plot the Average Radius by the -
+                Equivalent spherical radius ('spherical')
+                Short axis ('short')
+                Long axis ('long')
+            Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
         *args, **kwargs - extra arguments for plotting
         '''
         sizeDistributionVariables = ['Size Distribution', 'Size Distribution Curve', 'Size Distribution KDE', 'Size Distribution Density']
         compositionVariables = ['Interfacial Composition Alpha', 'Interfacial Composition Beta']
+
+        scale = []
+        for p in range(len(self.phases)):
+            if self.GB[p].nucleationSiteType == self.GB[p].BULK or self.GB[p].nucleationSiteType == self.GB[p].DISLOCATION:
+                if radius == 'spherical':
+                    scale.append(self._GBareaRemoval(p) * np.ones(len(self.PBM[p].PSDbounds)))
+                else:
+                    scale.append(1/self.shapeFactors[p].eqRadiusFactor(self.PBM[p].PSDbounds))
+                    if radius == 'long':
+                        scale.append(self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds) / self.shapeFactors[p].eqRadiusFactor(self.PBM[p].PSDbounds))
+            else:
+                scale.append(self._GBareaRemoval(p) * np.ones(len(self.PBM[p].PSDbounds)))
 
         if variable in compositionVariables:
             if variable == 'Interfacial Composition Alpha':
@@ -785,13 +803,12 @@ class PrecipitateModel (PrecipitateBase):
                 ylabel = 'Distribution Density (#/$m^4$)'
             else:
                 functionName = 'PlotCurve'
-            
 
             if len(self.phases) == 1:
-                getattr(self.PBM[0], functionName)(axes, scale=self._GBareaRemoval(0), *args, **kwargs)
+                getattr(self.PBM[0], functionName)(axes, scale=scale[0], *args, **kwargs)
             else:
                 for p in range(len(self.phases)):
-                    getattr(self.PBM[p], functionName)(axes, label=self.phases[p], scale=self._GBareaRemoval(p), *args, **kwargs)
+                    getattr(self.PBM[p], functionName)(axes, label=self.phases[p], scale=scale[p], *args, **kwargs)
                 axes.legend()
             axes.set_xlabel('Radius (m)')
             axes.set_ylabel(ylabel)
@@ -799,27 +816,27 @@ class PrecipitateModel (PrecipitateBase):
         elif variable == 'Cumulative Size Distribution':
             ylabel = 'CDF'
             if len(self.phases) == 1:
-                self.PBM[0].PlotCDF(axes, scale=self._GBareaRemoval(0), *args, **kwargs)
+                self.PBM[0].PlotCDF(axes, scale=scale[0], *args, **kwargs)
             else:
                 for p in range(len(self.phases)):
-                    self.PBM[p].PlotCDF(axes, label=self.phases[p], scale=self._GBareaRemoval(p), *args, **kwargs)
+                    self.PBM[p].PlotCDF(axes, label=self.phases[p], scale=scale[p], *args, **kwargs)
                 axes.legend()
             axes.set_xlabel('Radius (m)')
             axes.set_ylabel(ylabel)
 
         elif variable == 'Aspect Ratio Distribution':
             if len(self.phases) == 1:
-                axes.plot(self.PBM[0].PSDsize, self.eqAspectRatio[0], *args, **kwargs)
+                axes.plot(self.PBM[0].PSDbounds * np.interp(self.PBM[p].PSDbounds, self.PBM[0].PSDbounds, scale[0]), self.eqAspectRatio[0], *args, **kwargs)
             else:
                 for p in range(len(self.phases)):
-                    axes.plot(self.PBM[p].PSDsize, self.eqAspectRatio[p], label=self.phases[p], *args, **kwargs)
+                    axes.plot(self.PBM[p].PSDbounds * np.interp(self.PBM[p].PSDbounds, self.PBM[p].PSDbounds, scale[p]), self.eqAspectRatio[p], label=self.phases[p], *args, **kwargs)
                 axes.legend()
-            axes.set_xlim([0, np.amax(self.PBM[0].PSDsize)])
+            axes.set_xlim([0, np.amax(self.PBM[p].PSDbounds * np.interp(self.PBM[p].PSDbounds, self.PBM[p].PSDbounds, scale[p]))])
             axes.set_ylim(bottom=1)
             axes.set_xlabel('Radius (m)')
             axes.set_ylabel('Aspect ratio distribution')
             
         else:
-            super().plot(axes, variable, bounds, *args, **kwargs)
+            super().plot(axes, variable, bounds, timeUnits, radius, *args, **kwargs)
 
         

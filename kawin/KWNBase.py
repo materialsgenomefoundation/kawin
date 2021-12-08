@@ -55,6 +55,9 @@ class PrecipitateBase:
 
         #Predefined constraints, these can be set if they make the simulation unstable
         self._defaultConstraints()
+
+        #Stopping conditions
+        self.clearStoppingConditions()
             
         #Composition array
         self.elements = elements
@@ -129,7 +132,7 @@ class PrecipitateBase:
     def reset(self):
         '''
         Resets simulation results
-        This does not reset the model parameters
+        This does not reset the model parameters, however, it will clear any stopping conditions
         '''
         self._resetArrays()
         self.xComp[0] = self.xInit
@@ -950,6 +953,90 @@ class PrecipitateBase:
         else:
             self.effDiffDistance = effectiveDiffusionDistance
 
+    def addStoppingCondition(self, variable, condition, value, phase = None, element = None, mode = 'or'):
+        '''
+        Adds condition to stop simulation when condition is met
+
+        Parameters
+        ----------
+        variable : str
+            Variable to set condition for, options are 
+                'Volume Fraction'
+                'Average Radius'
+                'Driving Force'
+                'Nucleation Rate'
+                'Precipitate Density'
+        condition : str
+            Operator for condition, options are
+                'greater than' or '>'
+                'less than' or '<'
+        value : float
+            Value for condition
+        phase : str (optional)
+            Phase to consider (defaults to first precipitate in list)
+        element : str (optional)
+            For 'Composition', element to consider for condition (defaults to first element in list)
+        mode : str (optional)
+            How the condition will be handled
+                'or' (default) - at least one condition in this mode needs to be met before stopping
+                'and' - all conditions in this mode need to be met before stopping
+                    This will also record the times each condition is met
+
+        Example
+        model.addStoppingCondition('Volume Fraction', '>', 0.002, 'beta')
+            will add a condition to stop simulation when the volume fraction of the 'beta'
+            phase becomes greater than 0.002
+        '''
+        index = self.phaseIndex(phase)
+
+        if self._stoppingConditions is None:
+            self._stoppingConditions = []
+            self.stopConditionTimes = []
+            self._stopConditionMode = []
+
+        standardLabels = {
+            'Volume Fraction': 'betaFrac',
+            'Average Radius': 'avgR',
+            'Driving Force': 'dGs',
+            'Nucleation Rate': 'nucRate',
+            'Precipitate Density': 'precipitateDensity',
+        }
+        otherLabels = ['Composition']
+
+        if variable in standardLabels:
+            if 'greater' in condition or '>' in condition:
+                cond = lambda self, i, p = index, var=standardLabels[variable] : getattr(self, var)[p,i] > value
+            elif 'less' in condition or '<' in condition:
+                cond = lambda self, i, p = index, var=standardLabels[variable] : getattr(self, var)[p,i] < value
+        else:
+            if variable == 'Composition':
+                eIndex = 0 if element is None else self.elements.index(element)
+                if 'greater' in condition or '>' in condition:
+                    if self.numberOfElements > 1:
+                        cond = lambda self, i, e = eIndex, var='xComp' : getattr(self, var)[i, e] > value
+                    else:
+                        cond = lambda self, i, var='xComp' : getattr(self, var)[i] > value
+                elif 'less' in condition or '<' in condition:
+                    if self.numberOfElements > 1:
+                        cond = lambda self, i, e = eIndex, var='xComp' : getattr(self, var)[i, e] < value
+                    else:
+                        cond = lambda self, i, var='xComp' : getattr(self, var)[i] < value
+
+        self._stoppingConditions.append(cond)
+        self.stopConditionTimes.append(-1)
+        if mode == 'and':
+            self._stopConditionMode.append(False)
+        else:
+            self._stopConditionMode.append(True)
+
+    def clearStoppingConditions(self):
+        '''
+        Clears all stopping conditions
+        '''
+        self._stoppingConditions = None
+        self.stopConditionTimes = None
+        self._stopConditionMode = None
+
     def printModelParameters(self):
         '''
         Prints the model parameters
@@ -1019,8 +1106,35 @@ class PrecipitateBase:
         
         #While loop since number of steps may change with adaptive time stepping
         i = 1
-        while i < self.steps:
+        stopCondition = False
+        while i < self.steps and not stopCondition:
             self._iterate(i)
+
+            #Apply stopping condition
+            if self._stoppingConditions is not None:
+                andConditions = True
+                numberOfAndConditions = 0
+                orConditions = False
+                for s in range(len(self._stoppingConditions)):
+                    #Record time if stopping condition is met
+                    conditionResult = self._stoppingConditions[s](self, i)
+                    if conditionResult and self.stopConditionTimes[s] == -1:
+                        self.stopConditionTimes[s] = self.time[i]
+
+                    #If condition mode is 'or'
+                    if self._stopConditionMode[s]:
+                        orConditions = orConditions or conditionResult
+                    #If condition mode is 'and'
+                    else:
+                        andConditions = andConditions and conditionResult
+                        numberOfAndConditions += 1
+
+                #If there are no 'and' conditions, andConditions will be True
+                #Set to False so andConditions will not stop the model unneccesarily
+                if numberOfAndConditions == 0:
+                    andConditions = False
+
+                stopCondition = andConditions or orConditions
 
             #Print current variables
             if i % vIt == 0 and verbose:
@@ -1195,7 +1309,7 @@ class PrecipitateBase:
 
         return np.exp(-tau / (self.time[i] - self.time[int(self.incubationOffset[p])]))
     
-    def plot(self, axes, variable, bounds = None, timeUnits = 's', *args, **kwargs):
+    def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
         '''
         Plots model outputs
         
@@ -1217,6 +1331,14 @@ class PrecipitateBase:
                     
         bounds : tuple (optional)
             Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
+        timeUnits : str (optional)
+            Plot time dependent variables per seconds ('s'), minutes ('m') or hours ('h')
+        radius : str (optional)
+            For non-spherical precipitates, plot the Average Radius by the -
+                Equivalent spherical radius ('spherical')
+                Short axis ('short')
+                Long axis ('long')
+            Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
         *args, **kwargs - extra arguments for plotting
         '''
         timeScale = 1
@@ -1370,8 +1492,17 @@ class PrecipitateBase:
                 plotVariable = self.Rcrit
             elif variable == 'Average Radius':
                 plotVariable = self.avgR
+                for p in range(len(self.phases)):
+                    if self.GB[p].nucleationSiteType == self.GB[p].BULK or self.GB[p].nucleationSiteType == self.GB[p].DISLOCATION:
+                        if radius != 'spherical':
+                            plotVariable /= self.shapeFactors[p].eqRadiusFactor(self.avgR[p])
+                        if radius == 'long':
+                            plotVariable *= self.shapeFactors[p].aspectRatio(self.avgR[p])
+                    else:
+                        plotVariable *= self._GBareaRemoval(p)
+
             elif variable == 'Volume Average Radius':
-                plotVariable = np.cbrt(self.betaFrac / self.precipitateDensity)
+                plotVariable = np.cbrt(self.betaFrac / self.precipitateDensity / (4/3*np.pi))
             elif variable == 'Aspect Ratio':
                 plotVariable = self.avgAR
             elif variable == 'Driving Force':

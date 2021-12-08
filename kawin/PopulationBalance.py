@@ -329,6 +329,9 @@ class PopulationBalanceModel:
                 determined by precipitate curvature
         *args, **kwargs - extra arguments for plotting
         '''
+        if hasattr(scale, '__len__'):
+            scale = np.interp(self.PSDsize, self.PSDbounds, scale)
+
         if fill:
             axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
         else:
@@ -357,6 +360,9 @@ class PopulationBalanceModel:
                 determined by precipitate curvature
         *args, **kwargs - extra arguments for plotting
         '''
+        if hasattr(scale, '__len__'):
+            scale = np.interp(self.PSDsize, self.PSDbounds, scale)
+
         if fill:
             axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
         else:
@@ -406,6 +412,9 @@ class PopulationBalanceModel:
         kernel = sts.gaussian_kde(self.PSDsize, bw_method = bw_method, weights = self.PSD)
         x = np.linspace(self.min, self.max, 1000) if self.linear else np.logspace(self.min, self.max, 1000)    
         y = kernel(x) * self.ZeroMoment() * (self.PSDbounds[1] - self.PSDbounds[0])
+
+        if hasattr(scale, '__len__'):
+            scale = np.interp(x, self.PSDbounds, scale)
         
         if fill:
             axes.fill_between(x * scale, y, np.zeros(len(y)), *args, **kwargs)
@@ -446,6 +455,9 @@ class PopulationBalanceModel:
             xCoord[0], xCoord[1::2], xCoord[2::2] = self.PSDbounds[0], self.PSDbounds[:-1], self.PSDbounds[1:]
             yCoord[1::2], yCoord[2::2] = self.PSD, self.PSD
 
+        if hasattr(scale, '__len__'):
+            scale = np.interp(xCoord, self.PSDbounds, scale)
+
         if outline != 'no outline':
             axes.plot(xCoord * scale, yCoord, *args, **kwargs)
             if fill:
@@ -473,6 +485,9 @@ class PopulationBalanceModel:
             Moment of specified order
         *args, **kwargs - extra arguments for plotting
         '''
+        if hasattr(scale, '__len__'):
+            scale = np.interp(self.PSDsize, self.PSDbounds, scale)
+
         axes.plot(self.PSDsize * scale, self.CumulativeMoment(order) / self.Moment(order), *args, **kwargs)
         self.setAxes(axes, logX, False) 
         axes.set_ylim([0, 1])

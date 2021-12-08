@@ -1,5 +1,7 @@
 import numpy as np
 import itertools
+import matplotlib.pyplot as plt
+from kawin.LebedevNodes import loadPoints
 
 class StrainEnergy:
     '''
@@ -22,7 +24,7 @@ class StrainEnergy:
         self.appstrain = np.zeros((3,3))
         self.rotation = None
 
-        self.setIntegrationIntervals(32, 32)
+        self.lebedevIntegration('high')
 
         self._strainEnergyGeneric = self._strainEnergyConstant
         self.type = self.CONSTANT
@@ -39,14 +41,26 @@ class StrainEnergy:
         self._cachedIntervals = 100
 
     def setSpherical(self):
+        '''
+        Assumes spherical geometry for strain energy calculation
+        Uses Khachaturyan's approximation
+        '''
         self._strainEnergyGeneric = self._strainEnergySphere
         self.type = self.SPHERE
     
     def setCuboidal(self):
+        '''
+        Assumes cuboidal geometry for strain energy calculation
+        Uses Khachaturyan's approximation
+        '''
         self._strainEnergyGeneric = self._strainEnergyCube
         self.type = self.CUBE
 
     def setEllipsoidal(self):
+        '''
+        Assumes ellipsoidal geometry for strain energy calculation
+        Uses Eshelby's tensor
+        '''
         self._strainEnergyGeneric = self._strainEnergyEllipsoid
         self.type = self.ELLIPSE
 
@@ -62,34 +76,29 @@ class StrainEnergy:
         self._gElasticConstant = energy
         self._strainEnergyGeneric = self._strainEnergyConstant
         self.type = self.CONSTANT
-        
-    def setIntegrationIntervals(self, phiInt, thetaInt):
-        '''
-        Number of intervals to split domain along phi and theta for integration
-        '''
-        self.phiInt = phiInt
-        self.thetaInt = thetaInt
-
-        #Integral should be symmetric per quadrant (need to check)
-        #Thus we only need to integrate along a single quadrant
-        self.dphi = np.pi/2 / phiInt
-        self.dtheta = np.pi/2 / thetaInt
-        self.midPhi = np.linspace(self.dphi/2, np.pi/2 - self.dphi/2, phiInt)
-        self.midTheta = np.linspace(self.dtheta/2, np.pi/2 - self.dtheta/2, thetaInt)
-
-        #Cartesian product of phi and theta intervals
-        self.midPhiGrid, self.midThetaGrid = np.meshgrid(self.midPhi, self.midTheta)
-        self.midPhiGrid = self.midPhiGrid.ravel()
-        self.midThetaGrid = self.midThetaGrid.ravel()
 
     def setElasticTensor(self, tensor):
         '''
-        6x6 elastic matrix
+        Inputs 6x6 elastic matrix
+
+        Parameters
+        ----------
+        tensor : matrix of floats
+            Must be 6x6
         '''
         self.c = np.array(tensor)
         self._setupElasticTensor()
 
     def setElasticConstants(self, c11, c12, c44):
+        '''
+        Creates elastic tensor from c11, c12 and c44 constants assuming isotropic system
+
+        Parameters
+        ----------
+        c11 : float
+        c12 : float
+        c44 : float
+        '''
         self.c = np.zeros((6, 6))
         self.c[0,0], self.c[1,1], self.c[2,2] = c11, c11, c11
         self.c[0,1], self.c[0,2], self.c[1,0], self.c[1,2], self.c[2,0], self.c[2,1] = c12, c12, c12, c12, c12, c12
@@ -108,7 +117,7 @@ class StrainEnergy:
         K - bulk modulus
         M - P-wave modulus
 
-        There's gotta be a better way to do this
+        NOTE: There's gotta be a better way to implement the conversions
         '''
         if E:
             if nu:
@@ -204,6 +213,11 @@ class StrainEnergy:
 
         This is for cases where the axes of the precipitate does not align with the axes of the matrix
         (e.g., the long/short axes of the precipitate is not parallel to the <100> directions of the matrix)
+
+        Parameters
+        ----------
+        rot : matrix
+            3x3 rotation matrix
         '''
         self.rotation = np.array(rot)
 
@@ -214,6 +228,11 @@ class StrainEnergy:
         '''
         Rotates a 2nd rank tensor
         T_ij = r_il * r_jk * T_lk
+
+        Parameters
+        ----------
+        tensor : ndarray
+            2nd rank tensor to rotate (3x3 array)
         '''
         return np.tensordot(self.rotation,
                 np.tensordot(self.rotation, tensor, axes=(1,1)), axes=(1,1))
@@ -222,6 +241,11 @@ class StrainEnergy:
         '''
         Rotates a 4th rank tensor
         T_ijkl = r_im * r_jn * r_ok * r_lp * T_mnop
+
+        Parameters
+        ----------
+        tensor : ndarray
+            4th rank tensor to rotate (3x3x3x3 array)
         '''
         return np.tensordot(self.rotation, 
                 np.tensordot(self.rotation, 
@@ -229,6 +253,20 @@ class StrainEnergy:
                 np.tensordot(self.rotation, tensor, axes=(1,3)), axes=(1,3)), axes=(1,3)), axes=(1,3))
 
     def setEigenstrain(self, strain):
+        '''
+        Sets eigenstrain of precipitate
+
+        Parameters
+        ----------
+        strain : float, array or matrix
+            float - assume strain is the same along all 3 axis
+            array - each index corresponds to strain in a given axis
+            matrix - full 2nd rank strain tensor
+
+        NOTE: when using in conjunction with ShapeFactors, the axis are order specific
+            For needle-like precipitates, x1, x2 and x3 correspond to (short axis, short axis, long axis)
+            For plate-like precipitates, x1, x2 and x3 correspond to (long axis, long axis, short axis)
+        '''
         strain = np.array(strain)
         #If scalar, then apply to all 3 axis
         if (type(strain) == np.ndarray and strain.ndim == 0):
@@ -241,6 +279,25 @@ class StrainEnergy:
             self.eigstrain = strain
 
     def setAppliedStress(self, stress):
+        '''
+        Sets applied stress tensor
+
+        Parameters
+        ----------
+        stress : float, array or matrix
+            float - assume stress is the same along all 3 axis
+            array - each index corresponds to stress in a given axis
+            matrix - full 2nd rank stress tensor
+
+        NOTE: The applied stress is in reference to the coordinate axes of the precipitates
+        Thus, this is only valid if the following conditions are met:
+            The matrix phase has a single orientation (either as a single crystal or highly textured)
+            Precipitates will form only in a single orientation with respect to the matrix
+
+        TODO: It will be nice to expand on this.
+            For polycrystalline matrix and randomly oriented precipitates, it should be possible
+            to average the strain energy contributions over all matrix/precipitate orientations
+        '''
         stress = np.array(stress)
         #If scalar, then apply to all 3 axis
         if (type(stress) == np.ndarray and stress.ndim == 0):
@@ -256,6 +313,9 @@ class StrainEnergy:
             self.getAppliedStrain()
 
     def getAppliedStrain(self):
+        '''
+        Calculates applied strain tensor from applied stress tensor and elastic tensor
+        '''
         flatStress = np.array([self.appstress[0,0], self.appstress[1,1], self.appstress[2,2], \
                                 self.appstress[1,2], self.appstress[0,2], self.appstress[0,1]])
         flatStrain = np.matmul(np.linalg.inv(self.c), flatStress)
@@ -265,6 +325,77 @@ class StrainEnergy:
 
         if self.rotation is not None:
             self.appstrain = self._rotateRank2Tensor(self.appstrain)
+
+    def setIntegrationIntervals(self, phiInt, thetaInt, assumeSymmetric=True):
+        '''
+        Number of intervals to split domain along phi and theta for integration
+
+        Parameters
+        ----------
+        phiInt : int
+            Number of intervals to divide along phi
+        thetaInt : int
+            Number of intervals to divide along theta
+        assumeSymmetric : bool (optional)
+            If True (default), will only integrate Eshelby's tensor on a single quadrant and
+            multiply the results by 8
+        '''
+        #Integral should be symmetric per quadrant (need to check)
+        #Thus we only need to integrate along a single quadrant
+        if assumeSymmetric:
+            dphi = np.pi/2 / phiInt
+            dtheta = np.pi/2 / thetaInt
+            midPhi = np.linspace(dphi/2, np.pi/2 - dphi/2, phiInt)
+            midTheta = np.linspace(dtheta/2, np.pi/2 - dtheta/2, thetaInt)
+            self.dA = dtheta * dphi
+        else:
+            dphi = 2*np.pi / phiInt
+            dtheta = np.pi / thetaInt
+            midPhi = np.linspace(dphi/2, 2*np.pi-dphi/2, phiInt)
+            midTheta = np.linspace(dtheta/2, np.pi-dtheta/2, thetaInt)
+            self.dA = 1/8 * dtheta * dphi
+
+        #Cartesian product of phi and theta intervals
+        self.midPhiGrid, self.midThetaGrid = np.meshgrid(midPhi, midTheta)
+        self.midPhiGrid = self.midPhiGrid.ravel()
+        self.midThetaGrid = self.midThetaGrid.ravel()
+        self.midWeights = np.sin(self.midThetaGrid)
+
+    def lebedevIntegration(self, order = 'high'):
+        '''
+        Creates Lebedev quadrature points and nodes for integrating Eshebly's tensor
+        This is preferred over discretizing phi and theta
+
+        Parameters
+        ----------
+        order : str
+            'low' - uses quadrature order or 53 (974 points)
+            'mid' - uses quadrature order or 83 (2354 points)
+            'high' (default) - uses quadrature order or 131 (5810 points)
+        '''
+        if order == 'low':
+            order = 53
+        elif order == 'mid':
+            order = 83
+        else:
+            order = 131
+
+        self.midPhiGrid, self.midThetaGrid, self.midWeights = loadPoints(order)
+
+        #self.midPhiGrid = []
+        #self.midThetaGrid = []
+        #self.midWeights = []
+        #with open('p'+str(order)+'.txt', 'r') as file:
+        #    lines = file.readlines()
+        #    for l in lines:
+        #        data = l.split()
+        #        self.midPhiGrid.append(float(data[0]))
+        #        self.midThetaGrid.append(float(data[1]))
+        #        self.midWeights.append(float(data[2]))
+        #self.midPhiGrid = np.array(self.midPhiGrid) * np.pi / 180
+        #self.midThetaGrid = np.array(self.midThetaGrid) * np.pi / 180
+        #self.midWeights = np.array(self.midWeights)
+        self.dA = np.pi/2
 
     def _n(self, phi, theta):
         '''
@@ -297,26 +428,6 @@ class StrainEnergy:
         invOhm = np.tensordot(self._c4, np.tensordot(n, n, axes=0), axes=[[1,2], [0,1]])
         return np.linalg.inv(invOhm)
 
-    def sphericalIntegral(self, func):
-        '''
-        Integrates over spherical surface given function that takes in (phi, theta)
-        '''
-        intSum = 0
-        for i in range(len(self.midThetaGrid)):
-            intSum += func(self.midPhiGrid[i], self.midThetaGrid[i])
-        intSum *= self.dtheta * self.dphi
-
-        return 8*intSum
-
-    def Dfunc(self, phi, theta):
-        '''
-        Term inside integral for calculating Dijkl
-        '''
-        n = self._n(phi, theta)
-        endTerm = np.sin(theta) / self._beta(self.r[0], self.r[1], self.r[2], phi, theta)**3
-        d = np.tensordot(self._OhmGeneral(n), np.tensordot(n, n, axes=0), axes=0) * endTerm
-        return d
-
     def sphInt(self):
         '''
         Faster version of calculating the Dijkl, which avoids
@@ -330,7 +441,8 @@ class StrainEnergy:
         nProd = np.matmul(np.transpose(nexp, (2,1,0)), np.transpose(nexp, (2,0,1))).transpose((1,2,0))
 
         #End term inside integral = sin(theta) / beta**3
-        endTerm = np.sin(self.midThetaGrid) / self._beta(self.r[0], self.r[1], self.r[2], self.midPhiGrid, self.midThetaGrid)**3
+        #endTerm = np.sin(self.midThetaGrid) / self._beta(self.r[0], self.r[1], self.r[2], self.midPhiGrid, self.midThetaGrid)**3
+        endTerm = 1 / self._beta(self.r[0], self.r[1], self.r[2], self.midPhiGrid, self.midThetaGrid)**3
 
         #Ohm term (Ohm_ij = inverse(C_iklj * n_k * n_l))
         #For all grid points (Ohm_ijn = inverse(C_iklj) * nProd_kln)
@@ -339,10 +451,10 @@ class StrainEnergy:
 
         #Tensor product (D_ijkl = intergral(ohm_ij * n_k * n_l * endTerm))
         #For summing over grid points (D_ijkl = ohm_ij * nProd_kln * endTerm_n)
-        d = np.tensordot(ohm, np.multiply(nProd, endTerm), axes=[[2], [2]])
+        d = np.tensordot(ohm, np.multiply(nProd, endTerm * self.midWeights), axes=[[2], [2]])
 
         #Multiply by differential area and across the 8 quadrants
-        return 8*d*self.dtheta*self.dphi
+        return 8*d*self.dA
 
     def Dijkl(self):
         #return -np.product(self.r)/(4*np.pi) * self.sphericalIntegral(self.Dfunc)
@@ -535,6 +647,13 @@ class StrainEnergy:
             self._aspectRatios = np.concatenate((self._aspectRatios, addedAspectRatios))
             self._normEnergies = np.concatenate((self._normEnergies, addedNormEnergies))
 
+    def clearCache(self):
+        '''
+        Clear cached calculations
+        '''
+        self._aspectRatios = None
+        self._normEnergies = None
+
     def eqAR_bySearch(self, Rsph, gamma, shpFactor):
         '''
         Cached search
@@ -571,7 +690,7 @@ class StrainEnergy:
 
         #If eqAR is on the upper end (3/4) of the cached aspect ratios, then
         #added to the cached arrays until it's not
-        while eqAR > self._aspectRatios[int(-self._cachedIntervals/4)]:
+        while eqAR > self._aspectRatios[int(-self._cachedIntervals/4)] and self._aspectRatios[-1] < 100:
             self.updateCache(normR)
             eInter = Asph*interfacial(self._aspectRatios)*gamma
             eqAR = self._aspectRatios[np.argmin(self._normEnergies*Vsph+eInter)]

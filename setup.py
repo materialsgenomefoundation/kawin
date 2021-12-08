@@ -11,7 +11,7 @@ setup(
     author='Nicholas Ury',
     author_email='nury12n@gmail.com',
     description='Tool for simulating precipitation using the KWN model coupled with Calphad.',
-    packages=['kawin', 'kawin.tests', 'kawin.lebedevQuad'],
+    packages=['kawin', 'kawin.tests'],
     license='MIT',
     long_description=read('README.md'),
     long_description_content_type='text/markdown',

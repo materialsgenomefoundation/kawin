@@ -20,12 +20,15 @@ class PrecipitateModel (PrecipitateBase):
         Final time in seconds
     steps : int
         Number of time steps
-    rMin : float
+    rMin : float (optional)
         Lower bound of particle size distribution
-    rMax : float
+        Default is 1e-10 m
+    rMax : float (optional)
         Upper bound of particle size distribution
-    bins : int
+        Default is 1e-7 m
+    bins : int (optional)
         Number of size classes in particle size distribution
+        Default is 100
     phases : list (optional)
         Precipitate phases (array of str)
         If only one phase is considered, the default is ['beta']
@@ -50,7 +53,6 @@ class PrecipitateModel (PrecipitateBase):
 
         #Bounds of the bins in PSD
         self.bins = int(bins)
-        self.PBM = []
         self.PBM = [PopulationBalanceModel(rMin, rMax, self.bins, True) for p in self.phases]
 
         #Index of particle size classes which below, precipitates are unstable
@@ -417,7 +419,8 @@ class PrecipitateModel (PrecipitateBase):
         #The radaii that are ignore are determined such that the volume CDF up to that radaii is a certain fraction of the total volume
         #We also want to ignore radaii where the PSD is less than a certain threshold (this is useful in multi-phase systems where a phase has completely dissolved)
         dissFrac = [self.maxDissolution * self.PBM[p].ThirdMoment() for p in range(len(self.phases))]
-        dissIndices = [np.amax([np.argmax(self.PBM[p].CumulativeMoment(3) > dissFrac[p]), self.RdrivingForceIndex[p]]) for p in range(len(self.phases))]
+        relDiss = [np.argmax(self.PBM[p].CumulativeMoment(3) > dissFrac[p]) for p in range(len(self.phases))]
+        dissIndices = [np.amax([relDiss[p], self.RdrivingForceIndex[p]]) for p in range(len(self.phases))]
         growthFilter = [self.growth[p][dissIndices[p]:-1][self.PBM[p].PSD[dissIndices[p]:] > 0] for p in range(len(self.phases))]
         
         gFilter = []
@@ -444,6 +447,7 @@ class PrecipitateModel (PrecipitateBase):
                 if self.nucRate[p,i] > self.minNucleationRate and self.nucRate[p,i-1] > self.minNucleationRate and self.nucRate[p,i-1] != self.nucRate[p,i]:
                     dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
             dt = np.amin(dtNuc)
+            #pbmlimited = dtNuc[-1] == dt
 
             #Temperature change constraint
             Tchange = self.T[i] - self.T[i-1]
@@ -453,6 +457,10 @@ class PrecipitateModel (PrecipitateBase):
                 dt = np.amin([dt, dtTemp])
 
         if dt < self.time[i] - self.time[i-1]:
+            #if pbmlimited:
+            #    print('PBM limited time step', dissFrac, dissIndices)
+            #else:
+            #    print('Nucleation limited time step')
             self._divideTimestep(i, dt)
 
     def _noPostCheckDT(self, i):
@@ -489,6 +497,7 @@ class PrecipitateModel (PrecipitateBase):
 
         #If any test fails, then reset iteration and divide time increment
         if not any(checks):
+            print('Volume or composition limited time step')
             if self.numberOfElements == 1:
                 self.xComp[i] = 0
             else:
@@ -578,17 +587,26 @@ class PrecipitateModel (PrecipitateBase):
                     self.PSDXbeta[p] = np.append(self.PSDXbeta[p], newXbeta)
                 else:
                     g, newXalpha, newXbeta, _, _ = self.interfacialComposition[p](self.xComp[i-1], self.T[i], self.dGs[p,i-1] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]))
-                    self.PSDXalpha[p] = newXalpha
-                    self.PSDXbeta[p] = newXbeta
-                    self.growth[p] = g
+                    if g is None:
+                        #If driving force < 0, then precipitates are unstable
+                        if self.dGs[p,i] < 0:
+                            self.growth[p] = np.zeros(self.PBM[p].bins + 1)
+                            self.PSDXalpha[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
+                            self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
+                        #Else, use previous growth and composition values to determine new values
+                        else:
+                            #Temporary - will need to actually calculate the values
+                            self.growth[p][-1] = self.growth[p][-2]
+                            self.PSDXalpha[p] = np.append(self.PSDXalpha[p], [self.PSDXalpha[p][-1,:]], axis=0)
+                            self.PSDXbeta[p] = np.append(self.PSDXbeta[p], [self.PSDXbeta[p][-1,:]], axis=0)
+                    else:
+                        self.growth[p] = g
+                        self.PSDXalpha[p] = newXalpha
+                        self.PSDXbeta[p] = newXbeta
 
             #Add nucleates to PSD after growth rate since new precipitates will have a growth rate of 0
-            nRad = 0
             #Find size class for nucleated particles
-            for n in range(1, self.PBM[p].bins):
-                if self.PBM[p].PSDbounds[n] > self.Rad[p, i]:
-                    nRad = n-1
-                    break
+            nRad = np.argmax(self.PBM[p].PSDbounds > self.Rad[p, i]) - 1
             self.PBM[p].PSD[nRad] += self.nucRate[p, i] * dt
 
             self.PBM[p].Update(dt, self.growth[p])
@@ -596,6 +614,7 @@ class PrecipitateModel (PrecipitateBase):
             #Set negative frequencies in PSD to 0
             #Also set any less than the minimum possible radius to be 0
             self.PBM[p].PSD[:self.RdrivingForceIndex[p]] = 0
+            self.PBM[p].PSD[self.PBM[p].PSDsize < self.minRadius] = 0
 
     def _massBalance(self, i):
         '''
@@ -703,14 +722,20 @@ class PrecipitateModel (PrecipitateBase):
         for p in range(len(self.phases)):
             growth, xAlpha, xBeta, xEqAlpha, xEqBeta = self.interfacialComposition[p](self.xComp[i-1], self.T[i], self.dGs[p,i-1] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]))
             
-            #If two-phase equilibrium not found, the precipitates are unstable and dissolved
+            #If two-phase equilibrium not found, two possibilities - precipitates are unstable or equilibrium calculations didn't converge
             if growth is None:
-                growthRate.append(np.zeros(self.PBM[p].bins + 1))
-                self.PSDXalpha[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
-                self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
-                self.PBM[p].PSD = np.zeros(self.PBM[p].bins)
-                self.xEqAlpha[p,i] = np.zeros(self.numberOfElements)
-                self.xEqBeta[p,i] = np.zeros(self.numberOfElements)
+                #If driving force is negative, then precipitates are unstable
+                if self.dGs[p,i] < 0:
+                    growthRate.append(np.zeros(self.PBM[p].bins + 1))
+                    self.PSDXalpha[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
+                    self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
+                    self.PBM[p].PSD = np.zeros(self.PBM[p].bins)
+                    self.xEqAlpha[p,i] = np.zeros(self.numberOfElements)
+                    self.xEqBeta[p,i] = np.zeros(self.numberOfElements)
+                #Else, equilibrium did not converge and just use previous values
+                #Only the growth rate needs to be updated, since all other terms are previous
+                else:
+                    growthRate.append(self.growth[p])
             else:
                 #Update interfacial composition for each precipitate size
                 self.PSDXalpha[p] = xAlpha

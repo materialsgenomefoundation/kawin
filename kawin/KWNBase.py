@@ -390,7 +390,7 @@ class PrecipitateBase:
         maxTempChange - maximum temperature change before lookup table is updated (only for Euler in binary case) - default is 1 K
         maxDTFraction - maximum time increment allowed as a fraction of total simulation time - default is 0.1
         minDTFraction - minimum time increment allowed as a fraction of total simulation time - default is 1e-5
-        maxDissolution - maximum volume fraction of precipitates allowed to dissolve in a single time step - default is 0.01
+        maxDissolution - maximum relative volume fraction of precipitates allowed to dissolve in a single time step - default is 0.01
         maxRcritChange - maximum change in critical radius (as a fraction) per single time step - default is 0.01
         maxNucleationRateChange - maximum change in nucleation rate (on log scale) per single time step - default is 0.5
         minNucleationRate - minimum nucleation rate to be considered for checking time intervals - 1e-5

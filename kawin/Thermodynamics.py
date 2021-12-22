@@ -1450,7 +1450,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         
         Returns
         -------
-        (growth rate, matrix composition, precipitate composition)
+        (growth rate, matrix composition, precipitate composition, equilibrium matrix comp, equilibrium precipitate comp)
         growth rate will be float or array based off shape of R
         matrix and precipitate composition will be array or 2D array based
             off shape of R

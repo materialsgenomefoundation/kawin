@@ -382,19 +382,6 @@ class StrainEnergy:
 
         self.midPhiGrid, self.midThetaGrid, self.midWeights = loadPoints(order)
 
-        #self.midPhiGrid = []
-        #self.midThetaGrid = []
-        #self.midWeights = []
-        #with open('p'+str(order)+'.txt', 'r') as file:
-        #    lines = file.readlines()
-        #    for l in lines:
-        #        data = l.split()
-        #        self.midPhiGrid.append(float(data[0]))
-        #        self.midThetaGrid.append(float(data[1]))
-        #        self.midWeights.append(float(data[2]))
-        #self.midPhiGrid = np.array(self.midPhiGrid) * np.pi / 180
-        #self.midThetaGrid = np.array(self.midThetaGrid) * np.pi / 180
-        #self.midWeights = np.array(self.midWeights)
         self.dA = np.pi/2
 
     def _n(self, phi, theta):

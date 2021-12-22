@@ -40,7 +40,7 @@ class PrecipitateModel (PrecipitateBase):
         Note: order of elements must correspond to order of elements set in Thermodynamics module
         If binary system, then defualt is ['solute']
     '''
-    def __init__(self, t0, tf, steps, rMin = 1e-10, rMax = 1e-7, bins = 100, phases = ['beta'], linearTimeSpacing = False, elements = ['solute']):
+    def __init__(self, t0, tf, steps, phases = ['beta'], linearTimeSpacing = False, elements = ['solute']):
         #Initialize base class
         super().__init__(t0, tf, steps, phases, linearTimeSpacing, elements)
 
@@ -51,9 +51,7 @@ class PrecipitateModel (PrecipitateBase):
             self._growthRate = self._growthRateMulti
             self._Beta = self._BetaMulti
 
-        #Bounds of the bins in PSD
-        self.bins = int(bins)
-        self.PBM = [PopulationBalanceModel(rMin, rMax, self.bins, True) for p in self.phases]
+        self.PBM = [PopulationBalanceModel() for p in self.phases]
 
         #Index of particle size classes which below, precipitates are unstable
         self.RdrivingForceIndex = np.zeros(len(self.phases), dtype=np.int32)
@@ -348,11 +346,14 @@ class PrecipitateModel (PrecipitateBase):
     def setup(self):
         super().setup()
 
-        #Equilibrium aspect ratio
+        #Equilibrium aspect ratio and PBM setup
         #If calculateAspectRatio is True, then use strain energy to calculate aspect ratio for each size class in PSD
         #Else, then use aspect ratio defined in shape factors
         self.eqAspectRatio = [None for p in range(len(self.phases))]
         for p in range(len(self.phases)):
+            self.PBM[p].setBinConstraints(self.defaultBins, self.minBins, self.maxBins)
+            self.PBM[p].reset()
+
             if self.calculateAspectRatio[p]:
                 self.eqAspectRatio[p] = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDbounds, self.gamma[p], self.shapeFactors[p])
                 arFunc = lambda R, p1=p : self._interpolateAspectRatio(R, p1)
@@ -414,6 +415,12 @@ class PrecipitateModel (PrecipitateBase):
         '''
         Checks max growth rate and updates dt correspondingly
         '''
+        dt = self.time[i] - self.time[i-1]
+        if self.T[i] == self.T[i-1]:
+            dtPBM = [self.PBM[p].getDTEuler(dt, self.growth[p], self.maxDissolution, self.RdrivingForceIndex[p]) for p in range(len(self.phases))]
+        dt = np.amin(np.concatenate(([dt], dtPBM)))
+
+        '''
         #PBM growth rate constraint - flux leaving a bin cannot be higher than half the frequency in the bin
         #Ignore small radaii (growth rate can be really high, so this prevents dt from being too small)
         #The radaii that are ignore are determined such that the volume CDF up to that radaii is a certain fraction of the total volume
@@ -437,6 +444,7 @@ class PrecipitateModel (PrecipitateBase):
         else:
             maxGrowth = np.amax(np.abs(gFilter))
             dt = (self.PBM[0].PSDbounds[1] - self.PBM[0].PSDbounds[0]) / (2 * maxGrowth)
+        '''
 
         if i > 1:
             dtPrev = self.time[i-1] - self.time[i-2]
@@ -447,7 +455,6 @@ class PrecipitateModel (PrecipitateBase):
                 if self.nucRate[p,i] > self.minNucleationRate and self.nucRate[p,i-1] > self.minNucleationRate and self.nucRate[p,i-1] != self.nucRate[p,i]:
                     dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
             dt = np.amin(dtNuc)
-            #pbmlimited = dtNuc[-1] == dt
 
             #Temperature change constraint
             Tchange = self.T[i] - self.T[i-1]
@@ -457,10 +464,7 @@ class PrecipitateModel (PrecipitateBase):
                 dt = np.amin([dt, dtTemp])
 
         if dt < self.time[i] - self.time[i-1]:
-            #if pbmlimited:
-            #    print('PBM limited time step', dissFrac, dissIndices)
-            #else:
-            #    print('Nucleation limited time step')
+            #print('pbm limited time step')
             self._divideTimestep(i, dt)
 
     def _noPostCheckDT(self, i):
@@ -497,7 +501,7 @@ class PrecipitateModel (PrecipitateBase):
 
         #If any test fails, then reset iteration and divide time increment
         if not any(checks):
-            print('Volume or composition limited time step')
+            #print('Volume or composition limited time step')
             if self.numberOfElements == 1:
                 self.xComp[i] = 0
             else:
@@ -568,24 +572,23 @@ class PrecipitateModel (PrecipitateBase):
         This also updates the fraction of precipitates, matrix composition and average radius
         '''
         for p in range(len(self.phases)):
-            #Check largest class of PSD, if greater than 1, add additional size class
-            #Will have to update PSDXalpha and PSDXbeta as well
-            if self.PBM[p].PSD[-1] > 1:
-                self.PBM[p].addSizeClass()
-
+            #Update PSD
+            change1 = self.PBM[p].Nucleate(self.nucRate[p, i] * dt, self.Rad[p, i])
+            change2 = self.PBM[p].UpdateEuler(dt, self.growth[p])
+            if change1 or change2:
+                #print(self.phases[p])
                 #Add aspect ratio, do this before growth rate and interfacial composition since those are dependent on this
                 if self.calculateAspectRatio[p]:
-                    newAspectRatio = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDbounds[-1], self.gamma[p], self.shapeFactors[p])
+                    self.eqAspectRatio[p] = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDbounds, self.gamma[p], self.shapeFactors[p])
                 else:
-                    newAspectRatio = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds[-1])
-                self.eqAspectRatio[p] = np.append(self.eqAspectRatio[p], newAspectRatio)
+                    self.eqAspectRatio[p] = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds)
 
-                self.growth[p] = np.append(self.growth[p], 0)
+                self.growth[p] = np.zeros(len(self.PBM[p].PSDbounds))
                 if self.numberOfElements == 1:
-                    newXalpha, newXbeta = self.interfacialComposition[p](self.T[i], self.particleGibbs(self.PBM[p].PSDbounds[-1], self.phases[p]))
-                    self.PSDXalpha[p] = np.append(self.PSDXalpha[p], newXalpha)
-                    self.PSDXbeta[p] = np.append(self.PSDXbeta[p], newXbeta)
+                    #This is very slow to do
+                    self.createLookup()
                 else:
+                    #This takes the same time as before except it's called more often
                     g, newXalpha, newXbeta, _, _ = self.interfacialComposition[p](self.xComp[i-1], self.T[i], self.dGs[p,i-1] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]))
                     if g is None:
                         #If driving force < 0, then precipitates are unstable
@@ -603,13 +606,6 @@ class PrecipitateModel (PrecipitateBase):
                         self.growth[p] = g
                         self.PSDXalpha[p] = newXalpha
                         self.PSDXbeta[p] = newXbeta
-
-            #Add nucleates to PSD after growth rate since new precipitates will have a growth rate of 0
-            #Find size class for nucleated particles
-            nRad = np.argmax(self.PBM[p].PSDbounds > self.Rad[p, i]) - 1
-            self.PBM[p].PSD[nRad] += self.nucRate[p, i] * dt
-
-            self.PBM[p].Update(dt, self.growth[p])
             
             #Set negative frequencies in PSD to 0
             #Also set any less than the minimum possible radius to be 0
@@ -726,10 +722,12 @@ class PrecipitateModel (PrecipitateBase):
             if growth is None:
                 #If driving force is negative, then precipitates are unstable
                 if self.dGs[p,i] < 0:
+                    #Completely reset the PBM, including bounds and number of bins
+                    #In case nucleation occurs again, the PBM will be at a good length scale
+                    self.PBM[p].reset()
                     growthRate.append(np.zeros(self.PBM[p].bins + 1))
                     self.PSDXalpha[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
                     self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
-                    self.PBM[p].PSD = np.zeros(self.PBM[p].bins)
                     self.xEqAlpha[p,i] = np.zeros(self.numberOfElements)
                     self.xEqBeta[p,i] = np.zeros(self.numberOfElements)
                 #Else, equilibrium did not converge and just use previous values

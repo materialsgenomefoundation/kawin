@@ -374,6 +374,9 @@ class PrecipitateBase:
         self.maxVolumeChange = 0.001
         self.maxNonIsothermalDT = 1
         self.maxCompositionChange = 0.001
+        self.defaultBins = 150
+        self.maxBins = 200
+        self.minBins = 100
 
     def setConstraints(self, **kwargs):
         '''
@@ -397,6 +400,9 @@ class PrecipitateBase:
         maxVolumeChange - maximum absolute value that volume fraction can change per single time step - default is 0.001
         maxNonIsothermalDT - maximum time step when temperature is changing - default is 1 s
         maxCompositionChange - maximum change in composition in single time step - default is 0.01
+        defaultBins - default number of bins in the particle size distribution - defualt is 150
+        maxBins - maximum number of bins in the particle size distribution - default is 200
+        minBins - minimum number of bins in the particle size distribution - default is 100
         '''
         for key, value in kwargs.items():
             setattr(self, key, value)

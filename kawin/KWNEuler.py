@@ -326,13 +326,11 @@ class PrecipitateModel (PrecipitateBase):
             self.PSDXalpha.append(np.zeros(self.PBM[p].bins + 1))
             self.PSDXbeta.append(np.zeros(self.PBM[p].bins + 1))
 
-            for n in range(self.PBM[p].bins + 1):
-                self.PSDXalpha[p][n], self.PSDXbeta[p][n] = self.interfacialComposition[p](self.T[i], self.particleGibbs(self.PBM[p].PSDbounds[n], self.phases[p]))
+            self.PSDXalpha[p], self.PSDXbeta[p] = self.interfacialComposition[p](self.T[i], self.particleGibbs(self.PBM[p].PSDbounds, self.phases[p]))
+            self.RdrivingForceIndex[p] = np.argmax(self.PSDXalpha[p] != -1)-1
+            self.RdrivingForceIndex[p] = 0 if self.RdrivingForceIndex[p] < 0 else self.RdrivingForceIndex[p]
+            self.RdrivingForceLimit[p] = self.PBM[p].PSDbounds[self.RdrivingForceIndex[p]]
 
-                if self.PSDXalpha[p][n] == -1 or self.PSDXalpha[p][n] is None:
-                    self.RdrivingForceLimit[p] = self.PBM[p].PSDbounds[n]
-                    self.RdrivingForceIndex[p] = n
-                    
             #Sets particle radii smaller than driving force limit to driving force limit composition
             #If RdrivingForceIndex is at the end of the PSDX arrays, then no precipitate in the size classes of the PSD is stable
             #This can occur in non-isothermal situations where the temperature gets too high
@@ -418,33 +416,9 @@ class PrecipitateModel (PrecipitateBase):
         dt = self.time[i] - self.time[i-1]
         if self.T[i] == self.T[i-1]:
             dtPBM = [self.PBM[p].getDTEuler(dt, self.growth[p], self.maxDissolution, self.RdrivingForceIndex[p]) for p in range(len(self.phases))]
-        dt = np.amin(np.concatenate(([dt], dtPBM)))
-
-        '''
-        #PBM growth rate constraint - flux leaving a bin cannot be higher than half the frequency in the bin
-        #Ignore small radaii (growth rate can be really high, so this prevents dt from being too small)
-        #The radaii that are ignore are determined such that the volume CDF up to that radaii is a certain fraction of the total volume
-        #We also want to ignore radaii where the PSD is less than a certain threshold (this is useful in multi-phase systems where a phase has completely dissolved)
-        dissFrac = [self.maxDissolution * self.PBM[p].ThirdMoment() for p in range(len(self.phases))]
-        relDiss = [np.argmax(self.PBM[p].CumulativeMoment(3) > dissFrac[p]) for p in range(len(self.phases))]
-        dissIndices = [np.amax([relDiss[p], self.RdrivingForceIndex[p]]) for p in range(len(self.phases))]
-        growthFilter = [self.growth[p][dissIndices[p]:-1][self.PBM[p].PSD[dissIndices[p]:] > 0] for p in range(len(self.phases))]
-        
-        gFilter = []
-        for g in growthFilter:
-            #Possibly temporary!!!
-            #If temperature increases too fast and reaches a temp where precipitates are unstable,
-            #then the growth rate may by highly negative rather than being 0 with the PSD being reset
-            #In this case, only consider the phase for time constraint if isothermal or at least one growth rate is positive
-            if len(g) > 0 and (np.amax(g) > 0 or self.T[i] == self.T[i-1]):
-                gFilter = np.concatenate([gFilter, g])
-        #growthFilter = np.concatenate(([g for g in growthFilter if (len(g) > 0) and (np.amax(g) > 0)]))
-        if len(gFilter) == 0:
-            dt = self.time[i] - self.time[i-1]
         else:
-            maxGrowth = np.amax(np.abs(gFilter))
-            dt = (self.PBM[0].PSDbounds[1] - self.PBM[0].PSDbounds[0]) / (2 * maxGrowth)
-        '''
+            dtPBM = [dt]
+        dt = np.amin(np.concatenate(([dt], dtPBM)))
 
         if i > 1:
             dtPrev = self.time[i-1] - self.time[i-2]
@@ -574,7 +548,7 @@ class PrecipitateModel (PrecipitateBase):
         for p in range(len(self.phases)):
             #Update PSD
             change1 = self.PBM[p].Nucleate(self.nucRate[p, i] * dt, self.Rad[p, i])
-            change2 = self.PBM[p].UpdateEuler(dt, self.growth[p])
+            change2, newIndices = self.PBM[p].UpdateEuler(dt, self.growth[p])
             if change1 or change2:
                 #print(self.phases[p])
                 #Add aspect ratio, do this before growth rate and interfacial composition since those are dependent on this
@@ -585,8 +559,13 @@ class PrecipitateModel (PrecipitateBase):
 
                 self.growth[p] = np.zeros(len(self.PBM[p].PSDbounds))
                 if self.numberOfElements == 1:
-                    #This is very slow to do
-                    self.createLookup()
+                    if newIndices is None:
+                        #This is very slow to do
+                        self.createLookup(i-1)
+                    else:
+                        self.PSDXalpha[p] = np.concatenate((self.PSDXalpha[p], np.zeros(self.PBM[p].bins+1 - len(self.PSDXalpha[p]))))
+                        self.PSDXbeta[p] = np.concatenate((self.PSDXbeta[p], np.zeros(self.PBM[p].bins+1 - len(self.PSDXbeta[p]))))
+                        self.PSDXalpha[p][newIndices:], self.PSDXbeta[p][newIndices:] = self.interfacialComposition[p](self.T[i-1], self.particleGibbs(self.PBM[p].PSDbounds[newIndices:], self.phases[p]))
                 else:
                     #This takes the same time as before except it's called more often
                     g, newXalpha, newXbeta, _, _ = self.interfacialComposition[p](self.xComp[i-1], self.T[i], self.dGs[p,i-1] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]))

@@ -1,5 +1,4 @@
 import numpy as np
-from numpy.core.fromnumeric import reshape
 import scipy.stats as sts
 import matplotlib.pyplot as plt
 import copy
@@ -27,6 +26,29 @@ class PopulationBalanceModel:
         Minimum number of bins over an order of magnitude (defaults at 100)
     maxBins : int (optional)
         Maximum number of bins over an order of magnitude (defaults at 200)
+
+    Attributes
+    ----------
+    originalMin : float
+        Minimum bin size initially set
+    min : float
+        Current minimum bin size (this will almost always be equal to originalMin)
+    originalMax : float
+        Maximum bin size initially set
+    max : float
+        Current maximum bin size
+    bins : int
+        Default number of bins
+    minBins : int
+        Minimum number of allowed bins
+    maxBins : int
+        Maximum number of allowed bins
+    PSD : array
+        Particle size distribution
+    PSDsize : array
+        Average radius of each PSD size class
+    PSDbounds : array
+        Radius at the bounds of each size class - length of array is len(PSD)+1
     '''
     def __init__(self, cMin = 1e-10, cMax = 1e-9, bins = 150, minBins = 100, maxBins = 200):
         self.originalMin = cMin
@@ -52,10 +74,14 @@ class PopulationBalanceModel:
     def setBinConstraints(self, bins = 150, minBins = 100, maxBins = 200):
         '''
         Sets constraints for minimum and maxinum number of bins over an order of magnitude
+
+        All bins will be overridden to an even number
+        Minimum number of bins will be overridden to be at most half of maximum bins
+        Default bins will be overridden to be halfway between min and max bins if out of range
         '''
-        self.bins = bins
         self.minBins = minBins
         self.maxBins = maxBins
+        self.bins = bins
 
     def LoadDistribution(self, data):
         '''
@@ -184,10 +210,11 @@ class PopulationBalanceModel:
         dissFrac = maxDissolution * self.ThirdMoment()
         dissIndex = np.amax([np.argmax(self.CumulativeMoment(3) > dissFrac), startIndex])
         growthFilter = growth[dissIndex:-1][self.PSD[dissIndex:] > 0]
-        if len(growthFilter) == 0 or np.amax(growthFilter) < 0:
+        #if len(growthFilter) == 0 or np.amax(growthFilter) < 0:
+        if len(growthFilter) == 0:
             return currDT
         else:
-            return np.amin([currDT, (self.PSDbounds[1] - self.PSDbounds[0]) / (2 * np.abs(np.amax(growthFilter)))])
+            return np.amin([currDT, (self.PSDbounds[1] - self.PSDbounds[0]) / (2 * np.amax(np.abs(growthFilter)))])
 
     def adjustSizeClassesEuler(self, checkDissolution = False):
         '''
@@ -195,31 +222,49 @@ class PopulationBalanceModel:
         Changes length of size classes based off number of allowed bins
         '''
         change = False
+        newIndices = None
         if self.PSD[-1] > 1:
             #print('adding bins')
+            newIndices = self.bins
             self.addSizeClasses(int(self.originalBins/4))
             change = True
         if self.bins > self.maxBins:
             #print('reducing bins')
             self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.minBins)
             change = True
+            newIndices = None
         elif checkDissolution and self.PSDbounds[-1] > 10*self.PSDbounds[0]:
             if any(self.PSD > 1) and np.amax(self.PSDsize[self.PSD > 1]) < self.PSDsize[int(self.minBins/2)]:
                 #print('splitting bins')
                 self.changeSizeClasses(self.PSDbounds[0], np.amax(self.PSDsize[self.PSD > 1]), self.maxBins)
                 change = True
-        return change
+                newIndices = None
+        return change, newIndices
 
     def adjustSizeClassesLagrange(self):
         '''
         Adds or removes classes based off threshold given by max and min number of bins
         '''
+        posBins = self.PSDbounds[:-1] > 0
+        self.PSD = self.PSD[posBins]
+        self.PSDsize = self.PSDsize[posBins]
+        self.PSDbounds = self.PSDbounds[self.PSDbounds>0]
+        #self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.maxBins)
+
         minSize = (self.PSDbounds[-1] - self.PSDbounds[0]) / self.maxBins
         maxSize = (self.PSDbounds[-1] - self.PSDbounds[0]) / self.minBins
         maxIndices = np.where((self.PSDbounds[1:] - self.PSDbounds[:-1]) > maxSize)[0]
-        self.PSD = np.insert(self.PSD, maxIndices, np.zeros(len(maxIndices)))
-        self.PSDsize = np.insert(self.PSDsize, maxIndices, np.zeros(len(maxIndices)))
-        self.PSDbounds = np.insert(self.PSDbounds, maxIndices, np.zeros(len(maxIndices)))
+        minIndices = np.where((self.PSDbounds[1:] - self.PSDbounds[:-1]) < minSize)[0]
+        if len(maxIndices) > 0:
+            self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.maxBins)
+        elif len(minIndices) > 0:
+            self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.minBins)
+        #self.min = self.PSDbounds[0]
+        self.max = self.PSDbounds[-1]
+
+        #self.PSD = np.insert(self.PSD, maxIndices, np.zeros(len(maxIndices)))
+        #self.PSDsize = np.insert(self.PSDsize, maxIndices, np.zeros(len(maxIndices)))
+        #self.PSDbounds = np.insert(self.PSDbounds, maxIndices, np.zeros(len(maxIndices)))
         
     def Normalize(self):
         '''
@@ -285,32 +330,32 @@ class PopulationBalanceModel:
         self._prevPSD = copy.copy(self.PSD)
 
         netFlux = np.zeros(self.bins + 1)
-        netFlux[0] = 0 if flux[0] > 0 else flux[0] * dt * self.PSD[0] / (self.PSDbounds[1] - self.PSDbounds[0])
-        netFlux[-1] = 0 if flux[-1] < 0 else flux[-1] * dt * self.PSD[-1] / (self.PSDbounds[-1] - self.PSDbounds[-2])
 
-        #If flux is going from size class n to n-1, then use size class n (flux <= 0)
-        indices = flux[1:-1] <= 0
-        netFlux[1:-1][indices] = dt * flux[1:-1][indices] * self.PSD[1:][indices] / (self.PSDbounds[2:] - self.PSDbounds[1:-1])[indices]
-        under = (netFlux[1:-1] < -self.PSD[1:]) & indices
-        netFlux[1:-1][under] = -self.PSD[1:][under]
-        
-        #if flux is going from size class n-1 to n, then use size class n-1 (flux > 0)
-        indices = ~indices
-        netFlux[1:-1][indices] = dt * flux[1:-1][indices] * self.PSD[:-1][indices] / (self.PSDbounds[1:-1] - self.PSDbounds[:-2])[indices]
-        over = (netFlux[1:-1] > self.PSD[:-1]) & indices
-        netFlux[1:-1][over] = self.PSD[:-1][over]
+        #Array of 0 (flux <= 0), 1 (flux > 0)
+        fluxSign = np.sign(flux)
+        fluxSign[fluxSign == -1] = 0
+
+        #If flux is negative (from class n to n-1), then take from size class n
+        #If flux is positive, then take from size class n-1
+        netFlux[:-1] += dt * flux[:-1] * self.PSD * (1-fluxSign[:-1]) / (self.PSDbounds[1:] - self.PSDbounds[:-1])
+        netFlux[1:] += dt * flux[1:] * self.PSD * fluxSign[1:] / (self.PSDbounds[1:] - self.PSDbounds[:-1])
+
+        #Brute force stability so PSD is never negative
+        #If the time step is determined from getDTEuler, this should be unnecessary
+        netFlux[1:-1][netFlux[1:-1] < -self.PSD[1:]] = -self.PSD[1:][netFlux[1:-1] < -self.PSD[1:]]
+        netFlux[1:-1][netFlux[1:-1] > self.PSD[:-1]] = self.PSD[:-1][netFlux[1:-1] > self.PSD[:-1]]
 
         self._fv = netFlux
         
         self.PSD += (netFlux[:-1] - netFlux[1:])
-
+        
         #Adjust size classes and return True if the size classes had changed
-        change = self.adjustSizeClassesEuler(all(flux<0))
+        change, newIndices = self.adjustSizeClassesEuler(all(flux<0))
             
         #Set negative frequencies to 0
         self.PSD[self.PSD < 1] = 0
 
-        return change
+        return change, newIndices
 
     def UpdateLagrange(self, dt, flux):
         '''
@@ -330,6 +375,7 @@ class PopulationBalanceModel:
         self._prevPSDbounds = copy.copy(self.PSDbounds)
         self.PSDbounds += flux * dt
         self.PSDsize = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
+        self.adjustSizeClassesLagrange()
         
     def Moment(self, order):
         '''

@@ -912,16 +912,19 @@ class BinaryThermodynamics (GeneralThermodynamics):
         '''
         if hasattr(gExtra, '__len__'):
             if not hasattr(T, '__len__'):
-                T = T * np.ones(len(gExtra))
+                caArray, cbArray = self._interfacialComposition(T, gExtra, precPhase)
+            else:
+                #If T is also an array, then iterate through T and gExtra
+                #Otherwise, pycalphad will create a cartesian product of the two
+                caArray = []
+                cbArray = []
+                for i in range(len(gExtra)):
+                    ca, cb = self._interfacialComposition(T[i], gExtra[i], precPhase)
+                    caArray.append(ca)
+                    cbArray.append(cb)
+                caArray = np.array(caArray)
+                cbArray = np.array(cbArray)
 
-            caArray = []
-            cbArray = []
-            for i in range(len(gExtra)):
-                ca, cb = self._interfacialComposition(T[i], gExtra[i], precPhase)
-                caArray.append(ca)
-                cbArray.append(cb)
-            caArray = np.array(caArray)
-            cbArray = np.array(cbArray)
             return caArray, cbArray
         else:
             return self._interfacialComposition(T, gExtra, precPhase)
@@ -950,41 +953,58 @@ class BinaryThermodynamics (GeneralThermodynamics):
         '''
         if precPhase is None:
             precPhase = self.phases[1]
+
+        if hasattr(gExtra, '__len__'):
+            gExtra = np.array(gExtra)
+        else:
+            gExtra = np.array([gExtra])
+        gExtra += self.gOffset
         
         #Compute equilibrium at guess composition
-        cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: gExtra + self.gOffset}
+        cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: gExtra}
         eq = equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond, model=self.models, 
                         phase_records={self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]}, 
                         calc_opts = {'pdens': self.pDens})
 
-        gm = eq.GM.values.ravel()
-        for g in gm:
-            eqSub = eq.where(eq.GM == g, drop=True)
+        xParentArray = np.zeros(len(gExtra))
+        xPrecArray = np.zeros(len(gExtra))
+        for g in range(len(gExtra)):
+            eqG = eq.where(eq.GE == gExtra[g], drop=True)
+            gm = eqG.GM.values.ravel()
+            for i in range(len(gm)):
+                eqSub = eqG.where(eqG.GM == gm[i], drop=True)
 
-            ph = eqSub.Phase.values.ravel()
-            ph = ph[ph != '']
+                ph = eqSub.Phase.values.ravel()
+                ph = ph[ph != '']
 
-            #Check if matrix and precipitate phase are stable, and check if there's no miscibility gaps
-            if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
-                #Get indices for each phase
-                eqPa = eqSub.where(eqSub.Phase == self.phases[0], drop=True)
-                eqPr = eqSub.where(eqSub.Phase == precPhase, drop=True)
+                #Check if matrix and precipitate phase are stable, and check if there's no miscibility gaps
+                if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
+                    #Get indices for each phase
+                    eqPa = eqSub.where(eqSub.Phase == self.phases[0], drop=True)
+                    eqPr = eqSub.where(eqSub.Phase == precPhase, drop=True)
 
-                cParent = eqPa.X.values.ravel()
-                cPrec = eqPr.X.values.ravel()
+                    cParent = eqPa.X.values.ravel()
+                    cPrec = eqPr.X.values.ravel()
+                    
+                    #Get composition of element, use element index of 1 is the parent index is first alphabetically
+                    if self.reverse:
+                        xParent = cParent[0]
+                        xPrec = cPrec[0]
+                    else:
+                        xParent = cParent[1]
+                        xPrec = cPrec[1]
+
+                    xParentArray[g] = xParent
+                    xPrecArray[g] = xPrec
+                    break
+            if xParentArray[g] == 0:
+                xParentArray[g] = -1
+                xPrecArray[g] = -1
                 
-                #Get composition of element, use element index of 1 is the parent index is first alphabetically
-                if self.reverse:
-                    xParent = cParent[0]
-                    xPrec = cPrec[0]
-                else:
-                    xParent = cParent[1]
-                    xPrec = cPrec[1]
-                
-                return xParent, xPrec
-
-        #return None, None
-        return -1, -1
+        if len(gExtra) == 1:
+            return xParentArray[0], xPrecArray[0]
+        else:
+            return xParentArray, xPrecArray
 
 
     def _interfacialCompositionFromCurvature(self, T, gExtra = 0, precPhase = None):
@@ -1011,6 +1031,11 @@ class BinaryThermodynamics (GeneralThermodynamics):
         '''
         if precPhase is None:
             precPhase = self.phases[1]
+
+        if hasattr(gExtra, '__len__'):
+            gExtra = np.array(gExtra)
+        else:
+            gExtra = np.array([gExtra])
         
         #Compute equilibrium at guess composition
         cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: self.gOffset}
@@ -1069,10 +1094,20 @@ class BinaryThermodynamics (GeneralThermodynamics):
                 else:
                     xPrec = xPrecEq
                 
-                return xParent, xPrec
+                xParent[xParent < 0] = 0
+                xParent[xParent > 1] = 1
+                xPrec[xPrec < 0] = 0
+                xPrec[xPrec > 1] = 1
 
-        #return None, None
-        return -1, -1
+                if len(gExtra) == 1:
+                    return xParent[0], xPrec[0]
+                else:
+                    return xParent, xPrec
+
+        if len(gExtra) == 1:
+            return -1, -1
+        else:
+            return -1*np.ones(len(gExtra)), -1*np.ones(len(gExtra))
         
         
     def plotPhases(self, ax, T, gExtra = 0, plotGibbsOffset = False, *args, **kwargs):
@@ -1481,7 +1516,9 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 cbeta[:,i] = cb[i] + dcb[i,:]
 
             calpha[calpha < 0] = 0
+            calpha[calpha > 1] = 1
             cbeta[cbeta < 0] = 0
+            cbeta[cbeta > 1] = 1
 
             return gr, calpha, cbeta, ca, cb
         else:
@@ -1489,7 +1526,9 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             cbeta = cb + np.matmul(gba, (calpha - ca)).flatten()
 
             calpha[calpha < 0] = 0
+            calpha[calpha > 1] = 1
             cbeta[cbeta < 0] = 0
+            cbeta[cbeta > 1] = 1
 
             return gr, calpha, cbeta, ca, cb
 

@@ -106,10 +106,18 @@ class PopulationBalanceModel:
         '''
         self.PSD = function(self.PSDsize)
 
-    def revert(self):
-        self.PSD = copy.copy(self._prevPSD)
+    def createBackup(self):
+        '''
+        Stores current PSD and PSDbounds
+        '''
+        self._prevPSD = copy.copy(self.PSD)
+        self._prevPSDbounds = copy.copy(self.PSDbounds)
 
-    def revertSizeClass(self):
+    def revert(self):
+        '''
+        Reverts to previous PSD and PSDbounds
+        '''
+        self.PSD = copy.copy(self._prevPSD)
         self.PSDbounds = copy.copy(self._prevPSDbounds)
         self.PSDsize = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
 
@@ -133,7 +141,7 @@ class PopulationBalanceModel:
         
         Parameters
         ----------
-        min : float
+        cMin : float
             Lower bound of PSD
         cMax : float
             Upper bound of PSD
@@ -326,9 +334,6 @@ class PopulationBalanceModel:
             Growth rate of each particle size class
             Array size must be (bins + 1) since this operates on bounds of size classes
         '''
-        #Store current PSD
-        self._prevPSD = copy.copy(self.PSD)
-
         netFlux = np.zeros(self.bins + 1)
 
         #Array of 0 (flux <= 0), 1 (flux > 0)
@@ -353,7 +358,7 @@ class PopulationBalanceModel:
         change, newIndices = self.adjustSizeClassesEuler(all(flux<0))
             
         #Set negative frequencies to 0
-        self.PSD[self.PSD < 1] = 0
+        self.PSD[self.PSD < 0] = 0
 
         return change, newIndices
 

@@ -1191,7 +1191,6 @@ class PrecipitateBase:
             #For bulk or dislocation nucleation sites, the precipitate can be any shape,
             # so we need to solve for the critical radius in case the aspect ratio is not constant
             if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
-                #self.Rcrit[p, i] = self.shapeFactors[p].findRcrit(2 * self.gamma[p] / self.dGs[p, i], 20 * self.gamma[p] / self.dGs[p, i])
                 self.Rcrit[p, i] = 2 * self.shapeFactors[p].thermoFactor(self.Rcrit[p, i-1]) * self.gamma[p] / self.dGs[p, i]
                 if self.Rcrit[p, i] < self.Rmin[p]:
                     self.Rcrit[p, i] = self.Rmin[p]

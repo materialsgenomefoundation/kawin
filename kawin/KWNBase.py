@@ -365,18 +365,29 @@ class PrecipitateBase:
         '''
         self.minRadius = 5e-10
         self.maxTempChange = 1
+
         self.maxDTFraction = 0.1
-        self.minDTFraction = 1e-5
+        self.minDTFraction = 1e-6
+
+        self.checkTemperature = True
+        self.maxNonIsothermalDT = 1
+
+        self.checkPSD = True
         self.maxDissolution = 0.01
+
+        self.checkRcrit = False
         self.maxRcritChange = 0.01
+
+        self.checkNucleation = True
         self.maxNucleationRateChange = 0.5
         self.minNucleationRate = 1e-5
+
+        self.checkVolumePre = True
+        self.checkVolumePost = True
         self.maxVolumeChange = 0.001
-        self.maxNonIsothermalDT = 1
+        
+        self.checkComposition = True
         self.maxCompositionChange = 0.001
-        self.defaultBins = 150
-        self.maxBins = 200
-        self.minBins = 100
 
     def setConstraints(self, **kwargs):
         '''
@@ -384,25 +395,35 @@ class PrecipitateBase:
 
         TODO: the following constraints are not implemented
             maxDTFraction
-            minDTFraction
-            maxRcritChange - will need to account for special case that driving force becomes negative
+            maxRcritChange - this is somewhat implemented but disabled by default
 
         Possible constraints:
         ---------------------
-        minRadius - minimum radius to be considered a precipitate - default is 5e-10 m^3
-        maxTempChange - maximum temperature change before lookup table is updated (only for Euler in binary case) - default is 1 K
-        maxDTFraction - maximum time increment allowed as a fraction of total simulation time - default is 0.1
-        minDTFraction - minimum time increment allowed as a fraction of total simulation time - default is 1e-5
-        maxDissolution - maximum relative volume fraction of precipitates allowed to dissolve in a single time step - default is 0.01
-        maxRcritChange - maximum change in critical radius (as a fraction) per single time step - default is 0.01
-        maxNucleationRateChange - maximum change in nucleation rate (on log scale) per single time step - default is 0.5
-        minNucleationRate - minimum nucleation rate to be considered for checking time intervals - 1e-5
-        maxVolumeChange - maximum absolute value that volume fraction can change per single time step - default is 0.001
-        maxNonIsothermalDT - maximum time step when temperature is changing - default is 1 s
-        maxCompositionChange - maximum change in composition in single time step - default is 0.01
-        defaultBins - default number of bins in the particle size distribution - defualt is 150
-        maxBins - maximum number of bins in the particle size distribution - default is 200
-        minBins - minimum number of bins in the particle size distribution - default is 100
+        minRadius - minimum radius to be considered a precipitate (5e-10 m)
+        maxTempChange - maximum temperature change before lookup table is updated (only for Euler in binary case) (1 K)
+
+        maxDTFraction - maximum time increment allowed as a fraction of total simulation time (0.1)
+        minDTFraction - minimum time increment allowed as a fraction of total simulation time (1e-5)
+
+        checkTemperature - checks max temperature change (True)
+        maxNonIsothermalDT - maximum time step when temperature is changing (1 second)
+
+        checkPSD - checks maximum growth rate for particle size distribution (True)
+        maxDissolution - maximum relative volume fraction of precipitates allowed to dissolve in a single time step (0.01)
+
+        checkRcrit - checks maximum change in critical radius (False)
+        maxRcritChange - maximum change in critical radius (as a fraction) per single time step (0.01)
+
+        checkNucleation - checks maximum change in nucleation rate (True)
+        maxNucleationRateChange - maximum change in nucleation rate (on log scale) per single time step (0.5)
+        minNucleationRate - minimum nucleation rate to be considered for checking time intervals (1e-5)
+
+        checkVolumePre - checks maximum estimated volume change (True)
+        checkVolume Post - checks maximum calculated volume change (True)
+        maxVolumeChange - maximum absolute value that volume fraction can change per single time step (0.001)
+
+        checkComposition - checks maximum change in composition (True)
+        maxCompositionChange - maximum change in composition in single time step (0.01)
         '''
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -1177,8 +1198,10 @@ class PrecipitateBase:
         self.dGs[p, i], _ = self.dG[p](self.xComp[i-1], self.T[i])
         self.dGs[p, i] /= self.VmBeta[p]
 
-        #Temporary, may add way to solve for aspect ratio by minimizing free energy between surface and elastic energy
+        #Add strain energy for spherical shape - this assumes that the interfacial contribution is 
+        #the main factor in precipitate shape
         self.dGs[p, i] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.Rcrit[p, i-1]))
+        #self.dGs[p, i] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p]._normalRadiiEquation(1))
 
         if self.dGs[p, i] < 0:
             return self._noDrivingForce(p, i)
@@ -1192,6 +1215,7 @@ class PrecipitateBase:
             # so we need to solve for the critical radius in case the aspect ratio is not constant
             if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
                 self.Rcrit[p, i] = 2 * self.shapeFactors[p].thermoFactor(self.Rcrit[p, i-1]) * self.gamma[p] / self.dGs[p, i]
+                #self.Rcrit[p, i] = 2 * self.gamma[p] / self.dGs[p, i]
                 if self.Rcrit[p, i] < self.Rmin[p]:
                     self.Rcrit[p, i] = self.Rmin[p]
                 
@@ -1208,17 +1232,6 @@ class PrecipitateBase:
             #Calculate nucleation rate
             Z = self._Zeldovich(p, i)
             self.betas[p,i] = self._Beta(p, i)
-
-            #I find just calculating tau assuming steady state seems to work better
-            #I think it's because we're integrating the incubation term, where the thermocalc method of finding tau may already account for it
-            #tau = 1 / (self.theta[p] * (np.pi * self.betas[p,i] * Z**2))
-                
-            #If tau becomes super large, then add delay to the incubation time
-            #if tau > 10 * self.time[-1] and self.incubationOffset[p] == 0:
-            #If driving force disappears, then set the offset time for incubation
-            #if self.dGs[p,i] < 0:
-            #    self.incubationOffset[p] = self.time[i-1]
-            #    self.incubationOffset[p] = np.amax([i-1, 0])
                 
             #Incubation time, either isothermal or nonisothermal
             self.incubationSum[p] = self._incubation(Z, p, i)

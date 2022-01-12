@@ -597,7 +597,7 @@ class BinarySurrogate:
             gExtra = np.array(gExtra)
             gExtra[1 / (gExtra * self.GICscale) > np.amax(self.ICcoords[:,1])] = 1 / (np.amax(self.ICcoords[:,1]) * self.GICscale)
         else:
-            if (1 / (gExtra * self.GICscale)) > np.amax(self.ICcoords[:,1]):
+            if gExtra == 0 or (1 / (gExtra * self.GICscale)) > np.amax(self.ICcoords[:,1]):
                 gExtra = 1 / (np.amax(self.ICcoords[:,1]) * self.GICscale)
         if hasattr(T, '__len__'):
             T = np.array(T)
@@ -612,12 +612,12 @@ class BinarySurrogate:
         dG = self.SurrogateG(xP / self.XGscale, T / self.TICscale)
         if hasattr(xM, '__len__'):
             noneVals = (dG < gExtra)
-            xM[noneVals] = None
-            xP[noneVals] = None
+            xM[noneVals] = -1
+            xP[noneVals] = -1
         else:
             if dG < gExtra:
-                xM = None
-                xP = None
+                xM = -1
+                xP = -1
                     
         return xM, xP
 

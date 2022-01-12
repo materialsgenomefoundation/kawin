@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from sympy.core.numbers import comp
 from kawin.KWNBase import PrecipitateBase
 from kawin.PopulationBalance import PopulationBalanceModel
 from kawin.EffectiveDiffusion import effectiveDiffusionDistance, noDiffusionDistance
@@ -249,6 +250,36 @@ class PrecipitateModel (PrecipitateBase):
         else:
             self._postTimeIncrementCheck = self._noPostCheckDT
 
+    def setPBMParameters(self, cMin = 1e-10, cMax = 1e-9, bins = 150, minBins = 100, maxBins = 200, adaptive = True, phase = None):
+        '''
+        Sets population balance model parameters for each phase
+
+        Parameters
+        ----------
+        cMin : float
+            Minimum bin size
+        cMax : float
+            Maximum bin size
+        bins : int
+            Initial number of bins
+        minBins : int
+            Minimum number of bins - will not be used if adaptive = False
+        maxBins : int
+            Maximum number of bins - will not be used if adaptive = False
+        adaptive : bool
+            Sets adaptive bin sizes - bins may still change upon nucleation
+        phase : str
+            Phase to consider (will set all phases if phase = None or 'all')
+        '''
+        if phase is None or phase == 'all':
+            for p in range(len(self.phases)):
+                self.PBM[p] = PopulationBalanceModel(cMin, cMax, bins, minBins, maxBins)
+                self.PBM[p].setAdaptiveBinSize(adaptive)
+        else:
+            index = self.phaseIndex(phase)
+            self.PBM[index] = PopulationBalanceModel(cMin, cMax, bins, minBins, maxBins)
+            self.PBM[index].setAdaptiveBinSize(adaptive)
+
     def loadParticleSizeDistribution(self, data, phase = None):
         '''
         Loads particle size distribution for specified phase
@@ -352,7 +383,6 @@ class PrecipitateModel (PrecipitateBase):
         #Else, then use aspect ratio defined in shape factors
         self.eqAspectRatio = [None for p in range(len(self.phases))]
         for p in range(len(self.phases)):
-            self.PBM[p].setBinConstraints(self.defaultBins, self.minBins, self.maxBins)
             self.PBM[p].reset()
 
             if self.calculateAspectRatio[p]:
@@ -380,6 +410,13 @@ class PrecipitateModel (PrecipitateBase):
     def _interpolateAspectRatio(self, R, p):
         '''
         Linear interpolation between self.eqAspectRatio and self.PBM[p].PSDbounds
+
+        Parameters
+        ----------
+        R : float
+            Equivalent spherical radius
+        p : int
+            Phase index
         '''
         return np.interp(R, self.PBM[p].PSDbounds, self.eqAspectRatio[p])
 
@@ -393,6 +430,11 @@ class PrecipitateModel (PrecipitateBase):
         self._setNucleateRadius(i)
         self._growthRate(i)
         self._timeIncrementCheck(i)
+
+        self.growthBackup = copy.copy(self.growth)
+        self.PSDXalphaBackup = copy.copy(self.PSDXalpha)
+        self.PSDXbetaBackup = copy.copy(self.PSDXbeta)
+        self.eqAspectRatioBackup = copy.copy(self.eqAspectRatio)
         
         postDTCheck = False
         while not postDTCheck:
@@ -406,6 +448,9 @@ class PrecipitateModel (PrecipitateBase):
             else:
                 postDTCheck = True
 
+        #for p in range(len(self.phases)):
+        #    self.dGs[p,i] += self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.Rcrit[p, i-1]))
+
     def _noCheckDT(self, i):
         '''
         Function if adaptive time stepping is not used
@@ -418,43 +463,59 @@ class PrecipitateModel (PrecipitateBase):
         Checks max growth rate and updates dt correspondingly
         '''
         dt = self.time[i] - self.time[i-1]
-        if self.T[i] == self.T[i-1]:
-            dtPBM = [self.PBM[p].getDTEuler(dt, self.growth[p], self.maxDissolution, self.RdrivingForceIndex[p]) for p in range(len(self.phases))]
-        else:
-            dtPBM = [dt]
-        dt = np.amin(np.concatenate(([dt], dtPBM)))
+        dtAll = [dt]
+
+        if self.checkPSD:
+            if self.T[i] == self.T[i-1]:
+                dtPBM = [self.PBM[p].getDTEuler(dt, self.growth[p], self.maxDissolution, self.RdrivingForceIndex[p]) for p in range(len(self.phases))]
+            else:
+                dtPBM = [dt]
+            dt = np.amin(np.concatenate(([dt], dtPBM)))
+            dtAll.append(dt)
 
         if i > 1:
             dtPrev = self.time[i-1] - self.time[i-2]
 
             #Nucleation rate constraint
-            dtNuc = dt * np.ones(len(self.phases)+1)
-            for p in range(len(self.phases)):
-                if self.nucRate[p,i] > self.minNucleationRate and self.nucRate[p,i-1] > self.minNucleationRate and self.nucRate[p,i-1] != self.nucRate[p,i]:
-                    dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
-            dt = np.amin(dtNuc)
+            if self.checkNucleation:
+                dtNuc = dt * np.ones(len(self.phases)+1)
+                for p in range(len(self.phases)):
+                    if self.nucRate[p,i] > self.minNucleationRate and self.nucRate[p,i-1] > self.minNucleationRate and self.nucRate[p,i-1] != self.nucRate[p,i]:
+                        dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
+                dt = np.amin(dtNuc)
+                dtAll.append(dt)
 
             #Temperature change constraint
-            Tchange = self.T[i] - self.T[i-1]
-            dtTemp = dt
-            if Tchange > self.maxNonIsothermalDT:
-                dtTemp = self.maxNonIsothermalDT * (self.time[i] - self.time[i-1]) / Tchange
-                dt = np.amin([dt, dtTemp])
+            if self.checkTemperature:
+                Tchange = self.T[i] - self.T[i-1]
+                dtTemp = dt
+                if Tchange > self.maxNonIsothermalDT:
+                    dtTemp = self.maxNonIsothermalDT * (self.time[i] - self.time[i-1]) / Tchange
+                    dt = np.amin([dt, dtTemp])
 
-            #dtRad = dt * np.ones(len(self.phases)+1)
-            #if not all(self.Rcrit[:,i-1] == 0):
-            #    indices = self.Rcrit[:,i-1] > 0
-            #    dtRad[:-1][indices] = self.maxRcritChange * dtPrev / np.abs((self.Rcrit[:,i][indices] - self.Rcrit[:,i-1][indices]) / self.Rcrit[:,i-1][indices])
-            #dt = np.amin(dtRad)
+            if self.checkRcrit:
+                dtRad = dt * np.ones(len(self.phases)+1)
+                if not all((self.Rcrit[:,i-1] == 0) & (self.Rcrit[:,i] - self.Rcrit[:,i-1] == 0) & (self.dGs[:,i] <= 0)):
+                    indices = (self.Rcrit[:,i-1] > 0) & (self.Rcrit[:,i] - self.Rcrit[:,i-1] != 0) & (self.dGs[:,i] > 0)
+                    dtRad[:-1][indices] = self.maxRcritChange * dtPrev / np.abs((self.Rcrit[:,i][indices] - self.Rcrit[:,i-1][indices]) / self.Rcrit[:,i-1][indices])
+                dt = np.amin(dtRad)
+                dtAll.append(dt)
 
-            dtVol = dt * np.ones(len(self.phases) + 1)
-            if not all((self.Rad[:,i] == 0) & (self.nucRate[:,i] == 0)):
-                indices = (self.Rad[:,i] > 0) & (self.nucRate[:,i] > 0)
-                dtVol[:-1][indices] = self.maxVolumeChange / 10 / (4*np.pi*self.Rad[:,i][indices]**3*self.nucRate[:,i][indices]/3)
-            dt = np.amin(dtVol)
+            if self.checkVolumePre:
+                dtVol = dt * np.ones(len(self.phases) + 1)
+                if not all((self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)):
+                    indices = (self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)
+                    dtVol[:-1][indices] = self.maxVolumeChange / (10 * (4*np.pi*self.Rad[:,i][indices]**3*self.nucRate[:,i][indices]/3))
+                dt = np.amin(dtVol)
+                dtAll.append(dt)
 
+        if self.linearTimeSpacing:
+            dt = np.amax([dt, self.minDTFraction*(self.tf - self.t0)])
+        else:
+            dt = self.time[i-1] * (np.exp(np.amax([np.log((self.time[i-1]+dt)/self.time[i-1]), self.minDTFraction*np.log(self.tf/self.t0)])) - 1)
+        
         if dt < self.time[i] - self.time[i-1]:
-            #print('pbm limited time step')
+            #print(dtAll)
             self._divideTimestep(i, dt)
 
     def _noPostCheckDT(self, i):
@@ -477,22 +538,27 @@ class PrecipitateModel (PrecipitateBase):
         #Composition and volume change are checks in absolute changes
         #This prevents any unneccessary reduction in time increments for dilute solutions, or
         #if there is a long incubation time until nucleations starts occuring
-        volChange = np.abs(self.betaFrac[:,i] - self.betaFrac[:,i-1])
-        #If current volume fraction is 0, then ignore (either precipitation has not occured or precipitates has dissolved)
-        volChange[self.betaFrac[:,i] == 0] = 0
-        volCheck = np.amax(volChange) < self.maxVolumeChange
 
-        if self.numberOfElements == 1:
-            compCheck = np.abs(self.xComp[i] - self.xComp[i-1]) < self.maxCompositionChange
+        if self.checkVolumePost:
+            volChange = np.abs(self.betaFrac[:,i] - self.betaFrac[:,i-1])
+            #If current volume fraction is 0, then ignore (either precipitation has not occured or precipitates has dissolved)
+            volChange[self.betaFrac[:,i] == 0] = 0
+            volCheck = np.amax(volChange) < self.maxVolumeChange
         else:
-            compCheck = np.amax(np.abs(self.xComp[i,:] - self.xComp[i-1,:])) < self.maxCompositionChange
+            volCheck = True
+
+        if self.checkComposition:
+            if self.numberOfElements == 1:
+                compCheck = np.abs(self.xComp[i] - self.xComp[i-1]) < self.maxCompositionChange
+            else:
+                compCheck = np.amax(np.abs(self.xComp[i,:] - self.xComp[i-1,:])) < self.maxCompositionChange
+        else:
+            compCheck = True
 
         checks = [volCheck, compCheck]
 
         #If any test fails, then reset iteration and divide time increment
-        #if not all(checks):
-        if False:
-            print(volChange, compCheck)
+        if not all(checks):
             #print('Volume or composition limited time step')
             if self.numberOfElements == 1:
                 self.xComp[i] = 0
@@ -513,12 +579,19 @@ class PrecipitateModel (PrecipitateBase):
 
             for p in range(len(self.phases)):
                 self.PBM[p].revert()
-            
-            self._growthRate(i)
+            self.growth = copy.copy(self.growthBackup)
+            self.PSDXalpha = copy.copy(self.PSDXalphaBackup)
+            self.PSDXbeta = copy.copy(self.PSDXbetaBackup)
+            self.eqAspectRatio = copy.copy(self.eqAspectRatioBackup)
 
-            self._divideTimestep(i, np.amax([(self.time[i] - self.time[i-1]) / 2, self.minDTFraction * (self.tf - self.t0)]))
+            dt = (self.time[i] - self.time[i-1]) / 2
+            if self.linearTimeSpacing:
+                dt = np.amax([dt, self.minDTFraction*(self.tf - self.t0)])
+            else:
+                dt = self.time[i-1] * (np.exp(np.amax([np.log((self.time[i-1]+dt)/self.time[i-1]), self.minDTFraction*np.log(self.tf/self.t0)])) - 1)
+            self._divideTimestep(i, dt)
 
-            return False
+            return dt == self.minDTFraction * (self.tf - self.t0)
         else:
             return True
     
@@ -558,7 +631,7 @@ class PrecipitateModel (PrecipitateBase):
         for p in range(len(self.phases)):
             #If nucleates form, then calculate radius of precipitate
             #Radius is set slightly larger so preciptate 
-            if self.Rcrit[p, i] >= self.Rmin[p]:
+            if self.nucRate[p,i]*(self.time[i]-self.time[i-1]) >= 1 and self.Rcrit[p, i] >= self.Rmin[p]:
                 self.Rad[p, i] = self.Rcrit[p, i] + 0.5 * np.sqrt(self.kB * self.T[i] / (np.pi * self.gamma[p]))
             else:
                 self.Rad[p, i] = 0
@@ -639,7 +712,7 @@ class PrecipitateModel (PrecipitateBase):
 
             #Average radius and precipitate density
             if Ntot > 0:
-                self.avgR[p, i] = RadSum * self._GBareaRemoval(p) / Ntot
+                self.avgR[p, i] = RadSum / Ntot
                 self.precipitateDensity[p, i] = Ntot
                 self.avgAR[p, i] = ARsum / Ntot
             else:

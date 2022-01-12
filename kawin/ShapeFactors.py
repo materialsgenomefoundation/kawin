@@ -40,7 +40,7 @@ class ShapeFactor:
         
     def setAspectRatio(self, ar):
         '''
-        Sets aspect ratio as a function of R
+        Sets aspect ratio as a function of R (equivalent spherical radius)
         
         Parameters
         ----------

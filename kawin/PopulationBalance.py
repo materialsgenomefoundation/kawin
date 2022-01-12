@@ -71,6 +71,18 @@ class PopulationBalanceModel:
         self._prevPSD = np.zeros(self.bins)
         self._prevPSDbounds = np.zeros(self.bins)
 
+        self._adaptiveBinSize = True
+
+    def setAdaptiveBinSize(self, adaptive):
+        '''
+        For Euler implementation, sets whether to change the bin size when 
+        the number of filled bins > maxBins or < minBins
+
+        If False, the bins will still change if nucleated particles are greater than the max bin size
+        and bins will still be added when the last bins starts to fill (although this will not change the bin size)
+        '''
+        self._adaptiveBinSize = adaptive
+
     def setBinConstraints(self, bins = 150, minBins = 100, maxBins = 200):
         '''
         Sets constraints for minimum and maxinum number of bins over an order of magnitude
@@ -120,6 +132,8 @@ class PopulationBalanceModel:
         self.PSD = copy.copy(self._prevPSD)
         self.PSDbounds = copy.copy(self._prevPSDbounds)
         self.PSDsize = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
+        self.bins = len(self.PSD)
+        self.cMin, self.cMax = self.PSDbounds[0], self.PSDbounds[-1]
 
     def reset(self, resetBounds = True):
         '''
@@ -236,17 +250,19 @@ class PopulationBalanceModel:
             newIndices = self.bins
             self.addSizeClasses(int(self.originalBins/4))
             change = True
-        if self.bins > self.maxBins:
-            #print('reducing bins')
-            self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.minBins)
-            change = True
-            newIndices = None
-        elif checkDissolution and self.PSDbounds[-1] > 10*self.PSDbounds[0]:
-            if any(self.PSD > 1) and np.amax(self.PSDsize[self.PSD > 1]) < self.PSDsize[int(self.minBins/2)]:
-                #print('splitting bins')
-                self.changeSizeClasses(self.PSDbounds[0], np.amax(self.PSDsize[self.PSD > 1]), self.maxBins)
+
+        if self._adaptiveBinSize:
+            if self.bins > self.maxBins:
+                #print('reducing bins')
+                self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.minBins)
                 change = True
                 newIndices = None
+            elif checkDissolution and self.PSDbounds[-1] > 10*self.PSDbounds[0]:
+                if any(self.PSD > 1) and np.amax(self.PSDsize[self.PSD > 1]) < self.PSDsize[int(self.minBins/2)]:
+                    #print('splitting bins')
+                    self.changeSizeClasses(self.PSDbounds[0], np.amax(self.PSDsize[self.PSD > 1]), self.maxBins)
+                    change = True
+                    newIndices = None
         return change, newIndices
 
     def adjustSizeClassesLagrange(self):
@@ -305,6 +321,9 @@ class PopulationBalanceModel:
         radius : float
             Radius of nucleated particles
         '''
+        if amount < 1:
+            return False
+            
         change = False
 
         #Find size class for nucleated particles
@@ -358,7 +377,7 @@ class PopulationBalanceModel:
         change, newIndices = self.adjustSizeClassesEuler(all(flux<0))
             
         #Set negative frequencies to 0
-        self.PSD[self.PSD < 0] = 0
+        self.PSD[self.PSD < 1] = 0
 
         return change, newIndices
 

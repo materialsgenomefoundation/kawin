@@ -214,7 +214,6 @@ class GeneralThermodynamics:
         density : int
             Number of samples to take per degree of freedom in the phase
         '''
-        self._pointsParent = None
         self._pointsPrec = {self.phases[i]: None for i in range(1, len(self.phases))}
         self.sampling_pDens = density
 
@@ -486,7 +485,6 @@ class GeneralThermodynamics:
 
         #Check if equilibrium has converged and chemical potential can be obtained
         #If not, then return None for driving force
-        #if any(np.isnan(self._parentEq.MU.values.ravel())):
         if any(np.isnan(self._parentEq.chemical_potentials)):
             return None, None
 
@@ -501,7 +499,6 @@ class GeneralThermodynamics:
         #Get value of chemical potential hyperplane at composition of sampled points
         precComp = self._pointsPrec[precPhase].X.values.ravel()
         precComp = precComp.reshape((int(len(precComp) / (len(self.elements) - 1)), len(self.elements) - 1))
-        #mu = np.array([self._parentEq.MU.values.ravel()])
         mu = np.array([self._parentEq.chemical_potentials])
         mult = precComp * mu
         
@@ -650,7 +647,6 @@ class GeneralThermodynamics:
 
             #Check if equilibrium has converged and chemical potential can be obtained
             #If not, then return None for driving force
-            #if any(np.isnan(self._parentEq.MU.values.ravel())):
             if any(np.isnan(self._parentEq.chemical_potentials)):
                 return None, None
 
@@ -659,7 +655,6 @@ class GeneralThermodynamics:
 
             xP = x_precip
             
-            #dg = np.sum(xP * self._parentEq.MU.values.ravel()) - np.sum(xP * eqPh.MU.values.ravel())
             dg = np.sum(xP * self._parentEq.chemical_potentials) - np.sum(xP * chemical_potentials)
 
             #Remove reference element

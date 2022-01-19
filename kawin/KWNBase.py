@@ -51,7 +51,7 @@ class PrecipitateBase:
             print('\tSetting t0 to {:.3e}'.format(self.t0))
         
         #Time variables
-        self._timeIncrementCheck = self._noCheckDT
+        self.adaptiveTimeStepping(True)
 
         #Predefined constraints, these can be set if they make the simulation unstable
         self._defaultConstraints()
@@ -356,18 +356,30 @@ class PrecipitateBase:
         '''
         if adaptive:
             self._timeIncrementCheck = self._checkDT
+            self._postTimeIncrementCheck = self._postCheckDT
         else:
             self._timeIncrementCheck = self._noCheckDT
+            self._postTimeIncrementCheck = self._noPostCheckDT
+
+    def _calculateDT(self, i, fraction):
+        '''
+        Calculates DT as a fraction of the total simulation time
+        '''
+        if self.linearTimeSpacing:
+            dt = fraction*(self.tf - self.t0)
+        else:
+            dt = self.time[i] * (np.exp(fraction*np.log(self.tf / self.t0)) - 1)
+        return dt
 
     def _defaultConstraints(self):
         '''
         Default values for contraints
         '''
-        self.minRadius = 5e-10
+        self.minRadius = 3e-10
         self.maxTempChange = 1
 
-        self.maxDTFraction = 0.1
-        self.minDTFraction = 1e-6
+        self.maxDTFraction = 1e-2
+        self.minDTFraction = 1e-5
 
         self.checkTemperature = True
         self.maxNonIsothermalDT = 1
@@ -399,7 +411,7 @@ class PrecipitateBase:
 
         Possible constraints:
         ---------------------
-        minRadius - minimum radius to be considered a precipitate (5e-10 m)
+        minRadius - minimum radius to be considered a precipitate (1e-10 m)
         maxTempChange - maximum temperature change before lookup table is updated (only for Euler in binary case) (1 K)
 
         maxDTFraction - maximum time increment allowed as a fraction of total simulation time (0.1)
@@ -419,7 +431,7 @@ class PrecipitateBase:
         minNucleationRate - minimum nucleation rate to be considered for checking time intervals (1e-5)
 
         checkVolumePre - checks maximum estimated volume change (True)
-        checkVolume Post - checks maximum calculated volume change (True)
+        checkVolumePost - checks maximum calculated volume change (True)
         maxVolumeChange - maximum absolute value that volume fraction can change per single time step (0.001)
 
         checkComposition - checks maximum change in composition (True)
@@ -592,7 +604,6 @@ class PrecipitateBase:
         self.VmBeta[index] = Vm
         self.VaBeta[index] = atomsPerCell * self.VmBeta[index] / self.avo
         self.atomsPerCellBeta[index] = atomsPerCell
-        self.Rmin[index] = self.minRadius
         
     def setVaBeta(self, Va, atomsPerCell, phase = None):
         '''
@@ -611,7 +622,6 @@ class PrecipitateBase:
         self.VaBeta[index] = Va
         self.VmBeta[index] = self.VaBeta[index] * self.avo / atomsPerCell
         self.atomsPerCellBeta[index] = atomsPerCell
-        self.Rmin[index] = self.minRadius
         
     def setUnitCellBeta(self, a, atomsPerCell, phase = None):
         '''
@@ -630,7 +640,6 @@ class PrecipitateBase:
         self.VaBeta[index] = a**3
         self.VmBeta[index] = self.VaBeta[index] * self.avo / atomsPerCell
         self.atomsPerCellBeta[index] = atomsPerCell
-        self.Rmin[index] = self.minRadius
 
     def setNucleationDensity(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
         '''
@@ -1087,6 +1096,8 @@ class PrecipitateBase:
             #Set nucleation density assuming grain size of 100 um and dislocation density of 5e12 m/m3 (Thermocalc default)
             print('Nucleation density not set.\nSetting nucleation density assuming grain size of {:.0f} um and dislocation density of {:.0e} #/m2'.format(100, 5e12))
             self.setNucleationDensity(100, 1, 5e12)
+        for p in range(len(self.phases)):
+            self.Rmin[p] = self.minRadius
         self._getNucleationDensity()
         self._setGBfactors()
         self._setupStrainEnergyFactors()
@@ -1245,11 +1256,23 @@ class PrecipitateBase:
             
     def _noCheckDT(self, i):
         '''
-        Default time increment function if not implemented
+        Default for no adaptive time stepping
+        '''
+        pass
+
+    def _noPostCheckDT(self, i):
+        '''
+        Default for no adaptive time stepping
         '''
         pass
 
     def _checkDT(self, i):
+        '''
+        Default time increment function if implement (which is no implementation)
+        '''
+        pass
+
+    def _postCheckDT(self, i):
         '''
         Default time increment function if implement (which is no implementation)
         '''
@@ -1326,6 +1349,15 @@ class PrecipitateBase:
             tau = self.time[int(self.incubationOffset[p]):-1][signChange][0] - self.time[int(self.incubationOffset[p])]
 
         return np.exp(-tau / (self.time[i] - self.time[int(self.incubationOffset[p])]))
+
+    def _setNucleateRadius(self, i):
+        for p in range(len(self.phases)):
+            #If nucleates form, then calculate radius of precipitate
+            #Radius is set slightly larger so preciptate 
+            if self.nucRate[p,i]*(self.time[i]-self.time[i-1]) >= 1 and self.Rcrit[p, i] >= self.Rmin[p]:
+                self.Rad[p, i] = self.Rcrit[p, i] + 0.5 * np.sqrt(self.kB * self.T[i] / (np.pi * self.gamma[p]))
+            else:
+                self.Rad[p, i] = 0
     
     def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
         '''

@@ -21,15 +21,6 @@ class PrecipitateModel (PrecipitateBase):
         Final time in seconds
     steps : int
         Number of time steps
-    rMin : float (optional)
-        Lower bound of particle size distribution
-        Default is 1e-10 m
-    rMax : float (optional)
-        Upper bound of particle size distribution
-        Default is 1e-7 m
-    bins : int (optional)
-        Number of size classes in particle size distribution
-        Default is 100
     phases : list (optional)
         Precipitate phases (array of str)
         If only one phase is considered, the default is ['beta']
@@ -235,21 +226,6 @@ class PrecipitateModel (PrecipitateBase):
                     model.xEqBeta = np.transpose(model.xEqBeta, (0, 2, 1))
         return model
 
-    def adaptiveTimeStepping(self, adaptive = True):
-        '''
-        Sets if adaptive time stepping is used
-
-        Parameters
-        ----------
-        adaptive : bool (optional)
-            Defaults to True
-        '''
-        super().adaptiveTimeStepping(adaptive)
-        if adaptive:
-            self._postTimeIncrementCheck = self._postCheckDT
-        else:
-            self._postTimeIncrementCheck = self._noPostCheckDT
-
     def setPBMParameters(self, cMin = 1e-10, cMax = 1e-9, bins = 150, minBins = 100, maxBins = 200, adaptive = True, phase = None):
         '''
         Sets population balance model parameters for each phase
@@ -431,15 +407,17 @@ class PrecipitateModel (PrecipitateBase):
         self._growthRate(i)
         self._timeIncrementCheck(i)
 
+        #Backup variables in case size classes on PSD changes
         self.growthBackup = copy.copy(self.growth)
         self.PSDXalphaBackup = copy.copy(self.PSDXalpha)
         self.PSDXbetaBackup = copy.copy(self.PSDXbeta)
         self.eqAspectRatioBackup = copy.copy(self.eqAspectRatio)
+        self.RdrivingForceIndexBackup = copy.copy(self.RdrivingForceIndex)
+        self.RdrivingForceLimitBackup = copy.copy(self.RdrivingForceLimit)
         
         postDTCheck = False
         while not postDTCheck:
             dt = self.time[i] - self.time[i-1]
-            #self._setNucleateRadius(i, dt)
             self._calculatePSD(i, dt)
             self._massBalance(i)
 
@@ -462,7 +440,7 @@ class PrecipitateModel (PrecipitateBase):
         '''
         Checks max growth rate and updates dt correspondingly
         '''
-        dt = self.time[i] - self.time[i-1]
+        dt = self._calculateDT(i-1, self.maxDTFraction)
         dtAll = [dt]
 
         if self.checkPSD:
@@ -509,10 +487,13 @@ class PrecipitateModel (PrecipitateBase):
                 dt = np.amin(dtVol)
                 dtAll.append(dt)
 
-        if self.linearTimeSpacing:
-            dt = np.amax([dt, self.minDTFraction*(self.tf - self.t0)])
-        else:
-            dt = self.time[i-1] * (np.exp(np.amax([np.log((self.time[i-1]+dt)/self.time[i-1]), self.minDTFraction*np.log(self.tf/self.t0)])) - 1)
+        #Minimum dt is the lower of the minimum allowed time increment or the time to the next pre-defined increment
+        minDT = self._calculateDT(i-1, self.minDTFraction)
+        dt = np.amax([dt, minDT])
+
+        #Override time increment with the predefined time steps
+        #This prevents the next time increment from becoming 0 or negative
+        dt = np.amin([dt, self.time[i] - self.time[i-1]])
         
         if dt < self.time[i] - self.time[i-1]:
             #print(dtAll)
@@ -559,22 +540,17 @@ class PrecipitateModel (PrecipitateBase):
 
         #If any test fails, then reset iteration and divide time increment
         if not all(checks):
-            #print('Volume or composition limited time step')
-            if self.numberOfElements == 1:
-                self.xComp[i] = 0
-            else:
-                self.xComp[i,:] = 0
+            dt = (self.time[i] - self.time[i-1]) / 2
+            minDT = self._calculateDT(i-1, self.minDTFraction)
 
-            self.Rcrit[:,i] = 0
-            self.Gcrit[:,i] = 0
-            self.Rad[:,i] = 0
-            self.avgR[:,i] = 0
-            self.avgAR[:,i] = 0
-            self.nucRate[:,i] = 0
-            self.precipitateDensity[:,i] = 0
-            self.betaFrac[:,i] = 0
-            self.dGs[:,i] = 0
-            
+            #If proposed time increment is smaller than the minimum allowed increment, then skip the checks
+            if dt < minDT:
+                return True
+
+            #Only revert changes to variables that aren't stored per iteration
+            #Variables related to nucleation are not dependent on the time increment
+            #Variables related to the particle size distribution (composition, volume fraction, etc)
+            # will be overridden if the time increment changes            
             self.prevFConc[0] = copy.copy(self.prevFConc[1])
 
             for p in range(len(self.phases)):
@@ -583,15 +559,12 @@ class PrecipitateModel (PrecipitateBase):
             self.PSDXalpha = copy.copy(self.PSDXalphaBackup)
             self.PSDXbeta = copy.copy(self.PSDXbetaBackup)
             self.eqAspectRatio = copy.copy(self.eqAspectRatioBackup)
+            self.RdrivingForceIndex = copy.copy(self.RdrivingForceIndexBackup)
+            self.RdrivingForceLimit = copy.copy(self.RdrivingForceLimitBackup)
 
-            dt = (self.time[i] - self.time[i-1]) / 2
-            if self.linearTimeSpacing:
-                dt = np.amax([dt, self.minDTFraction*(self.tf - self.t0)])
-            else:
-                dt = self.time[i-1] * (np.exp(np.amax([np.log((self.time[i-1]+dt)/self.time[i-1]), self.minDTFraction*np.log(self.tf/self.t0)])) - 1)
             self._divideTimestep(i, dt)
 
-            return dt == self.minDTFraction * (self.tf - self.t0)
+            return False
         else:
             return True
     
@@ -626,15 +599,6 @@ class PrecipitateModel (PrecipitateBase):
             if nucleationSites < 0:
                 nucleationSites = 0
             self.nucRate[p, i] = nucleationSites * self._nucleationRate(p, i)
-
-    def _setNucleateRadius(self, i):
-        for p in range(len(self.phases)):
-            #If nucleates form, then calculate radius of precipitate
-            #Radius is set slightly larger so preciptate 
-            if self.nucRate[p,i]*(self.time[i]-self.time[i-1]) >= 1 and self.Rcrit[p, i] >= self.Rmin[p]:
-                self.Rad[p, i] = self.Rcrit[p, i] + 0.5 * np.sqrt(self.kB * self.T[i] / (np.pi * self.gamma[p]))
-            else:
-                self.Rad[p, i] = 0
 
     def _calculatePSD(self, i, dt):
         '''

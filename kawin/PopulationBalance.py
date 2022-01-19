@@ -133,7 +133,7 @@ class PopulationBalanceModel:
         self.PSDbounds = copy.copy(self._prevPSDbounds)
         self.PSDsize = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
         self.bins = len(self.PSD)
-        self.cMin, self.cMax = self.PSDbounds[0], self.PSDbounds[-1]
+        self.min, self.max = self.PSDbounds[0], self.PSDbounds[-1]
 
     def reset(self, resetBounds = True):
         '''

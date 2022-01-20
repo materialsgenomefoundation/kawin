@@ -387,7 +387,7 @@ class PrecipitateBase:
         self.checkPSD = True
         self.maxDissolution = 0.01
 
-        self.checkRcrit = False
+        self.checkRcrit = True
         self.maxRcritChange = 0.01
 
         self.checkNucleation = True

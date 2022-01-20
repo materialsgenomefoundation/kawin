@@ -198,20 +198,6 @@ class PopulationBalanceModel:
         self.PSDbounds = np.linspace(self.min, self.max, self.bins+1)
         self.PSDsize = 0.5 * (self.PSDbounds[:-1] + self.PSDbounds[1:])
 
-    def removeSmallSizeClasses(self, threshold):
-        '''
-        Removes size classes smaller than a given threshold
-
-        Parameters
-        ----------
-        threshold : float
-            Smallest value a size class than be
-        '''
-        index = np.argmax(self.PSDsize > threshold)
-        self.PSDsize = self.PSDsize[index:]
-        self.PSDbounds = self.PSDbounds[index:]
-        self.PSD = self.PSD[index:]
-
     def getDTEuler(self, currDT, growth, maxDissolution, startIndex):
         '''
         Calculates time interval for Euler implementation
@@ -264,31 +250,6 @@ class PopulationBalanceModel:
                     change = True
                     newIndices = None
         return change, newIndices
-
-    def adjustSizeClassesLagrange(self):
-        '''
-        Adds or removes classes based off threshold given by max and min number of bins
-        '''
-        posBins = self.PSDbounds[:-1] > 0
-        self.PSD = self.PSD[posBins]
-        self.PSDsize = self.PSDsize[posBins]
-        self.PSDbounds = self.PSDbounds[self.PSDbounds>0]
-        #self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.maxBins)
-
-        minSize = (self.PSDbounds[-1] - self.PSDbounds[0]) / self.maxBins
-        maxSize = (self.PSDbounds[-1] - self.PSDbounds[0]) / self.minBins
-        maxIndices = np.where((self.PSDbounds[1:] - self.PSDbounds[:-1]) > maxSize)[0]
-        minIndices = np.where((self.PSDbounds[1:] - self.PSDbounds[:-1]) < minSize)[0]
-        if len(maxIndices) > 0:
-            self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.maxBins)
-        elif len(minIndices) > 0:
-            self.changeSizeClasses(self.PSDbounds[0], self.PSDbounds[-1], self.minBins)
-        #self.min = self.PSDbounds[0]
-        self.max = self.PSDbounds[-1]
-
-        #self.PSD = np.insert(self.PSD, maxIndices, np.zeros(len(maxIndices)))
-        #self.PSDsize = np.insert(self.PSDsize, maxIndices, np.zeros(len(maxIndices)))
-        #self.PSDbounds = np.insert(self.PSDbounds, maxIndices, np.zeros(len(maxIndices)))
         
     def Normalize(self):
         '''
@@ -399,7 +360,6 @@ class PopulationBalanceModel:
         self._prevPSDbounds = copy.copy(self.PSDbounds)
         self.PSDbounds += flux * dt
         self.PSDsize = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
-        self.adjustSizeClassesLagrange()
         
     def Moment(self, order):
         '''
@@ -547,10 +507,10 @@ class PopulationBalanceModel:
 
         #Set y-limits
         if logY:
-            axes.set_ylim([1e-1, np.amax([1.1 * np.max(self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1])), 1])])
+            axes.set_ylim([1e-1, np.amax([1.1 * np.amax(self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1])), 1])])
             axes.set_yscale('log')
         else:
-            axes.set_ylim([0, np.amax([1.1 * np.max(self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1])), 1])])
+            axes.set_ylim([0, np.amax([1.1 * np.amax(self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1])), 1])])
 
     def PlotKDE(self, axes, bw_method = None, fill = False, logX = False, logY = False, scale = 1, *args, **kwargs):
         '''
@@ -684,10 +644,10 @@ class PopulationBalanceModel:
         #Don't set y limits if the PSD is empty
         if any(self.PSD > 0): 
             if logY:
-                axes.set_ylim([1e-1, np.amax([1.1 * np.max(self.PSD), 1])])
+                axes.set_ylim([1e-1, np.amax([1.1 * np.amax(self.PSD), 1])])
                 axes.set_yscale('log')
             else:
-                axes.set_ylim([0, np.amax([1.1 * np.max(self.PSD), 1])])
+                axes.set_ylim([0, np.amax([1.1 * np.amax(self.PSD), 1])])
         
         axes.set_ylabel('Frequency')
             

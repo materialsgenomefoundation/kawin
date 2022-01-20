@@ -144,7 +144,7 @@ class PrecipitateModel (PrecipitateBase):
             data = np.load(filename)
             
             #Input arbitrary values for PSD parameters (rMin, rMax, bins) since this will be changed shortly after
-            model = PrecipitateModel(data['t0'], data['tf'], data['steps'], 0, 1, 1, data['phases'], data['linearTimeSpacing'], data['elements'])
+            model = PrecipitateModel(data['t0'], data['tf'], data['steps'], data['phases'], data['linearTimeSpacing'], data['elements'])
             for p in range(len(model.phases)):
                 PSDvars = ['PSDdata_' + model.phases[p], 'PSD_' + model.phases[p], 'PSDsize_' + model.phases[p], 'eqAspectRatio_' + model.phases[p], 'PSDbounds_' + model.phases[p]]
                 #For back compatibility
@@ -178,7 +178,7 @@ class PrecipitateModel (PrecipitateBase):
 
                 t0, tf, steps, phases, elements = float(columns['t0'][0]), float(columns['tf'][0]), int(columns['steps'][0]), columns['phases'], columns['elements']
                 linearTimeSpacing = True if columns['linearTimeSpacing'][0] == 'True' else False
-                model = PrecipitateModel(t0, tf, steps, 0, 1, 1, phases, linearTimeSpacing, elements)
+                model = PrecipitateModel(t0, tf, steps, phases, linearTimeSpacing, elements)
 
                 for p in range(len(model.phases)):
                     PSDvars = ['PSDdata_' + model.phases[p], 'PSD_' + model.phases[p], 'PSDsize_' + model.phases[p], 'eqAspectRatio_' + model.phases[p], 'PSDbounds_' + model.phases[p]]
@@ -881,6 +881,11 @@ class PrecipitateModel (PrecipitateBase):
                 axes.legend()
             axes.set_xlabel('Radius (m)')
             axes.set_ylabel(ylabel)
+            axes.set_xlim([0, np.amax([pb.max for pb in self.PBM])])
+            if variable == 'Size Distribution Density':
+                axes.set_ylim([0, 1.1*np.amax(np.concatenate(([np.amax(pb.PSD/(pb.PSDbounds[1:] - pb.PSDbounds[:-1])) for pb in self.PBM], [1])))])
+            else:
+                axes.set_ylim([0, 1.1*np.amax(np.concatenate(([np.amax(pb.PSD) for pb in self.PBM], [1])))])
 
         elif variable == 'Cumulative Size Distribution':
             ylabel = 'CDF'
@@ -892,6 +897,7 @@ class PrecipitateModel (PrecipitateBase):
                 axes.legend()
             axes.set_xlabel('Radius (m)')
             axes.set_ylabel(ylabel)
+            axes.set_xlim([0, np.amax([pb.max for pb in self.PBM])])
 
         elif variable == 'Aspect Ratio Distribution':
             if len(self.phases) == 1:

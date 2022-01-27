@@ -426,9 +426,6 @@ class PrecipitateModel (PrecipitateBase):
             else:
                 postDTCheck = True
 
-        #for p in range(len(self.phases)):
-        #    self.dGs[p,i] += self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.Rcrit[p, i-1]))
-
     def _noCheckDT(self, i):
         '''
         Function if adaptive time stepping is not used

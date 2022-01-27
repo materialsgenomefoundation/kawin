@@ -434,7 +434,7 @@ class StrainEnergy:
         #Ohm term (Ohm_ij = inverse(C_iklj * n_k * n_l))
         #For all grid points (Ohm_ijn = inverse(C_iklj) * nProd_kln)
         invOhm = np.tensordot(self._c4, nProd, axes=[[1,2], [0,1]])
-        ohm = np.linalg.inv(invOhm.T).T
+        ohm = np.transpose(np.linalg.inv(np.transpose(invOhm, (2,0,1))), (1,2,0))
 
         #Tensor product (D_ijkl = intergral(ohm_ij * n_k * n_l * endTerm))
         #For summing over grid points (D_ijkl = ohm_ij * nProd_kln * endTerm_n)
@@ -584,7 +584,8 @@ class StrainEnergy:
             Default is 1.001 and 100
         '''
         normR = shpFactor._normalRadiiEquation
-        interfacial = shpFactor._eqRadiusEquation
+        #interfacial = shpFactor._eqRadiusEquation
+        interfacial = shpFactor._thermoEquation
         if hasattr(Rsph, '__len__'):
             eqAR = np.ones(len(Rsph))
             for i in range(len(Rsph)):
@@ -654,7 +655,8 @@ class StrainEnergy:
         shpFactor : ShapeFactor object
         '''
         normR = shpFactor._normalRadiiEquation
-        interfacial = shpFactor._eqRadiusEquation
+        #interfacial = shpFactor._eqRadiusEquation
+        interfacial = shpFactor._thermoEquation
         if hasattr(Rsph, '__len__'):
             eqAR = np.ones(len(Rsph))
             for i in range(len(Rsph)):

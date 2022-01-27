@@ -1209,21 +1209,18 @@ class PrecipitateBase:
         self.dGs[p, i], _ = self.dG[p](self.xComp[i-1], self.T[i])
         self.dGs[p, i] /= self.VmBeta[p]
 
-        #Add strain energy for spherical shape - this assumes that the interfacial contribution is 
-        #the main factor in precipitate shape
+        #Add strain energy for spherical shape, use previous critical radius
+        #This should still be correct even if the interfacial energy dominates at small radii since the aspect ratio may be near 1
         self.dGs[p, i] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.Rcrit[p, i-1]))
-        #self.dGs[p, i] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p]._normalRadiiEquation(1))
 
         if self.dGs[p, i] < 0:
             return self._noDrivingForce(p, i)
 
         #Only do this if there is some parent phase left (brute force solution for to avoid numerical errors)
-        #if self.betaFrac[p, i-1] < 1 and self.xComp[i-1] > 0:
         if self.betaFrac[p, i-1] < 1:
             
             #Calculate critical radius
-            #For bulk or dislocation nucleation sites, the precipitate can be any shape,
-            # so we need to solve for the critical radius in case the aspect ratio is not constant
+            #For bulk or dislocation nucleation sites, use previous critical radius to get aspect ratio
             if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
                 self.Rcrit[p, i] = 2 * self.shapeFactors[p].thermoFactor(self.Rcrit[p, i-1]) * self.gamma[p] / self.dGs[p, i]
                 #self.Rcrit[p, i] = 2 * self.gamma[p] / self.dGs[p, i]

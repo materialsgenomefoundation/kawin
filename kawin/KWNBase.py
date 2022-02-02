@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kawin.EffectiveDiffusion import effectiveDiffusionDistance, noDiffusionDistance
+from kawin.EffectiveDiffusion import EffectiveDiffusionFunctions
 from kawin.ShapeFactors import ShapeFactor
 from kawin.ElasticFactors import StrainEnergy
 from kawin.GrainBoundaries import GBFactors
@@ -77,7 +77,8 @@ class PrecipitateBase:
         self.RdrivingForceLimit = np.zeros(len(self.phases), dtype=np.float32)
         self.shapeFactors = [ShapeFactor() for i in self.phases]
         self.theta = 2 * np.ones(len(self.phases), dtype=np.float32)
-        self.effDiffDistance = effectiveDiffusionDistance
+        self.effDiffFuncs = EffectiveDiffusionFunctions()
+        self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
         self.infinitePrecipitateDiffusion = [True for i in self.phases]
         self.dTemp = 0
         self.iterationSinceTempChange = 0
@@ -985,9 +986,9 @@ class PrecipitateBase:
             If False, will calculate correction factor from Chen, Jeppson and Agren (2008)
         '''
         if neglect:
-            self.effDiffDistance = noDiffusionDistance
+            self.effDiffDistance = self.effDiffFuncs.noDiffusionDistance
         else:
-            self.effDiffDistance = effectiveDiffusionDistance
+            self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
 
     def addStoppingCondition(self, variable, condition, value, phase = None, element = None, mode = 'or'):
         '''

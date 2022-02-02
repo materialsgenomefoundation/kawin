@@ -40,6 +40,26 @@ class StrainEnergy:
         self._cachedRange = 5
         self._cachedIntervals = 100
 
+    def setAspectRatioResolution(self, resolution = 0.01, cachedRange = 5):
+        '''
+        Sets resolution to which equilibrium aspect ratios are calculated
+
+        Equilibrium aspect ratios are found by calculated strain energy for a range of aspect ratios
+        and finding the aspect ratio giving the minimum energy (strain + interfacial energy)
+
+        If aspect ratio does not vary much in a given system, then the default parameters may lead to poor
+        prediction of the aspect ratios
+
+        Parameters
+        ----------
+        resolution : float (optional)
+            Minimum distance between aspect ratios when calculating cache
+        cachedRange : float (optional)
+            Range of aspect ratio to calculate strain energy when updated cache
+        '''
+        self._cachedRange = cachedRange
+        self._cachedIntervals = int(1 / resolution)
+
     def setSpherical(self):
         '''
         Assumes spherical geometry for strain energy calculation

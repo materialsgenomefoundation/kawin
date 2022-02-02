@@ -1,9 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from sympy.core.numbers import comp
 from kawin.KWNBase import PrecipitateBase
 from kawin.PopulationBalance import PopulationBalanceModel
-from kawin.EffectiveDiffusion import effectiveDiffusionDistance, noDiffusionDistance
 from kawin.GrainBoundaries import GBFactors
 import copy
 import csv

@@ -246,7 +246,7 @@ class PopulationBalanceModel:
             elif checkDissolution and self.PSDbounds[-1] > 10*self.PSDbounds[0]:
                 if any(self.PSD > 1) and np.amax(self.PSDsize[self.PSD > 1]) < self.PSDsize[int(self.minBins/2)]:
                     #print('splitting bins')
-                    self.changeSizeClasses(self.PSDbounds[0], np.amax(self.PSDsize[self.PSD > 1]), self.maxBins)
+                    self.changeSizeClasses(self.PSDbounds[0], np.amax(self.PSDbounds[1:][self.PSD > 1]), self.maxBins)
                     change = True
                     newIndices = None
         return change, newIndices

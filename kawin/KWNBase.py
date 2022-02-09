@@ -1543,11 +1543,11 @@ class PrecipitateBase:
                 for p in range(len(self.phases)):
                     if self.GB[p].nucleationSiteType == self.GB[p].BULK or self.GB[p].nucleationSiteType == self.GB[p].DISLOCATION:
                         if radius != 'spherical':
-                            plotVariable /= self.shapeFactors[p].eqRadiusFactor(self.avgR[p])
+                            plotVariable[p] /= self.shapeFactors[p].eqRadiusFactor(self.avgR[p])
                         if radius == 'long':
-                            plotVariable *= self.shapeFactors[p].aspectRatio(self.avgR[p])
+                            plotVariable[p] *= self.avgAR[p]
                     else:
-                        plotVariable *= self._GBareaRemoval(p)
+                        plotVariable[p] *= self._GBareaRemoval(p)
 
             elif variable == 'Volume Average Radius':
                 plotVariable = np.cbrt(self.betaFrac / self.precipitateDensity / (4/3*np.pi))

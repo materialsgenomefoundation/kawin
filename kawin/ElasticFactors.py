@@ -2,6 +2,7 @@ import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 from kawin.LebedevNodes import loadPoints
+import copy
 
 class StrainEnergy:
     '''
@@ -19,6 +20,8 @@ class StrainEnergy:
     def __init__(self):
         self.c = None
         self._c4 = np.zeros((3,3,3,3))
+        self.cPrec = None
+        self._c4Prec = np.zeros((3,3,3,3))
         self.eigstrain = np.zeros((3,3))
         self.appstress = np.zeros((3,3))
         self.appstrain = np.zeros((3,3))
@@ -98,6 +101,30 @@ class StrainEnergy:
         self.type = self.CONSTANT
 
     def setElasticTensor(self, tensor):
+        self.c = self._setElasticTensor(tensor)
+        self._setupElasticTensor()
+
+    def setElasticConstants(self, c11, c12, c44):
+        self.c = self._setElasticConstants(c11, c12, c44)
+        self._setupElasticTensor()
+
+    def setModuli(self, E = None, nu = None, G = None, lam = None, K = None, M = None):
+        self.c = self._setModuli(E, nu, G, lam, K, M)
+        self._setupElasticTensor()
+
+    def setElasticTensorPrecipitate(self, tensor):
+        self.cPrec = self._setElasticTensor(tensor)
+        self._c4Prec = self._convert2To4rankTensor(self.cPrec)
+
+    def setElasticConsantsPrecipitate(self, c11, c12, c44):
+        self.cPrec = self._setElasticConstants(c11, c12, c44)
+        self._c4Prec = self._convert2To4rankTensor(self.cPrec)
+    
+    def setModuliPrecipitate(self, E = None, nu = None, G = None, lam = None, K = None, M = None):
+        self.cPrec = self._setModuli(E, nu, G, lam, K, M)
+        self._c4Prec = self._convert2To4rankTensor(self.cPrec)
+
+    def _setElasticTensor(self, tensor):
         '''
         Inputs 6x6 elastic matrix
 
@@ -106,10 +133,9 @@ class StrainEnergy:
         tensor : matrix of floats
             Must be 6x6
         '''
-        self.c = np.array(tensor)
-        self._setupElasticTensor()
+        return np.array(tensor)
 
-    def setElasticConstants(self, c11, c12, c44):
+    def _setElasticConstants(self, c11, c12, c44):
         '''
         Creates elastic tensor from c11, c12 and c44 constants assuming isotropic system
 
@@ -119,13 +145,13 @@ class StrainEnergy:
         c12 : float
         c44 : float
         '''
-        self.c = np.zeros((6, 6))
-        self.c[0,0], self.c[1,1], self.c[2,2] = c11, c11, c11
-        self.c[0,1], self.c[0,2], self.c[1,0], self.c[1,2], self.c[2,0], self.c[2,1] = c12, c12, c12, c12, c12, c12
-        self.c[3,3], self.c[4,4], self.c[5,5] = c44, c44, c44
-        self._setupElasticTensor()
+        c = np.zeros((6, 6))
+        c[0,0], c[1,1], c[2,2] = c11, c11, c11
+        c[0,1], c[0,2], c[1,0], c[1,2], c[2,0], c[2,1] = c12, c12, c12, c12, c12, c12
+        c[3,3], c[4,4], c[5,5] = c44, c44, c44
+        return c
 
-    def setModuli(self, E = None, nu = None, G = None, lam = None, K = None, M = None):
+    def _setModuli(self, E = None, nu = None, G = None, lam = None, K = None, M = None):
         '''
         Set elastic tensor by defining at least two of the moduli
         Everything will be converted to E, nu and G
@@ -196,9 +222,70 @@ class StrainEnergy:
         s[0,0], s[1,1], s[2,2] = 1/E, 1/E, 1/E
         s[3,3], s[4,4], s[5,5] = 1/G, 1/G, 1/G
         s[0,1], s[0,2], s[1,0], s[1,2], s[2,0], s[2,1] = -nu/E, -nu/E, -nu/E, -nu/E, -nu/E, -nu/E
-        self.c = np.linalg.inv(s)
+        return np.linalg.inv(s)
 
-        self._setupElasticTensor()
+    def _convert2To4rankTensor(self, c):
+        '''
+        Converts 2nd rank elastic tensor to 4th rank
+
+        Parameters
+        ----------
+        c : ndarray
+            2nd rank elastic tensor
+
+        Returns
+        -------
+        c4 : ndarray
+            4th rank elastic tensor
+        '''
+        vMap = {frozenset({0}): 0, frozenset({1}): 1, frozenset({2}): 2,
+                frozenset({1,2}): 3, frozenset({0,2}): 4, frozenset({0,1}): 5}
+
+        c4 = np.zeros((3,3,3,3))
+        for i, j, k, l in itertools.product(range(3), range(3), range(3), range(3)):
+            c4[i,j,k,l] = c[vMap[frozenset({i,j})], vMap[frozenset({k,l})]]
+        return c4
+
+    def _convert4To2rankTensor(self, c4):
+        '''
+        Converts 4th rank elastic tensor to 4nd rank
+
+        Parameters
+        ----------
+        c4 : ndarray
+            4th rank elastic tensor
+
+        Returns
+        -------
+        c : ndarray
+            2nd rank elastic tensor
+        '''
+        vMap = [[0,0], [1,1], [2,2], [1,2], [0,2], [0,1]]
+        c = np.zeros((6,6))
+        for i, j in itertools.product(range(6), range(6)):
+            c[i,j] = c4[vMap[i][0], vMap[i][1], vMap[j][0], vMap[j][1]]
+        return c
+
+    def _convertVecTo2rankTensor(self, v):
+        '''
+        Converts strain/stress vector to 2nd rank tensor
+
+        Parameters
+        ----------
+        v : 1d array
+            Strain/stress vector
+
+        Returns
+        -------
+        e : ndarray
+            2nd rank elastic tensor
+        '''
+        return np.array([[v[0], v[5], v[4]], \
+                        [v[5], v[1], v[3]], \
+                        [v[3], v[4], v[2]]])
+
+    def _convert2rankToVec(self, c):
+        return np.array([c[0,0], c[1,1], c[2,2], c[1,2], c[0,2], c[0,1]])
 
     def _setupElasticTensor(self):
         '''
@@ -208,12 +295,11 @@ class StrainEnergy:
         This will also automatically calculate applied strain, in case the applied stress is
         given before the elastic constants are
         '''
-        vMap = {frozenset({0}): 0, frozenset({1}): 1, frozenset({2}): 2,
-                frozenset({1,2}): 3, frozenset({0,2}): 4, frozenset({0,1}): 5}
+        self._c4 = self._convert2To4rankTensor(self.c)
 
-        self._c4 = np.zeros((3,3,3,3))
-        for i, j, k, l in itertools.product(range(3), range(3), range(3), range(3)):
-            self._c4[i,j,k,l] = self.c[vMap[frozenset({i,j})], vMap[frozenset({k,l})]]
+        if self.cPrec is None:
+            self.cPrec = copy.copy(self.c)
+            self._c4Prec = copy.copy(self._c4)
 
         self.getAppliedStrain()
 
@@ -226,6 +312,7 @@ class StrainEnergy:
         if self.rotation is not None:
             self.appstrain = self._rotateRank2Tensor(self.appstrain)
             self._c4 = self._rotateRank4Tensor(self._c4)
+            self._c4Prec = self._rotateRank4Tensor(self._c4Prec)
 
     def setRotationMatrix(self, rot):
         '''
@@ -243,6 +330,7 @@ class StrainEnergy:
 
         if self.c is not None:
             self._c4 = self._rotateRank4Tensor(self._c4)
+            self._c4Prec = self._rotateRank4Tensor(self._c4Prec)
 
     def _rotateRank2Tensor(self, tensor):
         '''
@@ -499,6 +587,19 @@ class StrainEnergy:
         stress = self._stress(self._strainC(S, self.eigstrain) - self.eigstrain)
         stress0 = self._stress(self._strainC(S, self.appstrain) - self.appstrain)
         return self._strainEnergy(stress - stress0, self.eigstrain - self.appstrain, V)
+
+    def _strainEnergyBohm(self):
+        V = 4*np.pi/3 * np.product(self.r)
+        S = self.Sijmn(self.Dijkl())
+        S2 = self._convert4To2rankTensor(S)
+        c = self._convert4To2rankTensor(self._c4)
+        cPrec = self._convert4To2rankTensor(self._c4Prec)
+        eigFlat = self._convert2rankToVec(self.eigstrain)
+        invTerm = np.linalg.inv(np.matmul(cPrec - c, S2) + c)
+        multTerm = np.matmul(invTerm, cPrec)
+        outerTerm = np.matmul(c, S2 - np.eye(6))
+        multTerm = np.matmul(outerTerm, multTerm)
+        return -0.5 * V * np.matmul(eigFlat, np.matmul(multTerm, eigFlat))
 
     def _Khachaturyan(self, I1, I2):
         '''

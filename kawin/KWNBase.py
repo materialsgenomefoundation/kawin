@@ -857,6 +857,7 @@ class PrecipitateBase:
         #For each phase, the strain energy calculation will be set to assume
         # a spherical, cubic or ellipsoidal shape depending on the defined shape factors
         for i in range(len(self.phases)):
+            self.strainEnergy[i].setup()
             if self.strainEnergy[i].type != StrainEnergy.CONSTANT:
                 if self.shapeFactors[i].particleType == ShapeFactor.SPHERE:
                     self.strainEnergy[i].setSpherical()

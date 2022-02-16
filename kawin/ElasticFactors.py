@@ -26,6 +26,7 @@ class StrainEnergy:
         self.appstress = np.zeros((3,3))
         self.appstrain = np.zeros((3,3))
         self.rotation = None
+        self.rotationPrec = None
 
         self.lebedevIntegration('high')
 
@@ -56,9 +57,9 @@ class StrainEnergy:
         Parameters
         ----------
         resolution : float (optional)
-            Minimum distance between aspect ratios when calculating cache
+            Minimum distance between aspect ratios when calculating cache (default at 0.01)
         cachedRange : float (optional)
-            Range of aspect ratio to calculate strain energy when updated cache
+            Range of aspect ratio to calculate strain energy when updated cache (default at 5)
         '''
         self._cachedRange = cachedRange
         self._cachedIntervals = int(1 / resolution)
@@ -85,6 +86,7 @@ class StrainEnergy:
         Uses Eshelby's tensor
         '''
         self._strainEnergyGeneric = self._strainEnergyEllipsoid
+        self._strainEnergyGeneric = self._strainEnergyBohm
         self.type = self.ELLIPSE
 
     def setConstantElasticEnergy(self, energy):
@@ -102,15 +104,15 @@ class StrainEnergy:
 
     def setElasticTensor(self, tensor):
         self.c = self._setElasticTensor(tensor)
-        self._setupElasticTensor()
+        self._c4 = self._convert2To4rankTensor(self.c)
 
     def setElasticConstants(self, c11, c12, c44):
         self.c = self._setElasticConstants(c11, c12, c44)
-        self._setupElasticTensor()
+        self._c4 = self._convert2To4rankTensor(self.c)
 
     def setModuli(self, E = None, nu = None, G = None, lam = None, K = None, M = None):
         self.c = self._setModuli(E, nu, G, lam, K, M)
-        self._setupElasticTensor()
+        self._c4 = self._convert2To4rankTensor(self.c)
 
     def setElasticTensorPrecipitate(self, tensor):
         self.cPrec = self._setElasticTensor(tensor)
@@ -224,6 +226,122 @@ class StrainEnergy:
         s[0,1], s[0,2], s[1,0], s[1,2], s[2,0], s[2,1] = -nu/E, -nu/E, -nu/E, -nu/E, -nu/E, -nu/E
         return np.linalg.inv(s)
 
+    def setRotationMatrix(self, rot):
+        '''
+        Sets rotation matrix to be applied to the matrix
+
+        This is for cases where the axes of the precipitate does not align with the axes of the matrix
+        (e.g., the long/short axes of the precipitate is not parallel to the <100> directions of the matrix)
+
+        Parameters
+        ----------
+        rot : matrix
+            3x3 rotation matrix
+        '''
+        self.rotation = np.array(rot)
+
+    def setRotationPrecipitate(self, rot):
+        self.rotationPrec = np.array(rot)
+
+    def setEigenstrain(self, strain):
+        '''
+        Sets eigenstrain of precipitate
+
+        Parameters
+        ----------
+        strain : float, array or matrix
+            float - assume strain is the same along all 3 axis
+            array - each index corresponds to strain in a given axis
+            matrix - full 2nd rank strain tensor
+
+        NOTE: when using in conjunction with ShapeFactors, the axis are order specific
+            For needle-like precipitates, x1, x2 and x3 correspond to (short axis, short axis, long axis)
+            For plate-like precipitates, x1, x2 and x3 correspond to (long axis, long axis, short axis)
+        '''
+        strain = np.array(strain)
+        #If scalar, then apply to all 3 axis
+        if (type(strain) == np.ndarray and strain.ndim == 0):
+            self.eigstrain = strain * np.identity(3)
+        #If array of length 3, then apply strain along each index to corresponding axis
+        elif strain.ndim == 1:
+            self.eigstrain = np.array([[strain[0], 0, 0], [0, strain[1], 0], [0, 0, strain[2]]])
+        #Else, assume it's a tensor
+        else:
+            self.eigstrain = strain
+
+    def setAppliedStress(self, stress):
+        '''
+        Sets applied stress tensor
+        Axes of stress tensor should be the same as the matrix
+
+        Parameters
+        ----------
+        stress : float, array or matrix
+            float - assume stress is the same along all 3 axis
+            array - each index corresponds to stress in a given axis
+            matrix - full 2nd rank stress tensor
+
+        NOTE: The applied stress is in reference to the coordinate axes of the precipitates
+        Thus, this is only valid if the following conditions are met:
+            The matrix phase has a single orientation (either as a single crystal or highly textured)
+            Precipitates will form only in a single orientation with respect to the matrix
+
+        TODO: It will be nice to expand on this.
+            For polycrystalline matrix and randomly oriented precipitates, it should be possible
+            to average the strain energy contributions over all matrix/precipitate orientations
+        '''
+        stress = np.array(stress)
+        #If scalar, then apply to all 3 axis
+        if (type(stress) == np.ndarray and stress.ndim == 0):
+            self.appstress = stress * np.identity(3)
+        #If array of length 3, then apply stress along each index to corresponding axis
+        elif stress.ndim == 1:
+            self.appstress = np.array([[stress[0], 0, 0], [0, stress[1], 0], [0, 0, stress[2]]])
+        #Else, assume it's a tensor
+        else:
+            self.appstress = stress
+
+    def getAppliedStrain(self):
+        '''
+        Calculates applied strain tensor from applied stress tensor and elastic tensor
+        '''
+        flatStress = self._convert2rankToVec(self.appstress)
+        flatStrain = np.matmul(np.linalg.inv(self.c), flatStress)
+        self.appstrain = self._convertVecTo2rankTensor(flatStrain)
+
+    def setup(self):
+        '''
+        Sets up elastic constants
+        '''
+        #If no elastic tensor is given, then elastic energy will be constant at 0
+        if self.c is not None:
+            #Apply rotation on matrix phase if there is one
+            #Since applied stress tensor is aligned with matrix, rotate it too since calculations will be in reference to precipitate axes
+            if self.rotation is not None:
+                self._c4 = self._rotateRank4Tensor(self.rotation, self._c4)
+                self.c = self._convert4To2rankTensor(self._c4)
+                self.appstress = self._rotateRank2Tensor(self.rotation, self.appstress)
+
+            #If elastic constants for precipitate are not given, then assume they're the same as the matrix
+            #This will give the elastic energy equation from Wu et al, Journal of Phase Equilibria and Diffusion, 39, 2018
+            #Using a different elastic tensor for the precipitate will give energy from Bohm et al, Mechanics of Materials, 155, 2021
+            if self.cPrec is None:
+                self.cPrec = copy.copy(self.c)
+                self._c4Prec = copy.copy(self._c4)
+
+            if self.rotationPrec is not None:
+                self._c4Prec = self._rotateRank4Tensor(self.rotationPrec, self._c4Prec)
+                self.cPrec = self._convert4To2rankTensor(self._c4Prec)
+
+            self.getAppliedStrain()
+
+            #Set type to something other than CONSTANT
+            #Since CONSTANT is the only method not requiring the elastic tensor,
+            #    we assume that the user is intending to calculate strain energy when inputting the tensor
+            if self.type == self.CONSTANT:
+                self.type = self.SPHERE
+
+    #Utility functions for tensors
     def _convert2To4rankTensor(self, c):
         '''
         Converts 2nd rank elastic tensor to 4th rank
@@ -266,6 +384,15 @@ class StrainEnergy:
             c[i,j] = c4[vMap[i][0], vMap[i][1], vMap[j][0], vMap[j][1]]
         return c
 
+    def _invert4rankTensor(self, c4):
+        '''
+        Inverts 4th rank tensor to give stiffness tensor
+
+        This is done by converting to 2nd rank, inverting, then converting back to 4th rank
+        '''
+        c = self._convert4To2rankTensor(c4)
+        return self._convert2To4rankTensor(np.linalg.inv(c))
+
     def _convertVecTo2rankTensor(self, v):
         '''
         Converts strain/stress vector to 2nd rank tensor
@@ -287,52 +414,7 @@ class StrainEnergy:
     def _convert2rankToVec(self, c):
         return np.array([c[0,0], c[1,1], c[2,2], c[1,2], c[0,2], c[0,1]])
 
-    def _setupElasticTensor(self):
-        '''
-        Creates the 4th rank elastic tensor
-        This makes it easer to use np.tensordot for most calculations
-
-        This will also automatically calculate applied strain, in case the applied stress is
-        given before the elastic constants are
-        '''
-        self._c4 = self._convert2To4rankTensor(self.c)
-
-        if self.cPrec is None:
-            self.cPrec = copy.copy(self.c)
-            self._c4Prec = copy.copy(self._c4)
-
-        self.getAppliedStrain()
-
-        #Set type to something other than CONSTANT
-        #Since CONSTANT is the only method not requiring the elastic tensor,
-        #    we assume that the user is intending to calculate strain energy when inputting the tensor
-        if self.type == self.CONSTANT:
-            self.type = self.SPHERE
-
-        if self.rotation is not None:
-            self.appstrain = self._rotateRank2Tensor(self.appstrain)
-            self._c4 = self._rotateRank4Tensor(self._c4)
-            self._c4Prec = self._rotateRank4Tensor(self._c4Prec)
-
-    def setRotationMatrix(self, rot):
-        '''
-        Sets rotation matrix to be applied to the matrix
-
-        This is for cases where the axes of the precipitate does not align with the axes of the matrix
-        (e.g., the long/short axes of the precipitate is not parallel to the <100> directions of the matrix)
-
-        Parameters
-        ----------
-        rot : matrix
-            3x3 rotation matrix
-        '''
-        self.rotation = np.array(rot)
-
-        if self.c is not None:
-            self._c4 = self._rotateRank4Tensor(self._c4)
-            self._c4Prec = self._rotateRank4Tensor(self._c4Prec)
-
-    def _rotateRank2Tensor(self, tensor):
+    def _rotateRank2Tensor(self, rot, tensor):
         '''
         Rotates a 2nd rank tensor
         T_ij = r_il * r_jk * T_lk
@@ -342,10 +424,10 @@ class StrainEnergy:
         tensor : ndarray
             2nd rank tensor to rotate (3x3 array)
         '''
-        return np.tensordot(self.rotation,
-                np.tensordot(self.rotation, tensor, axes=(1,1)), axes=(1,1))
+        return np.tensordot(rot,
+                np.tensordot(rot, tensor, axes=(1,1)), axes=(1,1))
 
-    def _rotateRank4Tensor(self, tensor):
+    def _rotateRank4Tensor(self, rot, tensor):
         '''
         Rotates a 4th rank tensor
         T_ijkl = r_im * r_jn * r_ok * r_lp * T_mnop
@@ -355,84 +437,10 @@ class StrainEnergy:
         tensor : ndarray
             4th rank tensor to rotate (3x3x3x3 array)
         '''
-        return np.tensordot(self.rotation, 
-                np.tensordot(self.rotation, 
-                np.tensordot(self.rotation, 
-                np.tensordot(self.rotation, tensor, axes=(1,3)), axes=(1,3)), axes=(1,3)), axes=(1,3))
-
-    def setEigenstrain(self, strain):
-        '''
-        Sets eigenstrain of precipitate
-
-        Parameters
-        ----------
-        strain : float, array or matrix
-            float - assume strain is the same along all 3 axis
-            array - each index corresponds to strain in a given axis
-            matrix - full 2nd rank strain tensor
-
-        NOTE: when using in conjunction with ShapeFactors, the axis are order specific
-            For needle-like precipitates, x1, x2 and x3 correspond to (short axis, short axis, long axis)
-            For plate-like precipitates, x1, x2 and x3 correspond to (long axis, long axis, short axis)
-        '''
-        strain = np.array(strain)
-        #If scalar, then apply to all 3 axis
-        if (type(strain) == np.ndarray and strain.ndim == 0):
-            self.eigstrain = strain * np.identity(3)
-        #If array of length 3, then apply strain along each index to corresponding axis
-        elif strain.ndim == 1:
-            self.eigstrain = np.array([[strain[0], 0, 0], [0, strain[1], 0], [0, 0, strain[2]]])
-        #Else, assume it's a tensor
-        else:
-            self.eigstrain = strain
-
-    def setAppliedStress(self, stress):
-        '''
-        Sets applied stress tensor
-
-        Parameters
-        ----------
-        stress : float, array or matrix
-            float - assume stress is the same along all 3 axis
-            array - each index corresponds to stress in a given axis
-            matrix - full 2nd rank stress tensor
-
-        NOTE: The applied stress is in reference to the coordinate axes of the precipitates
-        Thus, this is only valid if the following conditions are met:
-            The matrix phase has a single orientation (either as a single crystal or highly textured)
-            Precipitates will form only in a single orientation with respect to the matrix
-
-        TODO: It will be nice to expand on this.
-            For polycrystalline matrix and randomly oriented precipitates, it should be possible
-            to average the strain energy contributions over all matrix/precipitate orientations
-        '''
-        stress = np.array(stress)
-        #If scalar, then apply to all 3 axis
-        if (type(stress) == np.ndarray and stress.ndim == 0):
-            self.appstress = stress * np.identity(3)
-        #If array of length 3, then apply stress along each index to corresponding axis
-        elif stress.ndim == 1:
-            self.appstress = np.array([[stress[0], 0, 0], [0, stress[1], 0], [0, 0, stress[2]]])
-        #Else, assume it's a tensor
-        else:
-            self.appstress = stress
-
-        if self.c is not None:
-            self.getAppliedStrain()
-
-    def getAppliedStrain(self):
-        '''
-        Calculates applied strain tensor from applied stress tensor and elastic tensor
-        '''
-        flatStress = np.array([self.appstress[0,0], self.appstress[1,1], self.appstress[2,2], \
-                                self.appstress[1,2], self.appstress[0,2], self.appstress[0,1]])
-        flatStrain = np.matmul(np.linalg.inv(self.c), flatStress)
-        self.appstrain = np.array([[flatStrain[0], flatStrain[5], flatStrain[4]], \
-                                    [flatStrain[5], flatStrain[1], flatStrain[3]], \
-                                    [flatStrain[3], flatStrain[4], flatStrain[2]]])
-
-        if self.rotation is not None:
-            self.appstrain = self._rotateRank2Tensor(self.appstrain)
+        return np.tensordot(rot, 
+                np.tensordot(rot, 
+                np.tensordot(rot, 
+                np.tensordot(rot, tensor, axes=(1,3)), axes=(1,3)), axes=(1,3)), axes=(1,3))
 
     def setIntegrationIntervals(self, phiInt, thetaInt, assumeSymmetric=True):
         '''
@@ -448,20 +456,14 @@ class StrainEnergy:
             If True (default), will only integrate Eshelby's tensor on a single quadrant and
             multiply the results by 8
         '''
-        #Integral should be symmetric per quadrant (need to check)
-        #Thus we only need to integrate along a single quadrant
-        if assumeSymmetric:
-            dphi = np.pi/2 / phiInt
-            dtheta = np.pi/2 / thetaInt
-            midPhi = np.linspace(dphi/2, np.pi/2 - dphi/2, phiInt)
-            midTheta = np.linspace(dtheta/2, np.pi/2 - dtheta/2, thetaInt)
-            self.dA = dtheta * dphi
-        else:
-            dphi = 2*np.pi / phiInt
-            dtheta = np.pi / thetaInt
-            midPhi = np.linspace(dphi/2, 2*np.pi-dphi/2, phiInt)
-            midTheta = np.linspace(dtheta/2, np.pi-dtheta/2, thetaInt)
-            self.dA = 1/8 * dtheta * dphi
+        #If assume symmetric, then only a single quadrant will be integrated over
+        phiRange = np.pi/2 if assumeSymmetric else 2*np.pi
+        thetaRange = np.pi/2 if assumeSymmetric else np.pi
+        dphi = phiRange / phiInt
+        dtheta = thetaRange / thetaInt
+        midPhi = np.linspace(dphi/2, phiRange - dphi/2, phiInt)
+        midTheta = np.linspace(dtheta/2, thetaRange - dtheta/2, thetaInt)
+        self.dA = dtheta*dphi if assumeSymmetric else 1/8 * dtheta*dphi
 
         #Cartesian product of phi and theta intervals
         self.midPhiGrid, self.midThetaGrid = np.meshgrid(midPhi, midTheta)
@@ -489,7 +491,6 @@ class StrainEnergy:
             order = 131
 
         self.midPhiGrid, self.midThetaGrid, self.midWeights = loadPoints(order)
-
         self.dA = np.pi/2
 
     def _n(self, phi, theta):
@@ -563,17 +564,13 @@ class StrainEnergy:
         #The tensor product gives S_mnij so we'll need to transpose it
         return np.transpose(S, (2,3,0,1))
 
-    def _strainC(self, S, strain):
+    def _multiply(self, a, b):
         '''
-        ec_ij = S_ijkl * e_kl
+        Multiplies 2 tensors
+        4th x 2nd -> c_ij = a_ijkl * b_kl
+        4th x 4th -> c_ijkl = a_ijmn * b_mnkl
         '''
-        return np.tensordot(S, strain, axes=[[2,3],[0,1]])
-
-    def _stress(self, strain):
-        '''
-        sigma_ij = C_ijkl * e_kl
-        '''
-        return np.tensordot(self._c4, strain, axes = [[2,3], [0,1]])
+        return np.tensordot(a, b, axes=[[2,3], [0,1]])
 
     def _strainEnergy(self, stress, strain, V):
         '''
@@ -581,25 +578,45 @@ class StrainEnergy:
         '''
         return -0.5 * V * np.sum(stress * strain)
 
+    def _strainEnergyEllipsoidWithStress(self):
+        V = 4*np.pi/3 * np.product(self.r)
+        S = self.Sijmn(self.Dijkl())
+        stress = self._multiply(self._c4, self._multiply(S, self.eigstrain) - self.eigstrain)
+        stress0 = self._multiply(self._c4, self._multiply(S, self.appstrain) - self.appstrain)
+        return self._strainEnergy(stress - stress0, self.eigstrain - self.appstrain, V)
+
     def _strainEnergyEllipsoid(self):
         V = 4*np.pi/3 * np.product(self.r)
         S = self.Sijmn(self.Dijkl())
-        stress = self._stress(self._strainC(S, self.eigstrain) - self.eigstrain)
-        stress0 = self._stress(self._strainC(S, self.appstrain) - self.appstrain)
-        return self._strainEnergy(stress - stress0, self.eigstrain - self.appstrain, V)
+        stress = self._multiply(self._c4, self._multiply(S, self.eigstrain) - self.eigstrain)
+        return self._strainEnergy(stress, self.eigstrain, V)
+
+    def _strainEnergyEllipsoid2(self):
+        V = 4*np.pi/3 * np.product(self.r)
+        S = self._convert4To2rankTensor(self.Sijmn(self.Dijkl()))
+        eigFlat = self._convert2rankToVec(self.eigstrain)
+        multTerm = np.matmul(self.c, S - np.eye(6))
+        return -0.5 * V * np.matmul(eigFlat, np.matmul(multTerm, eigFlat))
 
     def _strainEnergyBohm(self):
         V = 4*np.pi/3 * np.product(self.r)
         S = self.Sijmn(self.Dijkl())
-        S2 = self._convert4To2rankTensor(S)
-        c = self._convert4To2rankTensor(self._c4)
-        cPrec = self._convert4To2rankTensor(self._c4Prec)
+        #invTerm = np.linalg.tensorinv(self._multiply(self._c4Prec - self._c4, S) + self._c4)
+        invTerm = self._invert4rankTensor(self._multiply(self._c4Prec - self._c4, S) + self._c4)
+        multTerm = self._multiply(invTerm, self._c4Prec)
+        stressC = self._multiply(self._c4, self._multiply(self._multiply(S, multTerm), self.eigstrain))
+        stress0 = self._multiply(self._c4, self._multiply(multTerm, self.eigstrain))
+        return self._strainEnergy(stressC-stress0, self.eigstrain, V)
+
+    def _strainEnergyBohm2(self):
+        V = 4*np.pi/3 * np.product(self.r)
+        S = self._convert4To2rankTensor(self.Sijmn(self.Dijkl()))
         eigFlat = self._convert2rankToVec(self.eigstrain)
-        invTerm = np.linalg.inv(np.matmul(cPrec - c, S2) + c)
-        multTerm = np.matmul(invTerm, cPrec)
-        outerTerm = np.matmul(c, S2 - np.eye(6))
-        multTerm = np.matmul(outerTerm, multTerm)
-        return -0.5 * V * np.matmul(eigFlat, np.matmul(multTerm, eigFlat))
+        invTerm = np.linalg.inv(np.matmul(self.cPrec - self.c, S) + self.c)
+        multTerm = np.matmul(invTerm, self.cPrec)
+        stressC = np.matmul(self.c, np.matmul(np.matmul(S, multTerm), eigFlat))
+        stress0 = np.matmul(self.c, np.matmul(multTerm, eigFlat))
+        return -0.5 * V * np.matmul(eigFlat, stressC - stress0)
 
     def _Khachaturyan(self, I1, I2):
         '''

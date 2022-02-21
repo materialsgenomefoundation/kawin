@@ -20,7 +20,7 @@ setup(
     install_requires=[
         'matplotlib>=3.3',
         'numpy>=1.13',
-        'pycalphad>=0.9.1',
+        'pycalphad>=0.10.0',
         'scipy',
         'setuptools_scm[toml]>=6.0',
     ],

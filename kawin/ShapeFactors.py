@@ -309,7 +309,9 @@ class ShapeFactor:
         Kinetic factor for plate shaped precipitate
         '''
         ecc = self.eccentricity(ar)
-        return ecc * np.cbrt(ar) / (np.arccos(0) - np.arccos(ecc))
+        return ecc * np.cbrt(ar) / (np.pi/2 - np.arccos(ecc))
+        #return ecc * np.cbrt(ar) / (np.arccos(0) - np.arccos(ecc))
+        #return ecc * np.cbrt(ar) / np.arccos(1/ar)
 
     def _kineticFactorEquationCuboidal(self, ar):
         '''

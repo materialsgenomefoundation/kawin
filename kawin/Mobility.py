@@ -1,7 +1,7 @@
 from tinydb import where
 import numpy as np
 from pycalphad import Model, variables as v
-from sympy import exp, Symbol
+from symengine import exp, Symbol
 from kawin.FreeEnergyHessian import partialdMudX, dMudX
 
 setattr(v, 'GE', v.StateVariable('GE'))

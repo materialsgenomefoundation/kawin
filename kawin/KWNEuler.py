@@ -43,6 +43,10 @@ class PrecipitateModel (PrecipitateBase):
         #Adaptive time stepping
         self._postTimeIncrementCheck = self._noPostCheckDT
 
+        #Additional PSD outputs
+        self.PSDfunctions = []
+        self.PSDoutputs = None
+
     def _resetArrays(self):
         super()._resetArrays()
         self.PBM = [PopulationBalanceModel() for p in self.phases]
@@ -63,6 +67,9 @@ class PrecipitateModel (PrecipitateBase):
         for i in range(len(self.phases)):
             self.PBM[i].reset()
 
+        #Resets PSD outputs
+        self._setupPSDOutputs()
+
     def save(self, filename, compressed = False, toCSV = False):
         '''
         Save results into a numpy .npz format
@@ -78,6 +85,9 @@ class PrecipitateModel (PrecipitateBase):
         variables = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements', \
             'time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
         vDict = {v: getattr(self, v) for v in variables}
+        if self.PSDoutputs is not None:
+            vDict['PSDoutputs'] = self.PSDoutputs
+            vDict['PSDfunctions'] = self.PSDfunctions
         for p in range(len(self.phases)):
             vDict['PSDdata_'+self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
             vDict['PSDsize_' + self.phases[p]] = self.PBM[p].PSDsize
@@ -108,6 +118,11 @@ class PrecipitateModel (PrecipitateBase):
                         for j in range(self.numberOfElements):
                             arrays.append(vDict[v][i,:,j])
                             headers.append(v + '_' + self.phases[i] + '_' + self.elements[j])
+                elif v == 'PSDoutputs':
+                    for i in range(len(self.phases)):
+                        for j in range(len(self.PSDfunctions)):
+                            arrays.append(vDict[v][i,:,j])
+                            headers.append(v + '_' + self.phases[i] + '_' + self.PSDfunctions[j]['name'])
                 else:
                     arrays.append(vDict[v])
                     headers.append(v)
@@ -156,6 +171,9 @@ class PrecipitateModel (PrecipitateBase):
             for d in data:
                 if d not in setupVars:
                     setattr(model, d, data[d])
+            if 'PSDoutputs' not in data:
+                model.PSDoutputs = None
+                model.PSDfunctions = []
         elif '.csv' in filename.lower():
             with open(filename, 'r') as csvFile:
                 data = csv.reader(csvFile, delimiter=',')
@@ -223,6 +241,12 @@ class PrecipitateModel (PrecipitateBase):
                     model.xEqBeta = np.transpose(model.xEqBeta, (0, 2, 1))
         return model
 
+    def _divideTimestep(self, i, dt):
+        super()._divideTimestep(i, dt)
+
+        if len(self.PSDfunctions) > 0:
+            self.PSDoutputs = np.append(self.PSDoutputs, np.zeros((len(self.phases), 1, len(self.PSDfunctions))), axis=1)
+
     def setPBMParameters(self, cMin = 1e-10, cMax = 1e-9, bins = 150, minBins = 100, maxBins = 200, adaptive = True, phase = None):
         '''
         Sets population balance model parameters for each phase
@@ -266,6 +290,46 @@ class PrecipitateModel (PrecipitateBase):
         '''
         index = self.phaseIndex(phase)
         self.PBM[index].LoadDistribution(data)
+
+    def addPSDOutput(self, name, f, moment=1, normalize='none'):
+        '''
+        Creates output based off PSD
+
+        Parameters
+        ----------
+        f : function
+            Takes in radius and returns a value
+        moment : integer
+            Moment to calculate function
+        normalize : str
+            Method to normalize radius
+            Options are:
+                'none' - no normalization
+                'avg' - normalized by average radius
+                'crit' - normalized by critcal radius
+        '''
+        self.PSDfunctions.append({'name': name, 'func': f, 'moment': moment, 'norm': normalize})
+
+    def _setupPSDOutputs(self):
+        '''
+        Function to setup PSD output arrays, will be used in setup and reset functions
+        '''
+        #Resets PSD outputs
+        if len(self.PSDfunctions) > 0:
+            self.PSDoutputs = np.zeros((len(self.phases), self.steps, len(self.PSDfunctions)))
+
+    def _calculatePSDOutputs(self, i):
+        '''
+        Calculates additional PSD functions
+        '''
+        for f in range(len(self.PSDfunctions)):
+            for p in range(len(self.phases)):
+                norm = 1
+                if self.PSDfunctions[f]['norm'] == 'avg':
+                    norm = self.avgR[p,i]
+                elif self.PSDfunctions[f]['norm'] == 'crit':
+                    norm = self.Rcrit[p,i]
+                self.PSDoutputs[p, i, f] = self.PBM[p].WeightedMoment(self.PSDfunctions[f]['moment'], self.PSDfunctions[f]['func'](self.PBM[p].PSDsize / norm))
 
     def particleRadius(self, phase = None):
         '''
@@ -351,6 +415,8 @@ class PrecipitateModel (PrecipitateBase):
     def setup(self):
         super().setup()
 
+        self._setupPSDOutputs()
+
         #Equilibrium aspect ratio and PBM setup
         #If calculateAspectRatio is True, then use strain energy to calculate aspect ratio for each size class in PSD
         #Else, then use aspect ratio defined in shape factors
@@ -411,7 +477,7 @@ class PrecipitateModel (PrecipitateBase):
         self.eqAspectRatioBackup = copy.copy(self.eqAspectRatio)
         self.RdrivingForceIndexBackup = copy.copy(self.RdrivingForceIndex)
         self.RdrivingForceLimitBackup = copy.copy(self.RdrivingForceLimit)
-        
+
         postDTCheck = False
         while not postDTCheck:
             dt = self.time[i] - self.time[i-1]
@@ -422,6 +488,9 @@ class PrecipitateModel (PrecipitateBase):
                 postDTCheck = self._postTimeIncrementCheck(i)
             else:
                 postDTCheck = True
+
+        #Calculate additional PSD function
+        self._calculatePSDOutputs(i)
 
     def _noCheckDT(self, i):
         '''

@@ -168,7 +168,7 @@ class PrecipitateBase:
         self.betaFrac = np.zeros((len(self.phases), self.steps))             #Fraction of precipitate
         
         self.nucRate = np.zeros((len(self.phases), self.steps))              #Nucleation rate
-        self.precipitateDensity = np.zeros((len(self.phases), self.steps))  #Number of nucleates
+        self.precipitateDensity = np.zeros((len(self.phases), self.steps))   #Number of nucleates
         
         self.dGs = np.zeros((len(self.phases), self.steps))                  #Driving force
         self.betas = np.zeros((len(self.phases), self.steps))                #Impingement rates (used for non-isothermal)
@@ -1357,6 +1357,25 @@ class PrecipitateBase:
                 self.Rad[p, i] = self.Rcrit[p, i] + 0.5 * np.sqrt(self.kB * self.T[i] / (np.pi * self.gamma[p]))
             else:
                 self.Rad[p, i] = 0
+
+    def getTimeAxis(self, timeUnits='s', bounds=None):
+        timeScale = 1
+        timeLabel = 'Time (s)'
+        if 'min' in timeUnits:
+            timeScale = 1/60
+            timeLabel = 'Time (min)'
+        if 'h' in timeUnits:
+            timeScale = 1/3600
+            timeLabel = 'Time (hrs)'
+
+        if bounds is None:
+            if self.t0 == 0:
+                bounds = [timeScale * 1e-5 * self.tf, timeScale * self.tf]
+            else:
+                bounds = [timeScale * self.t0, timeScale * self.tf]
+
+        return timeScale, timeLabel, bounds
+        
     
     def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
         '''
@@ -1390,21 +1409,8 @@ class PrecipitateBase:
             Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
         *args, **kwargs - extra arguments for plotting
         '''
-        timeScale = 1
-        timeLabel = 'Time (s)'
-        if 'min' in timeUnits:
-            timeScale = 1/60
-            timeLabel = 'Time (min)'
-        if 'h' in timeUnits:
-            timeScale = 1/3600
-            timeLabel = 'Time (hrs)'
+        timeScale, timeLabel, bounds = self.getTimeAxis(timeUnits, bounds)
 
-        if bounds is None:
-            if self.t0 == 0:
-                bounds = [timeScale * 1e-5 * self.tf, timeScale * self.tf]
-            else:
-                bounds = [timeScale * self.t0, timeScale * self.tf]
-            
         axes.set_xlabel(timeLabel)
         axes.set_xlim(bounds)
 

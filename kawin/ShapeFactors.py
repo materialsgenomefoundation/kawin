@@ -118,10 +118,9 @@ class ShapeFactor:
         self._kineticEquation = self._kineticFactorEquationCuboidal
         self._thermoEquation = self._thermoFactorEquationCuboidal
         
-        self.kineticFactorMin = 1
-        
-        #Thermodynamic factor for cuboidal precipitates is not 1 when aspect ratio is 1
+        #Thermodynamic and kinetic factor for cuboidal precipitates is not 1 when aspect ratio is 1
         self.thermoFactorMin = self._thermoFactorEquationCuboidal(1)
+        self.kineticFactorMin = self._kineticFactorEquationCuboidal(1.0001)
 
     def normalRadii(self, R):
         '''

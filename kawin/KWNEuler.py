@@ -764,7 +764,9 @@ class PrecipitateModel (PrecipitateBase):
                 return np.zeros(self.PBM[p].bins + 1)
             #Else, equilibrium did not converge and just use previous values
             #Only the growth rate needs to be updated, since all other terms are previous
+            #Also revert the PSD in case this function was called to adjust for the new PSD bins
             else:
+                self.PBM[p].revert()
                 return self.growth[p]
         else:
             #Update interfacial composition for each precipitate size

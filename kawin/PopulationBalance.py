@@ -222,7 +222,10 @@ class PopulationBalanceModel:
         if len(growthFilter) == 0:
             return currDT
         else:
-            return np.amin([currDT, (self.PSDbounds[1] - self.PSDbounds[0]) / (2 * np.amax(np.abs(growthFilter)))])
+            if np.amax(np.abs(growthFilter)) == 0:
+                return currDT
+            else:
+                return np.amin([currDT, (self.PSDbounds[1] - self.PSDbounds[0]) / (2 * np.amax(np.abs(growthFilter)))])
 
     def adjustSizeClassesEuler(self, checkDissolution = False):
         '''

@@ -818,7 +818,7 @@ class PrecipitateModel (PrecipitateBase):
         for the radius in the PSD as well as equilibrium (infinite radius)
         '''
         growth, xAlpha, xBeta, xEqAlpha, xEqBeta = self.interfacialComposition[p](self.xComp[i-1], self.T[i], self.dGs[p,i-1] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]))
-            
+
         #If two-phase equilibrium not found, two possibilities - precipitates are unstable or equilibrium calculations didn't converge
         if growth is None:
             #If driving force is negative, then precipitates are unstable
@@ -833,7 +833,9 @@ class PrecipitateModel (PrecipitateBase):
                 return np.zeros(self.PBM[p].bins + 1)
             #Else, equilibrium did not converge and just use previous values
             #Only the growth rate needs to be updated, since all other terms are previous
+            #Also revert the PSD in case this function was called to adjust for the new PSD bins
             else:
+                self.PBM[p].revert()
                 return self.growth[p]
         else:
             #Update interfacial composition for each precipitate size

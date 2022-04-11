@@ -2,6 +2,8 @@ import numpy as np
 
 class StrengthModel:
     def __init__(self):
+        self.functionName = 'strengthFactor'
+
         #Solid solution strengthening parameters
         self.ssweights = {}
         self.ssexp = 1
@@ -35,7 +37,7 @@ class StrengthModel:
         strength : array of floats
             Solid solution strength contribution over time
         '''
-        if len(model.xComp).shape == 1:
+        if len(model.xComp.shape) == 1:
             return self.ssweights[model.elements[0]] * model.xComp**self.ssexp
         else:
             return np.sum([self.ssweights[model.elements[i]]*model.xComp[:,i]**self.ssexp for i in range(len(model.elements))], axis=0)
@@ -67,7 +69,13 @@ class StrengthModel:
         ----------
         model : KWNEuler object
         '''
-        model.addPSDOutput('strengthFactor', self.Fterm, 0, normalize='none')
+        model.addPSDOutput(self.functionName, self.Fterm, 0, normalize='none')
+
+    def _totalAvgR(self, model):
+        totalN = np.sum(model.precipitateDensity, axis=0)
+        totalN[totalN == 0] = 1
+        totalR = np.sum(model.precipitateDensity * model.avgR, axis=0) / totalN
+        return totalR
 
     def _precStrength(self, r, fv, fterm, N):
         '''
@@ -107,7 +115,7 @@ class StrengthModel:
             Preciptate strength contribution over time
         '''
         psdfuncs = [p['name'] for p in model.PSDfunctions]
-        return self._precStrength(model.avgR[0,:], model.betaFrac[0,:], model.PSDoutputs[0,:,psdfuncs.index('strengthFactor')], model.precipitateDensity[0,:])
+        return self._precStrength(self._totalAvgR(model), np.sum(model.betaFrac, axis=0), np.sum(model.PSDoutputs[:,:,psdfuncs.index(self.functionName)], axis=0), np.sum(model.precipitateDensity, axis=0))
 
     def _avgD(self, r, fv):
         '''
@@ -137,7 +145,7 @@ class StrengthModel:
         distance : array of floats
             Average distance vs time
         '''
-        return self._avgD(model.avgR[0,:], model.betaFrac[0,:])
+        return self._avgD(self._totalAvgR(model), np.sum(model.betaFrac, axis=0))
 
     def estimateRtrans(self, Gm, Gp, b):
         '''
@@ -213,8 +221,11 @@ class StrengthModel:
         timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
 
-        strength = self.precStrength(model)
-        ax.plot(model.time*timeScale, strength / yscale, *args, **kwargs)
+        #ssstrength = self.ssStrength(model)
+        precstrength = self.precStrength(model)
+        ax.plot(model.time*timeScale, (precstrength) / yscale, *args, **kwargs)
+        #ax.plot(model.time*timeScale, (ssstrength) / yscale, *args, **kwargs)
+        #ax.plot(model.time*timeScale, (ssstrength + precstrength) / yscale, *args, **kwargs)
         ax.set_xlabel(timeLabel)
         ax.set_xlim(bounds)
         ax.set_ylabel(ylabel)

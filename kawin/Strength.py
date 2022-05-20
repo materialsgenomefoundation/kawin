@@ -8,12 +8,8 @@ class StrengthModel:
         self.ssweights = {}
         self.ssexp = 1
 
-        #Initial strength
+        #Base strength
         self.sigma0 = 0
-
-        #Forest hardening
-        self.rhod = None    #Dislocation density
-        self.alpha = None   #Constant (~0.15 - 0.5)
 
         #Precipitate strength
         self.M = None      #Taylor factor

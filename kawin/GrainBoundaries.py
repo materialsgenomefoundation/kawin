@@ -73,7 +73,7 @@ class GBFactors:
         elif self.nucleationSiteType == self.GRAIN_BOUNDARIES:
             self.gbRemoval = np.pi * (1 - self.GBk**2)
             self.areaFactor = 4 * np.pi * (1 - self.GBk)
-            self.volumeFactor = (2 * np.pi / 3) * (2 - 3 * self.GBk + self.GBk**2)
+            self.volumeFactor = (2 * np.pi / 3) * (2 - 3 * self.GBk + self.GBk**3)
 
         #Grain edge nucleation
         elif self.nucleationSiteType == self.GRAIN_EDGES and self.GBk < np.sqrt(3) / 2:

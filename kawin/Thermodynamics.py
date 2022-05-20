@@ -98,7 +98,6 @@ class GeneralThermodynamics:
         
         #Pertains to parent phase (composition, sampled points, equilibrium calculations)
         self._prevX = None
-        self._pointsParent = None
         self._parentEq = None
 
         #Pertains to precipitate phases (sampled points)
@@ -598,6 +597,9 @@ class GeneralThermodynamics:
             #If not, then there's no composition set to cache
             if len(precip_idx) > 0:
                 cs_matrix = CompositionSet(self.phase_records[self.phases[0]])
+                #If there's a miscibility gap in the matrix phase, then take the largest value
+                if len(matrix_idx) > 1:
+                    matrix_idx = [np.argmax(phase_amounts[matrix_idx])]
                 cs_matrix.update(eq.Y.isel(vertex=matrix_idx).values.ravel()[:cs_matrix.phase_record.phase_dof],
                                 phase_amounts[matrix_idx], state_variables)
                 cs_precip = CompositionSet(self.phase_records[precPhase])
@@ -1167,12 +1169,12 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         #Near saturation, pycalphad may detect only a single phase (if sampling density is too low)
         #When this occurs, this will assume that the system is on the same tie-line and 
         #use the previously calculated values
-        self._prevDc = None
-        self._prevMc = None
-        self._prevGba = None
-        self._prevBeta = None
-        self._prevCa = None
-        self._prevCb = None
+        self._prevDc = {p: None for p in phases[1:]}
+        self._prevMc = {p: None for p in phases[1:]}
+        self._prevGba = {p: None for p in phases[1:]}
+        self._prevBeta = {p: None for p in phases[1:]}
+        self._prevCa = {p: None for p in phases[1:]}
+        self._prevCb = {p: None for p in phases[1:]}
 
     def getInterfacialComposition(self, x, T, gExtra = 0, precPhase = None):
         '''
@@ -1296,16 +1298,16 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         Will return (None, None, None, None, None, None) if single phase
         '''
+        if precPhase is None:
+            precPhase = self.phases[1]
+
         #Check if input equilibrium has converged
         if np.any(np.isnan(chemical_potentials)):
             if training:
                 return None, None, None, None, None, None
             else:
                 print('Warning: equilibrum was not able to be solved for, using results of previous calculation')
-                return self._prevDc, self._prevMc, self._prevGba, self._prevBeta, self._prevCa, self._prevCb
-
-        if precPhase is None:
-            precPhase = self.phases[1]
+                return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
 
         ele = list(composition_sets[0].phase_record.nonvacant_elements)
         refIndex = ele.index(self.elements[0])
@@ -1355,16 +1357,20 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
             betaNum = xBarFull**2
             betaDen = Dtrace * xMFull.flatten()
-            beta = 1 / np.sum(betaNum / betaDen)
+            bsum = np.sum(betaNum / betaDen)
+            if bsum == 0:
+                beta = self._prevBeta[precPhase]
+            else:
+                beta = 1 / bsum
 
-            self._prevDc = num[unsortIndices] / den
-            self._prevMc = 1 / den
-            self._prevGba = Gba
-            self._prevBeta = beta
-            self._prevCa = xM[unsortIndices]
-            self._prevCb = xP[unsortIndices]
+            self._prevDc[precPhase] = num[unsortIndices] / den
+            self._prevMc[precPhase] = 1 / den
+            self._prevGba[precPhase] = Gba
+            self._prevBeta[precPhase] = beta
+            self._prevCa[precPhase] = xM[unsortIndices]
+            self._prevCb[precPhase] = xP[unsortIndices]
 
-            return self._prevDc, self._prevMc, self._prevGba, self._prevBeta, self._prevCa, self._prevCb
+            return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
         else:
             if training:
                 return None, None, None, None, None, None
@@ -1374,7 +1380,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
                 #If two-phase equilibrium is not found, then the temperature may have changed to where the precipitate is unstable
                 #Return None in this case
-                return None, None, None, self._prevBeta, None, None
+                return None, None, None, self._prevBeta[precPhase], None, None
 
 
     def curvatureFactor(self, x, T, precPhase = None, training = False):
@@ -1433,6 +1439,9 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                     return self._prevDc, self._prevMc, self._prevGba, self._prevBeta, self._prevCa, self._prevCb
 
             cs_matrix = CompositionSet(self.phase_records[self.phases[0]])
+            #If there's a miscibility gap in the matrix phase, then take the largest value
+            if len(matrix_idx) > 1:
+                matrix_idx = [np.argmax(phase_amounts[matrix_idx])]
             cs_matrix.update(eq.Y.isel(vertex=matrix_idx).values.ravel()[:cs_matrix.phase_record.phase_dof],
                              phase_amounts[matrix_idx], state_variables)
 

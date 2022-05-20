@@ -400,7 +400,9 @@ class PrecipitateBase:
         self.maxVolumeChange = 0.001
         
         self.checkComposition = True
+        self.checkCompositionPre = True
         self.maxCompositionChange = 0.001
+        self.minComposition = 0
 
     def setConstraints(self, **kwargs):
         '''
@@ -927,7 +929,7 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.interfacialComposition[index] = composition
 
-    def setThermodynamics(self, therm, phase = None):
+    def setThermodynamics(self, therm, phase = None, removeCache = False):
         '''
         Parameters
         ----------
@@ -936,13 +938,13 @@ class PrecipitateBase:
             Phase to consider (defaults to first precipitate in list)
         '''
         index = self.phaseIndex(phase)
-        self.dG[index] = lambda x, T: therm.getDrivingForce(x, T, precPhase=phase)
+        self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache)
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
         else:
-            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase)
-            self._betaFuncs[index] = lambda x, T: therm.impingementFactor(x, T, precPhase=phase)
+            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = removeCache)
+            self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = removeCache)
 
     def setSurrogate(self, surr, phase = None):
         '''
@@ -1112,17 +1114,17 @@ class PrecipitateBase:
             print('N\tTime (s)\tTemperature (K)\tMatrix Comp')
             print('{:.0f}\t{:.1e}\t\t{:.0f}\t\t{:.4f}\n'.format(i, self.time[i], self.T[i], 100*self.xComp[i]))
         else:
-            compStr = 'N\tTime (s)\tTemperature (K)'
-            compValStr = '{:.0f}\t{:.1e}\t\t{:.0f}\t'.format(i, self.time[i], self.T[i])
+            compStr = 'N\tTime (s)\tTemperature (K)\t'
+            compValStr = '{:.0f}\t{:.1e}\t\t{:.0f}\t\t'.format(i, self.time[i], self.T[i])
             for a in range(self.numberOfElements):
                 compStr += self.elements[a] + '\t'
                 compValStr += '{:.4f}\t'.format(100*self.xComp[i,a])
             compValStr += '\n'
             print(compStr)
             print(compValStr)
-        print('\tPhase\tPrec Density (#/m3)\tVolume Frac\tAvg Radius (m)')
+        print('\tPhase\tPrec Density (#/m3)\tVolume Frac\tAvg Radius (m)\tDriving Force (J/mol)')
         for p in range(len(self.phases)):
-            print('\t{}\t{:.3e}\t{:.4f}\t\t{:.4e}'.format(self.phases[p], self.precipitateDensity[p,i], 100*self.betaFrac[p,i], self.avgR[p,i]))
+            print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.precipitateDensity[p,i], 100*self.betaFrac[p,i], self.avgR[p,i], self.dGs[p,i]*self.VmBeta[p]))
         print('')
                 
     def solve(self, verbose = False, vIt = 1000):
@@ -1242,12 +1244,14 @@ class PrecipitateBase:
             #Calculate nucleation rate
             Z = self._Zeldovich(p, i)
             self.betas[p,i] = self._Beta(p, i)
+            if self.betas[p,i] == 0:
+                return self._noDrivingForce(p, i)
                 
             #Incubation time, either isothermal or nonisothermal
             self.incubationSum[p] = self._incubation(Z, p, i)
             if self.incubationSum[p] > 1:
                 self.incubationSum[p] = 1
-            
+
             return Z * self.betas[p,i] * np.exp(-self.Gcrit[p, i] / (self.kB * self.T[i])) * self.incubationSum[p]
 
         else:
@@ -1281,9 +1285,7 @@ class PrecipitateBase:
         '''
         Set everything to 0 if there is no driving force for precipitation
         '''
-        #self.dGs[p, i] = 0
         self.Rcrit[p, i] = 0
-        #self.incubationOffset[p] = self.time[i-1]
         self.incubationOffset[p] = np.amax([i-1, 0])
         return 0
 

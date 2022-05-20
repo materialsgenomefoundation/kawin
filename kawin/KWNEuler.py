@@ -516,39 +516,70 @@ class PrecipitateModel (PrecipitateBase):
 
         if i > 1:
             dtPrev = self.time[i-1] - self.time[i-2]
+        else:
+            dtPrev = dt
 
-            #Nucleation rate constraint
-            if self.checkNucleation:
-                dtNuc = dt * np.ones(len(self.phases)+1)
-                for p in range(len(self.phases)):
-                    if self.nucRate[p,i] > self.minNucleationRate and self.nucRate[p,i-1] > self.minNucleationRate and self.nucRate[p,i-1] != self.nucRate[p,i]:
-                        dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
-                dt = np.amin(dtNuc)
-                dtAll.append(dt)
+        #Nucleation rate constraint
+        if self.checkNucleation:
+            dtNuc = dt * np.ones(len(self.phases)+1)
+            for p in range(len(self.phases)):
+                if self.nucRate[p,i] > self.minNucleationRate and self.nucRate[p,i-1] > self.minNucleationRate and self.nucRate[p,i-1] != self.nucRate[p,i]:
+                    dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(self.nucRate[p,i-1] / self.nucRate[p,i]))
+            dt = np.amin(dtNuc)
+            dtAll.append(dt)
 
-            #Temperature change constraint
-            if self.checkTemperature:
-                Tchange = self.T[i] - self.T[i-1]
-                dtTemp = dt
-                if Tchange > self.maxNonIsothermalDT:
-                    dtTemp = self.maxNonIsothermalDT * (self.time[i] - self.time[i-1]) / Tchange
-                    dt = np.amin([dt, dtTemp])
+        #Temperature change constraint
+        if self.checkTemperature:
+            Tchange = self.T[i] - self.T[i-1]
+            dtTemp = dt
+            if Tchange > self.maxNonIsothermalDT:
+                dtTemp = self.maxNonIsothermalDT * (self.time[i] - self.time[i-1]) / Tchange
+                dt = np.amin([dt, dtTemp])
 
-            if self.checkRcrit:
-                dtRad = dt * np.ones(len(self.phases)+1)
-                if not all((self.Rcrit[:,i-1] == 0) & (self.Rcrit[:,i] - self.Rcrit[:,i-1] == 0) & (self.dGs[:,i] <= 0)):
-                    indices = (self.Rcrit[:,i-1] > 0) & (self.Rcrit[:,i] - self.Rcrit[:,i-1] != 0) & (self.dGs[:,i] > 0)
-                    dtRad[:-1][indices] = self.maxRcritChange * dtPrev / np.abs((self.Rcrit[:,i][indices] - self.Rcrit[:,i-1][indices]) / self.Rcrit[:,i-1][indices])
-                dt = np.amin(dtRad)
-                dtAll.append(dt)
+        if self.checkRcrit:
+            dtRad = dt * np.ones(len(self.phases)+1)
+            if not all((self.Rcrit[:,i-1] == 0) & (self.Rcrit[:,i] - self.Rcrit[:,i-1] == 0) & (self.dGs[:,i] <= 0)):
+                indices = (self.Rcrit[:,i-1] > 0) & (self.Rcrit[:,i] - self.Rcrit[:,i-1] != 0) & (self.dGs[:,i] > 0)
+                dtRad[:-1][indices] = self.maxRcritChange * dtPrev / np.abs((self.Rcrit[:,i][indices] - self.Rcrit[:,i-1][indices]) / self.Rcrit[:,i-1][indices])
+            dt = np.amin(dtRad)
+            dtAll.append(dt)
 
-            if self.checkVolumePre:
-                dtVol = dt * np.ones(len(self.phases) + 1)
-                if not all((self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)):
-                    indices = (self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)
-                    dtVol[:-1][indices] = self.maxVolumeChange / (10 * (4*np.pi*self.Rad[:,i][indices]**3*self.nucRate[:,i][indices]/3))
-                dt = np.amin(dtVol)
-                dtAll.append(dt)
+        if self.checkVolumePre or self.checkCompositionPre:
+            dV = np.zeros(len(self.phases))
+            for p in range(len(self.phases)):
+                #Calculate estimate volume change based off growth rate and nucleated particles
+                #TODO: account for non-spherical precipitates
+                dVi = self.PBM[p].PSD * self.PBM[p].PSDsize**2 * 0.5 * (self.growth[p][1:] + self.growth[p][:-1])
+                dVi[dVi < 0] = 0
+                dV = self.VmAlpha / self.VmBeta[p] * (self.GB[p].areaFactor * np.sum(dVi) + self.GB[p].volumeFactor * self.nucRate[p,i] * self.Rad[p,i]**3)
+
+        if self.checkVolumePre:
+            dtVol = dt * np.ones(len(self.phases) + 1)
+            for p in range(len(self.phases)):
+                if dV != 0:
+                    dtVol[p] = self.maxVolumeChange / (2 * np.abs(dV))
+            #if not all((self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)):
+            #    indices = (self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)
+            #    dtVol[:-1][indices] = self.maxVolumeChange / (10 * (4*np.pi*self.Rad[:,i][indices]**3*self.nucRate[:,i][indices]/3))
+            dt = np.amin(dtVol)
+            dtAll.append(dt)
+
+        if self.checkCompositionPre:
+            dtComp = dt * np.ones(self.numberOfElements + 1)
+            fvsum = np.sum(self.betaFrac[:,i-1])
+            xbavg = np.zeros(self.numberOfElements)
+            if self.numberOfElements == 1:
+                xbavg[0] = 0 if fvsum == 0 else (self.xComp[0] - self.xComp[i-1] * (1 - fvsum)) / fvsum
+                dxadt = (self.xComp[i-1] - xbavg) * np.sum(dV) / (1 - fvsum)
+            else:
+                for e in range(self.numberOfElements):
+                    xbavg[e] = 0 if fvsum == 0 else (self.xComp[0,e] - self.xComp[i-1,e] * (1 - fvsum)) / fvsum
+                dxadt = (self.xComp[i-1,:] - xbavg) * np.sum(dV) / (1 - fvsum)
+            dxadt[dxadt == 0] = self.maxCompositionChange / (2 * dt)
+            dtComp[:self.numberOfElements] = self.maxCompositionChange / (2 * dxadt)
+                
+            dt = np.amin(dtComp)
+            dtAll.append(dt)
 
         #Minimum dt is the lower of the minimum allowed time increment or the time to the next pre-defined increment
         minDT = self._calculateDT(i-1, self.minDTFraction)
@@ -593,9 +624,9 @@ class PrecipitateModel (PrecipitateBase):
 
         if self.checkComposition:
             if self.numberOfElements == 1:
-                compCheck = np.abs(self.xComp[i] - self.xComp[i-1]) < self.maxCompositionChange
+                compCheck = (np.abs(self.xComp[i] - self.xComp[i-1]) < self.maxCompositionChange) & (self.xComp[i] > 0)
             else:
-                compCheck = np.amax(np.abs(self.xComp[i,:] - self.xComp[i-1,:])) < self.maxCompositionChange
+                compCheck = (np.amax(np.abs(self.xComp[i,:] - self.xComp[i-1,:])) < self.maxCompositionChange) & (np.amin(self.xComp[i,:] > self.minComposition))
         else:
             compCheck = True
 
@@ -764,6 +795,7 @@ class PrecipitateModel (PrecipitateBase):
         else:
             if np.sum(fBeta) < 1:
                 self.xComp[i] = (self.xComp[0] - np.sum(fConc, axis=0)) / (1 - np.sum(fBeta))
+                self.xComp[i][self.xComp[i] < 0] = self.minComposition
             else:
                 self.xComp[i] = np.zeros(self.numberOfElements)
 
@@ -854,7 +886,6 @@ class PrecipitateModel (PrecipitateBase):
         growthRate = []
         for p in range(len(self.phases)):
             growthRate.append(self._singleGrowthMulti(i, p))
-
         self.growth = growthRate
 
     def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):

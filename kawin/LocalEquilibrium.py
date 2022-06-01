@@ -1,4 +1,3 @@
-from pycalphad.core.eqsolver import solve_and_update
 from pycalphad.core.solver import Solver
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.codegen.callables import build_phase_records
@@ -8,7 +7,7 @@ import numpy as np
 def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composition_sets=None):
     '''
     Local equilibrium calculation
-    
+
     Chemical potential in a miscibility gap will be constant
     This method allows the user to get the free energy at the specified composition
     ignoring possible miscibility gaps
@@ -58,5 +57,5 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
     # Calculate a local equilibrium for the specified phases
     solver = Solver()
     #print('initial', composition_sets)
-    result = solve_and_update(composition_sets, cur_conds, solver)
+    result = solver.solve(composition_sets, cur_conds)
     return result, composition_sets

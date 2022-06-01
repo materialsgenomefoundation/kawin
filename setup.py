@@ -16,11 +16,11 @@ setup(
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
     url='https://kawin.org/',
-    version='0.1.1',
+    version='0.1.2',
     install_requires=[
         'matplotlib>=3.3',
         'numpy>=1.13',
-        'pycalphad>=0.10.0',
+        'pycalphad>=0.10.1',
         'scipy',
         'setuptools_scm[toml]>=6.0',
     ],

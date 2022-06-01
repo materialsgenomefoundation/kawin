@@ -217,9 +217,9 @@ class StrengthModel:
         timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
 
-        #ssstrength = self.ssStrength(model)
+        ssstrength = self.ssStrength(model)
         precstrength = self.precStrength(model)
-        ax.plot(model.time*timeScale, (precstrength) / yscale, *args, **kwargs)
+        ax.plot(model.time*timeScale, (self.sigma0 + ssstrength + precstrength) / yscale, *args, **kwargs)
         #ax.plot(model.time*timeScale, (ssstrength) / yscale, *args, **kwargs)
         #ax.plot(model.time*timeScale, (ssstrength + precstrength) / yscale, *args, **kwargs)
         ax.set_xlabel(timeLabel)

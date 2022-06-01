@@ -1376,7 +1376,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 return None, None, None, None, None, None
             else:
                 #print('Warning: only a single phase detected in equilibrium, using results of previous calculation')
-                #return self._prevDc, self._prevMc, self._prevGba, self._prevBeta, self._prevCa, self._prevCb
+                #return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
 
                 #If two-phase equilibrium is not found, then the temperature may have changed to where the precipitate is unstable
                 #Return None in this case

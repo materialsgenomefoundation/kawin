@@ -466,7 +466,7 @@ class PopulationBalanceModel:
             axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
         else:
             axes.plot(self.PSDsize * scale, self.PSD, *args, **kwargs)
-        self.setAxes(axes, logX, logY) 
+        self.setAxes(axes, scale, logX, logY) 
 
     def PlotDistributionDensity(self, axes, fill = False, logX = False, logY = False, scale = 1, *args, **kwargs):
         '''
@@ -501,12 +501,12 @@ class PopulationBalanceModel:
         #Set x-limits
         if logX:
             if self.min == 0:
-                axes.set_xlim([self.PSDbounds[1], self.max])
+                axes.set_xlim([self.PSDbounds[1]*scale, self.max*scale])
             else:
-                axes.set_xlim([self.min, self.max])
+                axes.set_xlim([self.min*scale, self.max*scale])
             axes.set_xscale('log')
         else:
-            axes.set_xlim([self.min, self.max]) 
+            axes.set_xlim([self.min*scale, self.max*scale]) 
 
         #Set y-limits
         if logY:
@@ -550,7 +550,7 @@ class PopulationBalanceModel:
             axes.fill_between(x * scale, y, np.zeros(len(y)), *args, **kwargs)
         else:
             axes.plot(x * scale, y, *args, **kwargs)
-        self.setAxes(axes, logX, logY) 
+        self.setAxes(axes, scale, logX, logY) 
             
     def PlotHistogram(self, axes, outline = 'outline bins', fill = True, logX = False, logY = False, scale = 1, *args, **kwargs):
         '''
@@ -594,7 +594,7 @@ class PopulationBalanceModel:
                 axes.fill_between(xCoord * scale, yCoord, np.zeros(len(yCoord)), alpha=0.3, *args, **kwargs)
         else:
             axes.fill_between(xCoord * scale, yCoord, np.zeros(len(yCoord)), *args, **kwargs)
-        self.setAxes(axes, logX, logY)
+        self.setAxes(axes, scale, logX, logY)
 
     def PlotCDF(self, axes, logX = False, scale = 1, order = 0, *args, **kwargs):
         '''
@@ -619,10 +619,10 @@ class PopulationBalanceModel:
             scale = np.interp(self.PSDsize, self.PSDbounds, scale)
 
         axes.plot(self.PSDsize * scale, self.CumulativeMoment(order) / self.Moment(order), *args, **kwargs)
-        self.setAxes(axes, logX, False) 
+        self.setAxes(axes, scale, logX, False) 
         axes.set_ylim([0, 1])
         
-    def setAxes(self, axes, logX = False, logY = False): 
+    def setAxes(self, axes, scale = 1, logX = False, logY = False): 
         '''
         Sets x- and y-axis to linear or log scale
         
@@ -637,12 +637,12 @@ class PopulationBalanceModel:
         '''    
         if logX:
             if self.min == 0:
-                axes.set_xlim([self.PSDbounds[1], self.max])
+                axes.set_xlim([self.PSDbounds[1]*scale, self.max*scale])
             else:
-                axes.set_xlim([self.min, self.max])
+                axes.set_xlim([self.min*scale, self.max*scale])
             axes.set_xscale('log')
         else:
-            axes.set_xlim([self.min, self.max])
+            axes.set_xlim([self.min*scale, self.max*scale])
 
         #Don't set y limits if the PSD is empty
         if any(self.PSD > 0): 

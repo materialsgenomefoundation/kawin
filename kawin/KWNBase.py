@@ -357,7 +357,8 @@ class PrecipitateBase:
         '''
         if adaptive:
             self._timeIncrementCheck = self._checkDT
-            self._postTimeIncrementCheck = self._postCheckDT
+            #self._postTimeIncrementCheck = self._postCheckDT
+            self._postTimeIncrementCheck = self._noPostCheckDT
         else:
             self._timeIncrementCheck = self._noCheckDT
             self._postTimeIncrementCheck = self._noPostCheckDT
@@ -400,7 +401,7 @@ class PrecipitateBase:
         self.maxVolumeChange = 0.001
         
         self.checkComposition = True
-        self.checkCompositionPre = True
+        self.checkCompositionPre = False
         self.maxCompositionChange = 0.001
         self.minComposition = 0
 
@@ -433,11 +434,12 @@ class PrecipitateBase:
         maxNucleationRateChange - maximum change in nucleation rate (on log scale) per single time step (0.5)
         minNucleationRate - minimum nucleation rate to be considered for checking time intervals (1e-5)
 
-        checkVolumePre - checks maximum estimated volume change (True)
+        checkVolumePre - estimates maximum volume change (True)
         checkVolumePost - checks maximum calculated volume change (True)
         maxVolumeChange - maximum absolute value that volume fraction can change per single time step (0.001)
 
         checkComposition - checks maximum change in composition (True)
+        chekcCompositionPre - estimates maximum change in composition (False)
         maxCompositionChange - maximum change in composition in single time step (0.01)
         '''
         for key, value in kwargs.items():

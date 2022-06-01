@@ -40,9 +40,6 @@ class PrecipitateModel (PrecipitateBase):
             self._growthRate = self._growthRateMulti
             self._Beta = self._BetaMulti
 
-        #Adaptive time stepping
-        self._postTimeIncrementCheck = self._noPostCheckDT
-
         #Additional PSD outputs
         self.PSDfunctions = []
         self.PSDoutputs = None
@@ -553,33 +550,33 @@ class PrecipitateModel (PrecipitateBase):
                 dVi[dVi < 0] = 0
                 dV = self.VmAlpha / self.VmBeta[p] * (self.GB[p].areaFactor * np.sum(dVi) + self.GB[p].volumeFactor * self.nucRate[p,i] * self.Rad[p,i]**3)
 
-        if self.checkVolumePre:
-            dtVol = dt * np.ones(len(self.phases) + 1)
-            for p in range(len(self.phases)):
-                if dV != 0:
-                    dtVol[p] = self.maxVolumeChange / (2 * np.abs(dV))
-            #if not all((self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)):
-            #    indices = (self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)
-            #    dtVol[:-1][indices] = self.maxVolumeChange / (10 * (4*np.pi*self.Rad[:,i][indices]**3*self.nucRate[:,i][indices]/3))
-            dt = np.amin(dtVol)
-            dtAll.append(dt)
+            if self.checkVolumePre:
+                dtVol = dt * np.ones(len(self.phases) + 1)
+                for p in range(len(self.phases)):
+                    if dV != 0:
+                        dtVol[p] = self.maxVolumeChange / (2 * np.abs(dV))
+                #if not all((self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)):
+                #    indices = (self.Rad[:,i]**3*self.nucRate[:,i] > 1e-30)
+                #    dtVol[:-1][indices] = self.maxVolumeChange / (10 * (4*np.pi*self.Rad[:,i][indices]**3*self.nucRate[:,i][indices]/3))
+                dt = np.amin(dtVol)
+                dtAll.append(dt)
 
-        if self.checkCompositionPre:
-            dtComp = dt * np.ones(self.numberOfElements + 1)
-            fvsum = np.sum(self.betaFrac[:,i-1])
-            xbavg = np.zeros(self.numberOfElements)
-            if self.numberOfElements == 1:
-                xbavg[0] = 0 if fvsum == 0 else (self.xComp[0] - self.xComp[i-1] * (1 - fvsum)) / fvsum
-                dxadt = (self.xComp[i-1] - xbavg) * np.sum(dV) / (1 - fvsum)
-            else:
-                for e in range(self.numberOfElements):
-                    xbavg[e] = 0 if fvsum == 0 else (self.xComp[0,e] - self.xComp[i-1,e] * (1 - fvsum)) / fvsum
-                dxadt = (self.xComp[i-1,:] - xbavg) * np.sum(dV) / (1 - fvsum)
-            dxadt[dxadt == 0] = self.maxCompositionChange / (2 * dt)
-            dtComp[:self.numberOfElements] = self.maxCompositionChange / (2 * dxadt)
-                
-            dt = np.amin(dtComp)
-            dtAll.append(dt)
+            if self.checkCompositionPre:
+                dtComp = dt * np.ones(self.numberOfElements + 1)
+                fvsum = np.sum(self.betaFrac[:,i-1])
+                xbavg = np.zeros(self.numberOfElements)
+                if self.numberOfElements == 1:
+                    xbavg[0] = 0 if fvsum == 0 else (self.xComp[0] - self.xComp[i-1] * (1 - fvsum)) / fvsum
+                    dxadt = (self.xComp[i-1] - xbavg) * np.sum(dV) / (1 - fvsum)
+                else:
+                    for e in range(self.numberOfElements):
+                        xbavg[e] = 0 if fvsum == 0 else (self.xComp[0,e] - self.xComp[i-1,e] * (1 - fvsum)) / fvsum
+                    dxadt = (self.xComp[i-1,:] - xbavg) * np.sum(dV) / (1 - fvsum)
+                dxadt[dxadt == 0] = self.maxCompositionChange / (2 * dt)
+                dtComp[:self.numberOfElements] = self.maxCompositionChange / (2 * dxadt)
+                    
+                dt = np.amin(dtComp)
+                dtAll.append(dt)
 
         #Minimum dt is the lower of the minimum allowed time increment or the time to the next pre-defined increment
         minDT = self._calculateDT(i-1, self.minDTFraction)
@@ -601,6 +598,8 @@ class PrecipitateModel (PrecipitateBase):
 
     def _postCheckDT(self, i):
         '''
+        CURRENTLY UNUSED AND MAY BE REMOVED LATER
+
         If adaptive time step is used, this checks new values at iteration i
         and compares with simulation contraints
 

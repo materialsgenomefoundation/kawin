@@ -9,14 +9,229 @@ class StrengthModel:
         self.ssexp = 1
 
         #Base strength
-        self.sigma0 = 0
+        self.sigma0 = None
 
-        #Precipitate strength
-        self.M = None      #Taylor factor
-        self.b = None       #Burgers vector
-        self.k = None       #Constant (~0.5)
-        self.G = None       #Shear modulus
-        self.rtrans = None      #Transition radius
+        #Precipitate strength factors
+        self.coherencyEffect = False        #Coherency effect
+        self.modulusEffect = False          #Modulus effect
+        self.APBEffect = False              #Anti-phase boundary effect
+        self.SFEffect = False               #Stacking fault energy effect
+        self.IFEffect = False               #Interfacial energy effect
+        self.orowanEffect = False           #Non-shearable (Orowan) mechanism
+
+        #Parameters for precipitate strength
+        self.nu = None              #Poisson ratio
+        self.b = None               #Burgers vector
+        self.bp = None              #Burgers vector for precipitate
+        self.theta = None           #Angle between dislocation and burgers vector (0 for screw, pi/2 for edge)
+        self.G = None               #Shear modulus of matrix
+        self.Gp = None              #Shear modulus of precipitate
+        self.ri = None              #Dislocation radius
+        self.delta = None           #Lattice misfit
+        self.eps = None             #Strain from lattice misfit
+        self.J = 1                  #Correction factor for strong coherency effect
+        self.w1 = 0.0722            #Factor for modulus effect (0.0175 - 0.0722)
+        self.w2 = 0.81              #Factor for modulus effect (0.81 +/- 0.09)
+        self.yAPB = None            #Anti-phase boundary energy
+        self.s = None               #Number of dislocations per group for weak APB effect
+        self.beta = 1               #Factor for trailing dislocation for weak APB effect
+        self.V = 2.8                #Factor for strong APB effect
+        self.ySFM = None            #Stacking fault energy for matrix
+        self.ySFP = None            #Stacking fault energy for precipitate
+        self.gamma = None           #Interfacial energy of precipitate
+
+    def epsMisfit(self):
+        '''
+        Strain from lattice misfit
+        '''
+        self.eps = (1/3) * (1+self.nu) / (1-self.nu) * self.delta
+
+    def T(self, theta, r0):
+        '''
+        Dislocation line tension
+        '''
+        return self.G*self.b**2 / (4*np.pi) * (1 + self.nu - 3*self.nu*np.sin(theta)**2) / (1 - self.nu) * np.log(r0 / self.ri)
+
+    @property
+    def Tedge(self):
+        '''
+        Edge dislocation line tension assuming ln(r0/ri) = 2pi
+        '''
+        return self.G * self.b**2 / 4
+
+    @property
+    def Tscrew(self):
+        '''
+        Screw dislocation line tension assuming ln(r0/ri) = 2pi
+        '''
+        return self.G * self.b**2
+
+    @property
+    def Tgeneral(self):
+        '''
+        Approximation of line tension, combining edge and screw dislocations
+        '''
+        return 0.5 * self.G * self.b**2
+
+    def coherencyWeakEdge(self, r, Ls, r0):
+        '''
+        Coherency effect for edge dislocation on weak and shearable particles
+        '''
+        return np.sqrt((592 / 35) * self.G**3 * self.b * self.eps**3 * r**3 / (Ls**2 * self.T(np.pi/2, r0)))
+
+    def coherencyWeakScrew(self, r, Ls, r0):
+        '''
+        Coherency effect for screw dislocation on weak and shearable particles
+        '''
+        return np.sqrt((9/5) * self.G**3 * self.b * self.eps**3 * r**3 / (Ls**2 * self.T(0, r0)))
+
+    def coherencyStrongEdge(self, r, Ls, r0):
+        '''
+        Coherency effect for edge dislocation on strong and shearable particles
+        '''
+        return np.sqrt(2) * np.power(3, 3/8) * self.J / Ls * np.power((self.T(np.pi/2, r0)**3 * self.G * self.eps * r) / self.b**3, 1/4)
+
+    def coherencyStrongScrew(self, r, Ls, r0):
+        '''
+        Coherency effect for screw dislocation on strong and shearable particles
+        '''
+        return 2 * self.J / Ls * np.power((self.T(0, r0)**3 * self.G * self.eps * r) / self.b**3, 1/4)
+
+    def modulusWeakEdge(self, r, Ls, r0):
+        '''
+        Modulus effect for edge dislocation on weak and shearable particles
+        '''
+        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(self.w1 * np.abs(self.Gp - self.G) * self.b**2 * np.power(r/self.b, self.w2) / (2*self.T(np.pi/2, r0)), 3/2)
+
+    def modulusWeakScrew(self, r, Ls, r0):
+        '''
+        Modulus effect for screw dislocation on weak and shearable particles
+        '''
+        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(self.w1 * np.abs(self.Gp - self.G) * self.b**2 * np.power(r/self.b, self.w2) / (2*self.T(0, r0)), 3/2)
+
+    def modulusStrong(self, r, Ls):
+        '''
+        Modulus effect for edge or screw dislocation on strong and shearable particles
+        '''
+        return self.J * self.w1 * np.abs(self.Gp - self.G) * self.b**2 * np.power(r/self.b, self.w2) / (self.b * Ls)
+
+    def APBweakedge(self, r, Ls, r0):
+        '''
+        Anti-phase boundary effect for edge dislocation on weak and shearable particles
+        '''
+        xi = 16 * self.yAPB * r**2 / (3 * np.pi * self.b * Ls**2)
+        return 2/self.s * (2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(2 * self.yAPB * r / (2*self.T(np.pi/2, r0)), 3/2) - self.beta * xi)
+
+    def APBweakscrew(self, r, Ls, r0):
+        '''
+        Anti-phase boundary effect for screw dislocation on weak and shearable particles
+        '''
+        xi = 16 * self.yAPB * r**2 / (3 * np.pi * self.b * Ls**2)
+        return 2/self.s * (2 * self.T(0, r0) / (self.b * Ls) * np.power(2 * self.yAPB * r / (2*self.T(0, r0)), 3/2) - self.beta * xi)
+
+    def APBstrongedge(self, r, Ls, r0):
+        '''
+        Anti-phase boundary effect for edge dislocation on strong and shearable particles
+        Equation from paper gives np.sqrt((np.pi * self.yAPB * r) / (self.V * self.T(np.pi/2, r0)) - 1), but their plots say otherwise
+        '''
+        return (2 * self.V * self.T(np.pi/2, r0)) / (np.pi * self.b * Ls) * np.sqrt((np.pi * self.yAPB * r) / (self.V * self.T(np.pi/2, r0)))
+
+    def APBstrongscrew(self, r, Ls, r0):
+        '''
+        Anti-phase boundary effect for screw dislocation on strong and shearable particles
+        '''
+        return (2 * self.V * self.T(0, r0)) / (np.pi * self.b * Ls) * np.sqrt((np.pi * self.yAPB * r) / (self.V * self.T(0, r0)) - 1)
+
+    def SFEweakWideEdge(self, r, Ls, r0):
+        '''
+        Stacking fault energy effect for edge dislocation on weak and shearable particles for a wide stacking fault
+        '''
+        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(r * (self.ySFM - self.ySFP) / self.T(np.pi/2, r0), 3/2)
+
+    def SFEweakWideScrew(self, r, Ls, r0):
+        '''
+        Stacking fault energy effect for screw dislocation on weak and shearable particles for a wide stacking fault
+        '''
+        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(r * (self.ySFM - self.ySFP) / self.T(0, r0), 3/2)
+
+    def SFEstrongWide(self, r, Ls):
+        '''
+        Stacking fault energy effect for edge or screw dislocation on strong and shearable particles for a wide stacking fault
+        '''
+        return self.J * 2 * r * (self.ySFM - self.ySFP) / (self.b * Ls)
+
+    def K(self, theta):
+        return self.G * self.bp**2 * (2 - self.nu) / (8 * np.pi * (1 - self.nu)) * (1 - 2 * self.nu * np.cos(2 * theta) / (2 - self.nu))
+
+    @property
+    def SFEWeffEdge(self):
+        '''
+        Effective stacking fault width for edge dislocations
+        '''
+        return 2 * self.K(np.pi/2) / (self.ySFM + self.ySFP)
+
+    @property
+    def SFEWeffScrew(self):
+        '''
+        Effective stacking fault width for screw dislocations
+        '''
+        return 2 * self.K(0) / (self.ySFM + self.ySFP)
+
+    def SFEweakNarrowEdge(self, r, Ls, r0):
+        '''
+        Stacking fault energy effect for edge dislocation on weak and shearable particles for a narrow stacking fault
+        '''
+        return (2 * self.T(np.pi/2, r0)) / (self.b * Ls) * np.power((self.ySFM - self.ySFP) * np.sqrt(self.SFEWeffEdge * r - self.SFEWeffEdge**2 / 4) / self.T(np.pi/2, r0), 3/2)
+
+    def SFEweakNarrowScrew(self, r, Ls, r0):
+        '''
+        Stacking fault energy effect for screw dislocation on weak and shearable particles for a narrow stacking fault
+        '''
+        return (2 * self.T(0, r0)) / (self.b * Ls) * np.power((self.ySFM - self.ySFP) * np.sqrt(self.SFEWeffScrew * r - self.SFEWeffScrew**2 / 4) / self.T(0, r0), 3/2)
+
+    def SFEstrongNarrowEdge(self, r, Ls, r0):
+        '''
+        Stacking fault energy effect for edge dislocation on strong and shearable particles for a narrow stacking fault
+        '''
+        return self.J * 2 * (self.ySFM - self.ySFP) * np.sqrt(self.SFEWeffEdge * r - self.SFEWeffEdge**2 / 4) / (self.b * Ls)
+
+    def SFEstrongNarrowScrew(self, r, Ls, r0):
+        '''
+        Stacking fault energy effect for screw dislocation on strong and shearable particles for a narrow stacking fault
+        '''
+        return self.J * 2 * (self.ySFM - self.ySFP) * np.sqrt(self.SFEWeffScrew * r - self.SFEWeffScrew**2 / 4) / (self.b * Ls)
+
+    def interfacialWeakEdge(self, r, Ls, r0):
+        '''
+        Interfacial energy effect for edge dislocation on weak and shearable particles
+        '''
+        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(self.gamma * self.b / self.T(np.pi/2, r0), 3/2)
+
+    def interfacialWeakScrew(self, r, Ls, r0):
+        '''
+        Interfacial energy effect for screw dislocation on weak and shearable particles
+        '''
+        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(self.gamma * self.b / self.T(0, r0), 3/2)
+
+    def interfacialStrong(self, r, Ls, r0):
+        '''
+        Interfacial energy effect for edge or screw dislocation on strong and shearable particles
+        '''
+        return self.J * 2 * self.gamma / Ls
+
+    def orowan(self, r, Ls):
+        '''
+        Orowan strengthening for non-shearable particles
+        '''
+        return self.J * self.G * self.b / (2 * np.pi * np.sqrt(1 - self.nu) * Ls) * np.log(2 * r / self.ri)
+
+    def checkPrecipitateStrengthParameters(self):
+        '''
+        Checks if all parameters for precipitate strength contributions are supplied
+        Return True if all parameters are not None
+            Parameters: Taylor factor (M), burgers vector (b), constant (k), shear modulus (G) and transition radius (rtrans)
+        '''
+        return self.M is not None and self.b is not None and self.k is not None and self.G is not None and self.rtrans is not None
 
     def ssStrength(self, model):
         '''
@@ -199,7 +414,7 @@ class StrengthModel:
         ax.set_ylabel(ylabel)
         ax.set_ylim(bottom=0)
 
-    def plotStrength(self, ax, model, bounds = None, timeUnits = 's', strengthUnits = 'Pa', *args, **kwargs):
+    def plotStrength(self, ax, model, plotContributions = False, bounds = None, timeUnits = 's', strengthUnits = 'Pa', *args, **kwargs):
         '''
         Plots strength over time
 
@@ -207,6 +422,8 @@ class StrengthModel:
         ----------
         ax : Axis
         model : KWNEuler object
+        plotContributions : boolean
+            Whether to plot each contribution of the strength model (defaults to False)
         bounds : tuple or None
             Bounds on time axis (if None, the bounds will automatically be set)
         timeUnits : str
@@ -217,11 +434,18 @@ class StrengthModel:
         timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
 
-        ssstrength = self.ssStrength(model)
-        precstrength = self.precStrength(model)
-        ax.plot(model.time*timeScale, (self.sigma0 + ssstrength + precstrength) / yscale, *args, **kwargs)
-        #ax.plot(model.time*timeScale, (ssstrength) / yscale, *args, **kwargs)
-        #ax.plot(model.time*timeScale, (ssstrength + precstrength) / yscale, *args, **kwargs)
+        ssstrength = self.ssStrength(model) if len(self.ssweights) > 0 else np.zeros(len(model.time))
+        sigma0 = self.sigma0*np.ones(len(model)) if self.sigma0 is not None else np.zeros(len(model.time))
+        precstrength = self.precStrength(model) if self.checkPrecipitateStrengthParameters() else np.zeros(len(model.time))
+
+        ax.plot(model.time*timeScale, (sigma0 + ssstrength + precstrength) / yscale, *args, **kwargs)
+
+        if plotContributions:
+            ax.plot(model.time*timeScale, sigma0 / yscale, *args, **kwargs)
+            ax.plot(model.time*timeScale, ssstrength / yscale, *args, **kwargs)
+            ax.plot(model.time*timeScale, precstrength / yscale, *args, **kwargs)
+            ax.legend(['Total Strength', r'$\sigma_0$', 'SS Strength', 'Precipitate Strength'])
+
         ax.set_xlabel(timeLabel)
         ax.set_xlim(bounds)
         ax.set_ylabel(ylabel)

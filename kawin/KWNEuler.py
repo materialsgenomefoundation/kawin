@@ -131,9 +131,9 @@ class PrecipitateModel (PrecipitateBase):
                 csv.writer(f).writerows(rows)
         else:
             if compressed:
-                np.savez_compressed(filename, **vDict)
+                np.savez_compressed(filename, **vDict, allow_pickle=True)
             else:
-                np.savez(filename, **vDict)
+                np.savez(filename, **vDict, allow_pickle=True)
 
     def load(filename):
         '''
@@ -150,7 +150,7 @@ class PrecipitateModel (PrecipitateBase):
         '''
         setupVars = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements']
         if '.np' in filename.lower():
-            data = np.load(filename)
+            data = np.load(filename, allow_pickle=True)
             
             #Input arbitrary values for PSD parameters (rMin, rMax, bins) since this will be changed shortly after
             model = PrecipitateModel(data['t0'], data['tf'], data['steps'], data['phases'], data['linearTimeSpacing'], data['elements'])
@@ -305,7 +305,8 @@ class PrecipitateModel (PrecipitateBase):
                 'avg' - normalized by average radius
                 'crit' - normalized by critcal radius
         '''
-        self.PSDfunctions.append({'name': name, 'func': f, 'moment': moment, 'norm': normalize})
+        self.PSDfunctions = np.append(self.PSDfunctions, {'name': name, 'func': f, 'moment': moment, 'norm': normalize})
+        #self.PSDfunctions.append({'name': name, 'func': f, 'moment': moment, 'norm': normalize})
 
     def _setupPSDOutputs(self):
         '''

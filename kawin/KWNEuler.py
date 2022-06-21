@@ -40,9 +40,9 @@ class PrecipitateModel (PrecipitateBase):
             self._growthRate = self._growthRateMulti
             self._Beta = self._BetaMulti
 
-        #Additional PSD outputs
-        self.PSDfunctions = []
-        self.PSDoutputs = None
+        #Additional outputs
+        self.additionalFunctions = []
+        self.additionalOutputs = None
 
     def _resetArrays(self):
         super()._resetArrays()
@@ -65,7 +65,7 @@ class PrecipitateModel (PrecipitateBase):
             self.PBM[i].reset()
 
         #Resets PSD outputs
-        self._setupPSDOutputs()
+        self._setupAdditionalOutputs()
 
     def save(self, filename, compressed = False, toCSV = False):
         '''
@@ -82,9 +82,14 @@ class PrecipitateModel (PrecipitateBase):
         variables = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements', \
             'time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
         vDict = {v: getattr(self, v) for v in variables}
-        if self.PSDoutputs is not None:
-            vDict['PSDoutputs'] = self.PSDoutputs
-            vDict['PSDfunctions'] = self.PSDfunctions
+        if self.additionalOutputs is not None:
+            vDict['additionalOutputs'] = self.additionalOutputs
+            tempFunctions = {f['name']: f['func'] for f in self.additionalFunctions}
+            for f in self.additionalFunctions:
+                f['func'] = None
+            vDict['additionalFunctions'] = self.additionalFunctions
+            for f in self.additionalFunctions:
+                f['func'] = tempFunctions[f['name']]
         for p in range(len(self.phases)):
             vDict['PSDdata_'+self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
             vDict['PSDsize_' + self.phases[p]] = self.PBM[p].PSDsize
@@ -115,11 +120,11 @@ class PrecipitateModel (PrecipitateBase):
                         for j in range(self.numberOfElements):
                             arrays.append(vDict[v][i,:,j])
                             headers.append(v + '_' + self.phases[i] + '_' + self.elements[j])
-                elif v == 'PSDoutputs':
+                elif v == 'additionalOutputs':
                     for i in range(len(self.phases)):
-                        for j in range(len(self.PSDfunctions)):
+                        for j in range(len(self.additionalFunctions)):
                             arrays.append(vDict[v][i,:,j])
-                            headers.append(v + '_' + self.phases[i] + '_' + self.PSDfunctions[j]['name'])
+                            headers.append(v + '_' + self.phases[i] + '_' + self.additionalFunctions[j]['name'])
                 else:
                     arrays.append(vDict[v])
                     headers.append(v)
@@ -168,9 +173,9 @@ class PrecipitateModel (PrecipitateBase):
             for d in data:
                 if d not in setupVars:
                     setattr(model, d, data[d])
-            if 'PSDoutputs' not in data:
-                model.PSDoutputs = None
-                model.PSDfunctions = []
+            if 'additionalOutputs' not in data:
+                model.additionalOutputs = None
+                model.additionalFunctions = []
         elif '.csv' in filename.lower():
             with open(filename, 'r') as csvFile:
                 data = csv.reader(csvFile, delimiter=',')
@@ -241,8 +246,8 @@ class PrecipitateModel (PrecipitateBase):
     def _divideTimestep(self, i, dt):
         super()._divideTimestep(i, dt)
 
-        if len(self.PSDfunctions) > 0:
-            self.PSDoutputs = np.append(self.PSDoutputs, np.zeros((len(self.phases), 1, len(self.PSDfunctions))), axis=1)
+        if len(self.additionalFunctions) > 0:
+            self.additionalOutputs = np.append(self.additionalOutputs, np.zeros((len(self.phases), 1, len(self.additionalFunctions))), axis=1)
 
     def setPBMParameters(self, cMin = 1e-10, cMax = 1e-9, bins = 150, minBins = 100, maxBins = 200, adaptive = True, phase = None):
         '''
@@ -288,7 +293,7 @@ class PrecipitateModel (PrecipitateBase):
         index = self.phaseIndex(phase)
         self.PBM[index].LoadDistribution(data)
 
-    def addPSDOutput(self, name, f, moment=1, normalize='none'):
+    def addAdditionalOutput(self, name, f, moment=1, normalize='none'):
         '''
         Creates output based off PSD
 
@@ -305,29 +310,23 @@ class PrecipitateModel (PrecipitateBase):
                 'avg' - normalized by average radius
                 'crit' - normalized by critcal radius
         '''
-        self.PSDfunctions = np.append(self.PSDfunctions, {'name': name, 'func': f, 'moment': moment, 'norm': normalize})
-        #self.PSDfunctions.append({'name': name, 'func': f, 'moment': moment, 'norm': normalize})
+        self.additionalFunctions = np.append(self.additionalFunctions, {'name': name, 'func': f})
 
-    def _setupPSDOutputs(self):
+    def _setupAdditionalOutputs(self):
         '''
         Function to setup PSD output arrays, will be used in setup and reset functions
         '''
         #Resets PSD outputs
-        if len(self.PSDfunctions) > 0:
-            self.PSDoutputs = np.zeros((len(self.phases), self.steps, len(self.PSDfunctions)))
+        if len(self.additionalFunctions) > 0:
+            self.additionalOutputs = np.zeros((len(self.phases), self.steps, len(self.additionalFunctions)))
 
-    def _calculatePSDOutputs(self, i):
+    def _calculateAdditionalOutputs(self, i):
         '''
         Calculates additional PSD functions
         '''
-        for f in range(len(self.PSDfunctions)):
+        for f in range(len(self.additionalFunctions)):
             for p in range(len(self.phases)):
-                norm = 1
-                if self.PSDfunctions[f]['norm'] == 'avg':
-                    norm = self.avgR[p,i]
-                elif self.PSDfunctions[f]['norm'] == 'crit':
-                    norm = self.Rcrit[p,i]
-                self.PSDoutputs[p, i, f] = self.PBM[p].WeightedMoment(self.PSDfunctions[f]['moment'], self.PSDfunctions[f]['func'](self.PBM[p].PSDsize / norm))
+                self.additionalOutputs[p, i, f] = self.additionalFunctions[f]['func'](self)
 
     def particleRadius(self, phase = None):
         '''
@@ -413,7 +412,7 @@ class PrecipitateModel (PrecipitateBase):
     def setup(self):
         super().setup()
 
-        self._setupPSDOutputs()
+        self._setupAdditionalOutputs()
 
         #Equilibrium aspect ratio and PBM setup
         #If calculateAspectRatio is True, then use strain energy to calculate aspect ratio for each size class in PSD
@@ -488,7 +487,7 @@ class PrecipitateModel (PrecipitateBase):
                 postDTCheck = True
 
         #Calculate additional PSD function
-        self._calculatePSDOutputs(i)
+        self._calculateAdditionalOutputs(i)
 
     def _noCheckDT(self, i):
         '''

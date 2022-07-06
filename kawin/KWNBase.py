@@ -397,10 +397,10 @@ class PrecipitateBase:
         self.minNucleationRate = 1e-5
 
         self.checkVolumePre = True
-        self.checkVolumePost = True
+        self.checkVolumePost = False
         self.maxVolumeChange = 0.001
         
-        self.checkComposition = True
+        self.checkComposition = False
         self.checkCompositionPre = False
         self.maxCompositionChange = 0.001
         self.minComposition = 0
@@ -944,6 +944,8 @@ class PrecipitateBase:
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
+            if therm.mobCallables is not None or therm.diffCallables is not None:
+                self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
             self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = removeCache)
             self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = removeCache)
@@ -1224,7 +1226,7 @@ class PrecipitateBase:
 
         #Only do this if there is some parent phase left (brute force solution for to avoid numerical errors)
         if self.betaFrac[p, i-1] < 1:
-            
+
             #Calculate critical radius
             #For bulk or dislocation nucleation sites, use previous critical radius to get aspect ratio
             if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
@@ -1248,7 +1250,7 @@ class PrecipitateBase:
             self.betas[p,i] = self._Beta(p, i)
             if self.betas[p,i] == 0:
                 return self._noDrivingForce(p, i)
-                
+
             #Incubation time, either isothermal or nonisothermal
             self.incubationSum[p] = self._incubation(Z, p, i)
             if self.incubationSum[p] > 1:

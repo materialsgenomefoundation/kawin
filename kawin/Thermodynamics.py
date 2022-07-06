@@ -361,7 +361,7 @@ class GeneralThermodynamics:
                                                          composition_sets=composition_sets)
         return result, composition_sets
 
-    def getInterdiffusivity(self, x, T):
+    def getInterdiffusivity(self, x, T, removeCache = True):
         '''
         Gets interdiffusivity at specified x and T
         Requires TDB database to have mobility or diffusivity parameters
@@ -387,12 +387,12 @@ class GeneralThermodynamics:
 
         if hasattr(T, '__len__'):
             for i in range(len(T)):
-                dnkj.append(self._interdiffusivitySingle(x[i], T[i]))
+                dnkj.append(self._interdiffusivitySingle(x[i], T[i], removeCache))
             return np.array(dnkj)
         else:
-            return self._interdiffusivitySingle(x, T)
+            return self._interdiffusivitySingle(x, T, removeCache)
 
-    def _interdiffusivitySingle(self, x, T):
+    def _interdiffusivitySingle(self, x, T, removeCache = True):
         '''
         Gets interdiffusivity at unique composition and temperature
 
@@ -416,12 +416,14 @@ class GeneralThermodynamics:
 
         cond = self._getConditions(x, T, 0)
 
-        result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0]], cond,
-                                                         self.models, self.phase_records,
-                                                         composition_sets=None)
+        if removeCache:
+            self._matrix_cs = None
+            self._parentEq, self._matrix_cs = local_equilibrium(self.db, self.elements, [self.phases[0]], cond,
+                                                        self.models, self.phase_records,
+                                                        composition_sets=self._matrix_cs)
 
-        cs_matrix = [cs for cs in composition_sets if cs.phase_record.phase_name == self.phases[0]][0]
-        chemical_potentials = result.chemical_potentials
+        cs_matrix = [cs for cs in self._matrix_cs if cs.phase_record.phase_name == self.phases[0]][0]
+        chemical_potentials = self._parentEq.chemical_potentials
 
         if self.mobCallables is None:
             Dnkj, _, _ = inverseMobility_from_diffusivity(chemical_potentials, cs_matrix,
@@ -509,6 +511,7 @@ class GeneralThermodynamics:
         if not hasattr(x, '__len__'):
             x = [x]
         cond = self._getConditions(x, T, 0)
+        self._prevX = x
 
         #Equilibrium at matrix composition for only the parent phase
         self._parentEq, self._matrix_cs = local_equilibrium(self.db, self.elements, [self.phases[0]], cond, 
@@ -518,8 +521,6 @@ class GeneralThermodynamics:
         #Remove cache when training
         if training:
             self._matrix_cs = None
-
-        self._prevX = x
 
         #Check if equilibrium has converged and chemical potential can be obtained
         #If not, then return None for driving force
@@ -606,6 +607,7 @@ class GeneralThermodynamics:
         if not hasattr(x, '__len__'):
             x = [x]
         cond = self._getConditions(x, T, 0)
+        self._prevX = x
 
         #Create cache of composition set if not done so already or if training a surrogate
         #Training points for surrogates may be far apart, so starting from a previous
@@ -644,6 +646,7 @@ class GeneralThermodynamics:
                     result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
                                                             self.models, self.phase_records,
                                                             composition_sets=self._compset_cache_df[precPhase])
+                    self._compset_cache_df[precPhase] = composition_sets
                     chemical_potentials = result.chemical_potentials
                     cs_precip = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase][0]
                     x_precip = np.array(cs_precip.X)
@@ -683,8 +686,6 @@ class GeneralThermodynamics:
             #Remove caching if training surrogate in case training points are far apart
             if training:
                 self._matrix_cs = None
-
-            self._prevX = x
 
             #Check if equilibrium has converged and chemical potential can be obtained
             #If not, then return None for driving force
@@ -744,6 +745,7 @@ class GeneralThermodynamics:
         if not hasattr(x, '__len__'):
             x = [x]
         cond = self._getConditions(x, T, 0)
+        self._prevX = x
 
         #Create cache of composition set if not done so already or if training a surrogate
         #Training points for surrogates may be far apart, so starting from a previous
@@ -784,6 +786,7 @@ class GeneralThermodynamics:
                     result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
                                                          self.models, self.phase_records,
                                                          composition_sets=self._compset_cache_df[precPhase])
+                    self._compset_cache_df[precPhase] = composition_sets
                     chemical_potentials = result.chemical_potentials
                     cs_precip = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase][0]
                     x_precip = np.array(cs_precip.X)
@@ -1503,13 +1506,15 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 if miscMatrix or miscPrec:
                     result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
                                                             self.models, self.phase_records,
-                                                            composition_sets=self._compset_cache_df[precPhase])
+                                                            composition_sets=self._compset_cache[precPhase])
+                    self._compset_cache[precPhase] = composition_sets
                     chemical_potentials = result.chemical_potentials
 
         else:
             result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
                                                          self.models, self.phase_records,
                                                          composition_sets=self._compset_cache[precPhase])
+            self._compset_cache[precPhase] = composition_sets
             chemical_potentials = result.chemical_potentials
 
         result = self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)

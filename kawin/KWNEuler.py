@@ -5,6 +5,7 @@ from kawin.GrainBoundaries import GBFactors
 import copy
 import csv
 from itertools import zip_longest
+import time
 
 class PrecipitateModel (PrecipitateBase):
     '''
@@ -326,7 +327,7 @@ class PrecipitateModel (PrecipitateBase):
         '''
         for f in range(len(self.additionalFunctions)):
             for p in range(len(self.phases)):
-                self.additionalOutputs[p, i, f] = self.additionalFunctions[f]['func'](self)
+                self.additionalOutputs[p, i, f] = self.additionalFunctions[f]['func'](self, p, i)
 
     def particleRadius(self, phase = None):
         '''

@@ -475,7 +475,7 @@ class StrengthModel:
             ylabel = 'Strength (GPa)'
         return yscale, ylabel
 
-    def plotStrengthOverR(self, ax, r, Ls, strengthUnits = 'Pa', plotContributions = False, *args, **kwargs):
+    def plotPrecipitateStrengthOverR(self, ax, r, Ls, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
         '''
         Plots precipitate strength contribution as a function of radius
 
@@ -508,7 +508,7 @@ class StrengthModel:
                     sc.append(strong)
                     ax[row[i], col[i]].plot(r, weak / yscale, r, strong / yscale)
                     ax[row[i], col[i]].legend(['Weak', 'Strong'])
-                ax[row[i], col[i]].set_xlim([0, r[-1]])
+                ax[row[i], col[i]].set_xlim([0, np.amax(r)])
                 ax[row[i], col[i]].set_ylim(bottom=0)
                 ax[row[i], col[i]].set_xlabel('Radius (m)')
                 ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
@@ -518,7 +518,7 @@ class StrengthModel:
             owo = self.orowan(r, Ls)
             smin = np.amin([wtot, stot, owo], axis=0)
             ax[2,1].plot(r, wtot/yscale, r, stot/yscale, r, owo/yscale, r, smin/yscale)
-            ax[2,1].set_xlim([0, r[-1]])
+            ax[2,1].set_xlim([0, np.amax(r)])
             ax[2,1].set_ylim(bottom=0)
             ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
             ax[2,1].set_xlabel('Radius (m)')
@@ -527,11 +527,72 @@ class StrengthModel:
             strength = self._precStrength(r, Ls, Leff, Ls)
             ax.plot(r, strength / yscale)
             ax.set_xlabel('Radius (m)')
-            ax.set_xlim([np.amin(r), np.amax(r)])
+            ax.set_xlim([0, np.amax(r)])
             ax.set_ylabel('Yield ' + ylabel)
             ax.set_ylim(bottom=0)
 
-    def plotStrength(self, ax, model, plotContributions = False, bounds = None, timeUnits = 's', strengthUnits = 'Pa', *args, **kwargs):
+    def plotPrecipitateStrengthOverTime(self, ax, model, phase = None, bounds = None, timeUnits = 's', strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
+        '''
+        Plots precipitate strength contribution as a function of radius
+
+        Parameters
+        ----------
+        ax : Axis
+        r : list
+            Equivalent radius
+        Ls : list
+            Surface to surface particle distance
+        strengthUnits : str
+            Units for strength, options are 'Pa', 'kPa', 'MPa' or 'GPa'
+        plotContributions : bool
+            Whether to plot all contributions
+        '''
+        timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
+        yscale, ylabel = self.getStrengthUnits(strengthUnits)
+        r, Ls = self.getParticleSpacing(model, phase)
+        Leff = Ls / np.sqrt(np.cos(self.psi / 2))
+        if plotContributions:
+            wfuncs = [self.coherencyWeak, self.modulusWeak, self.APBweak, self.SFEweak, self.interfacialWeak]
+            sfuncs = [self.coherencyStrong, self.modulusStrong, self.APBstrong, self.SFEstrong, self.interfacialStrong]
+            contributions = [self.coherencyEffect, self.modulusEffect, self.APBEffect, self.SFEffect, self.IFEffect]
+            row, col = [0, 0, 1, 1, 2], [0, 1, 0, 1, 0]
+            ylabel = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
+            wc, sc = [], []
+            for i in range(len(row)):
+                if contributions[i]:
+                    weak = wfuncs[i](r, Ls, Leff)
+                    strong = sfuncs[i](r, Ls, Ls)
+                    wc.append(weak)
+                    sc.append(strong)
+                    ax[row[i], col[i]].plot(model.time*timeScale, weak / yscale, model.time*timeScale, strong / yscale)
+                    ax[row[i], col[i]].legend(['Weak', 'Strong'])
+                ax[row[i], col[i]].set_xlim([model.time[0], model.time[-1]])
+                ax[row[i], col[i]].set_ylim(bottom=0)
+                ax[row[i], col[i]].set_xlabel(timeLabel)
+                ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
+                ax[row[i], col[i]].set_xscale('log')
+            wc, sc = np.array(wc), np.array(sc)
+            wtot = np.power(np.sum(np.power(wc, 1.8), axis=0), 1/1.8)
+            stot = np.power(np.sum(np.power(sc, 1.8), axis=0), 1/1.8)
+            owo = self.orowan(r, Ls)
+            smin = np.amin([wtot, stot, owo], axis=0)
+            ax[2,1].plot(model.time*timeScale, wtot/yscale, model.time*timeScale, stot/yscale, model.time*timeScale, owo/yscale, model.time*timeScale, smin/yscale)
+            ax[2,1].set_xlim([model.time[0], model.time[-1]])
+            ax[2,1].set_ylim(bottom=0)
+            ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
+            ax[2,1].set_xlabel(timeLabel)
+            ax[2,1].legend(['Weak', 'Strong', 'Orowan', 'Minimum'])
+            ax[2,1].set_xscale('log')
+        else:
+            strength = self._precStrength(r, Ls, Leff, Ls)
+            ax.plot(model.time*timeScale, strength / yscale)
+            ax.set_xlabel(timeLabel)
+            ax.set_xlim([model.time[0], model.time[-1]])
+            ax.set_ylabel('Yield ' + ylabel)
+            ax.set_ylim(bottom=0)
+            ax.set_xscale('log')
+
+    def plotStrength(self, ax, model, plotContributions = False, bounds = None, timeUnits = 's', strengthUnits = 'MPa', *args, **kwargs):
         '''
         Plots strength over time
 

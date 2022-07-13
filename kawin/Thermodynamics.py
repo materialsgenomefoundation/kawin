@@ -50,7 +50,7 @@ class GeneralThermodynamics:
 
     def __init__(self, database, elements, phases, drivingForceMethod = 'approximate'):
         self.db = Database(database)
-        self.elements = elements
+        self.elements = copy.copy(elements)
 
         if 'VA' not in self.elements:
             self.elements.append('VA')

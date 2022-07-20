@@ -165,7 +165,7 @@ class Mesh1D:
 
         dt = 0.4 * self.dz**2 / np.amax(d)
 
-        return -fluxes, dt
+        return fluxes, dt
 
     def update(self, fluxes, dt):
         '''
@@ -182,9 +182,9 @@ class Mesh1D:
             Time increment
         '''
         for e in range(len(self.elements)):
-            self.x[e] += (fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz
+            self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz
 
-    def plot(self, ax, plotReference = True):
+    def plot(self, ax, plotReference = True, zScale = 1):
         '''
         Plots composition profile
 
@@ -197,36 +197,49 @@ class Mesh1D:
         '''
         if plotReference:
             refE = 1 - np.sum(self.x, axis=0)
-            ax.plot(self.z, refE, label=self.allElements[0])
+            ax.plot(self.z/zScale, refE, label=self.allElements[0])
         for e in range(len(self.elements)):
-            ax.plot(self.z, self.x[e], label=self.elements[e])
+            ax.plot(self.z/zScale, self.x[e], label=self.elements[e])
             
         ax.set_xlim([self.zlim[0], self.zlim[1]])
         ax.legend()
         ax.set_xlabel('Distance (m)')
         ax.set_ylabel('Composition (at.%)')
 
-    def plotTwoAxis(self, ax, Lelements, Relements):
+    def plotTwoAxis(self, axL, Lelements, Relements, zScale = 1):
+        if type(Lelements) is str:
+            Lelements = [Lelements]
+        if type(Relements) is str:
+            Relements = [Relements]
+
         ci = 0
-        axR = ax.twinx()
-        for e in range(len(self.elements)):
-            if self.elements[e] in Lelements:
-                ax.plot(self.z, self.x[e], label=self.elements[e], color = 'C' + str(ci))
-            elif self.elements[e] in Relements:
-                axR.plot(self.z, self.x[e], label=self.elements[e], color = 'C' + str(ci))
-
-            ci = ci+1 if ci <= 9 else 0
-
         refE = 1 - np.sum(self.x, axis=0)
-        if self.allElements[0] in Lelements:
-            ax.plot(self.z, refE, label=self.allElements[0], color = 'C' + str(ci))
-        elif self.allElements[0] in Relements:
-            axR.plot(self.z, refE, label=self.allElements[0], color = 'C' + str(ci))
-            
-        ax.set_xlim([self.zlim[0], self.zlim[1]])
-        axR.set_xlim([self.zlim[0], self.zlim[1]])
-        ax.legend()
-        axR.legend()
-        ax.set_xlabel('Distance (m)')
-        ax.set_ylabel('Composition (at.%) ' + str(Lelements))
+        axR = axL.twinx()
+        for e in range(len(Lelements)):
+            if Lelements[e] in self.elements:
+                eIndex = self._getElementIndex(Lelements[e])
+                axL.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci))
+                ci = ci+1 if ci <= 9 else 0
+            elif Lelements[e] in self.allElements:
+                axL.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci))
+                ci = ci+1 if ci <= 9 else 0
+        for e in range(len(Relements)):
+            if Relements[e] in self.elements:
+                eIndex = self._getElementIndex(Relements[e])
+                axR.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci))
+                ci = ci+1 if ci <= 9 else 0
+            elif Relements[e] in self.allElements:
+                axR.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci))
+                ci = ci+1 if ci <= 9 else 0
+
+        
+        axL.set_xlim([self.zlim[0], self.zlim[1]])
+        axL.set_xlabel('Distance (m)')
+        axL.set_ylabel('Composition (at.%) ' + str(Lelements))
         axR.set_ylabel('Composition (at.%) ' + str(Relements))
+        
+        lines, labels = axL.get_legend_handles_labels()
+        lines2, labels2 = axR.get_legend_handles_labels()
+        axR.legend(lines+lines2, labels+labels2, framealpha=1)
+
+        return axL, axR

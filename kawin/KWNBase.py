@@ -944,7 +944,7 @@ class PrecipitateBase:
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
-            if therm.mobCallables is not None or therm.diffCallables is not None:
+            if therm.mobCallables[therm.phases[0]] is not None or therm.diffCallables[therm.phases[0]] is not None:
                 self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
             self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = removeCache)

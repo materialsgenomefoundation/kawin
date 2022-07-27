@@ -106,40 +106,45 @@ class GeneralThermodynamics:
 
         self.setDrivingForceMethod(drivingForceMethod)
 
-        #Get mobility/diffusivity if exists
-        param_search = self.db.search
-        param_query_mob = (
-            (where('phase_name') == self.phases[0]) & \
-            (where('parameter_type') == 'MQ') | \
-            (where('parameter_type') == 'MF')
-        )
+        self.mobModels = {p: None for p in self.phases}
+        self.mobCallables = {p: None for p in self.phases}
+        self.diffCallables = {p: None for p in self.phases}
+        for p in self.phases:
+            #Get mobility/diffusivity of phase p if exists
+            param_search = self.db.search
+            param_query_mob = (
+                (where('phase_name') == p) & \
+                (where('parameter_type') == 'MQ') | \
+                (where('parameter_type') == 'MF')
+            )
 
-        param_query_diff = (
-            (where('phase_name') == self.phases[0]) & \
-            (where('parameter_type') == 'DQ') | \
-            (where('parameter_type') == 'DF')
-        )
+            param_query_diff = (
+                (where('phase_name') == p) & \
+                (where('parameter_type') == 'DQ') | \
+                (where('parameter_type') == 'DF')
+            )
 
-        pMob = param_search(param_query_mob)
-        pDiff = param_search(param_query_diff)
-        self.mobModels = None
-        self.mobCallables = {} if len(pMob) > 0 else None
-        self.diffCallables = {} if len(pDiff) > 0 else None
-        if len(pMob) > 0 or len(pDiff) > 0:
-            self.mobModels = MobilityModel(self.db, self.elements, self.phases[0])
-            if len(pMob) > 0:
-                for c in self.phase_records[self.phases[0]].nonvacant_elements:
-                    bcp = build_callables(self.db, self.elements, [self.phases[0]], {self.phases[0]: self.mobModels},
-                                          parameter_symbols=None, output='mob_'+c, build_gradients=False, build_hessians=False,
-                                          additional_statevars=[v.T, v.P, v.N, v.GE])
-                    self.mobCallables[c] = bcp['mob_'+c]['callables'][self.phases[0]]
-            else:
-                for c in self.phase_records[self.phases[0]].nonvacant_elements:
-                    bcp = build_callables(self.db, self.elements, [self.phases[0]], {self.phases[0]: self.mobModels},
-                                          parameter_symbols=None, output='diff_'+c, build_gradients=False, build_hessians=False,
-                                          additional_statevars=[v.T, v.P, v.N, v.GE])
-                    self.diffCallables[c] = bcp['diff_'+c]['callables'][self.phases[0]]
+            pMob = param_search(param_query_mob)
+            pDiff = param_search(param_query_diff)
 
+            if len(pMob) > 0 or len(pDiff) > 0:
+                self.mobModels[p] = MobilityModel(self.db, self.elements, p)
+                if len(pMob) > 0:
+                    self.mobCallables[p] = {}
+                    for c in self.phase_records[p].nonvacant_elements:
+                        bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
+                                            parameter_symbols=None, output='mob_'+c, build_gradients=False, build_hessians=False,
+                                            additional_statevars=[v.T, v.P, v.N, v.GE])
+                        self.mobCallables[p][c] = bcp['mob_'+c]['callables'][p]
+                else:
+                    self.diffCallables[p] = {}
+                    for c in self.phase_records[p].nonvacant_elements:
+                        bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
+                                            parameter_symbols=None, output='diff_'+c, build_gradients=False, build_hessians=False,
+                                            additional_statevars=[v.T, v.P, v.N, v.GE])
+                        self.diffCallables[p][c] = bcp['diff_'+c]['callables'][p]
+
+        #This applies to all phases since this is typically reflective of quenched-in vacancies
         self.mobility_correction = {A: 1 for A in self.elements}
 
         #Cached results
@@ -361,7 +366,7 @@ class GeneralThermodynamics:
                                                          composition_sets=composition_sets)
         return result, composition_sets
 
-    def getInterdiffusivity(self, x, T, removeCache = True):
+    def getInterdiffusivity(self, x, T, removeCache = True, phase = None):
         '''
         Gets interdiffusivity at specified x and T
         Requires TDB database to have mobility or diffusivity parameters
@@ -376,6 +381,12 @@ class GeneralThermodynamics:
             Temperature
             If array, must be same length as x
                 For multicomponent systems, must be same length as 0th axis
+        removeCache : boolean
+            If True, recalculates equilibrium to get interdiffusivity (default)
+            If False, will use calculation from driving force calcs (if available) to compute diffusivity
+        phase : str
+            Phase to compute diffusivity for (defaults to first or matrix phase)
+            This only needs to be used for multiphase diffusion simulations
 
         Returns
         -------
@@ -387,12 +398,12 @@ class GeneralThermodynamics:
 
         if hasattr(T, '__len__'):
             for i in range(len(T)):
-                dnkj.append(self._interdiffusivitySingle(x[i], T[i], removeCache))
+                dnkj.append(self._interdiffusivitySingle(x[i], T[i], removeCache, phase))
             return np.array(dnkj)
         else:
-            return self._interdiffusivitySingle(x, T, removeCache)
+            return self._interdiffusivitySingle(x, T, removeCache, phase)
 
-    def _interdiffusivitySingle(self, x, T, removeCache = True):
+    def _interdiffusivitySingle(self, x, T, removeCache = True, phase = None):
         '''
         Gets interdiffusivity at unique composition and temperature
 
@@ -402,11 +413,16 @@ class GeneralThermodynamics:
             Composition
         T : float
             Temperature
+        removeCache : boolean
+        phase : str
         
         Returns
         -------
         Interdiffusivity as a matrix (will return float in binary case)
         '''
+        if phase is None:
+            phase = self.phases[0]
+
         if not hasattr(x, '__len__'):
             x = [x]
 
@@ -418,20 +434,20 @@ class GeneralThermodynamics:
 
         if removeCache:
             self._matrix_cs = None
-            self._parentEq, self._matrix_cs = local_equilibrium(self.db, self.elements, [self.phases[0]], cond,
+            self._parentEq, self._matrix_cs = local_equilibrium(self.db, self.elements, [phase], cond,
                                                         self.models, self.phase_records,
                                                         composition_sets=self._matrix_cs)
 
-        cs_matrix = [cs for cs in self._matrix_cs if cs.phase_record.phase_name == self.phases[0]][0]
+        cs_matrix = [cs for cs in self._matrix_cs if cs.phase_record.phase_name == phase][0]
         chemical_potentials = self._parentEq.chemical_potentials
 
-        if self.mobCallables is None:
+        if self.mobCallables[phase] is None:
             Dnkj, _, _ = inverseMobility_from_diffusivity(chemical_potentials, cs_matrix,
-                                                                            self.elements[0], self.diffCallables,
+                                                                            self.elements[0], self.diffCallables[phase],
                                                                             diffusivity_correction=self.mobility_correction)
         else:
             Dnkj, _, _ = inverseMobility(chemical_potentials, cs_matrix, self.elements[0],
-                                                        self.mobCallables,
+                                                        self.mobCallables[phase],
                                                         mobility_correction=self.mobility_correction)
 
         if len(x) == 1:
@@ -443,6 +459,87 @@ class GeneralThermodynamics:
             Dnkj = Dnkj[:,unsortIndices]
             return Dnkj
             
+
+    def getTracerDiffusivity(self, x, T, removeCache = True, phase = None):
+        '''
+        Gets tracer diffusivity for element el at specified x and T
+        Requires TDB database to have mobility or diffusivity parameters
+
+        Parameters
+        ----------
+        x : float, array or 2D array
+            Composition
+            Float or array for binary systems
+            Array or 2D array for multicomponent systems
+        T : float or array
+            Temperature
+            If array, must be same length as x
+                For multicomponent systems, must be same length as 0th axis
+        removeCache : boolean
+        phase : str
+
+        Returns
+        -------
+        tracer diffusivity - will return array if T is an array
+        '''
+        td = []
+
+        if hasattr(T, '__len__'):
+            for i in range(len(T)):
+                td.append(self._tracerDiffusivitySingle(x[i], T[i], removeCache, phase))
+            return np.array(td)
+        else:
+            return self._tracerDiffusivitySingle(x, T, removeCache, phase)
+
+    def _tracerDiffusivitySingle(self, x, T, removeCache = True, phase = None):
+        '''
+        Gets tracer diffusivity at unique composition and temperature
+
+        Parameters
+        ----------
+        x : float or array
+            Composition
+        T : float
+            Temperature
+        el : str
+            Element to calculate diffusivity
+        
+        Returns
+        -------
+        Tracer diffusivity as a float
+        '''
+        if phase is None:
+            phase = self.phases[0]
+
+        if not hasattr(x, '__len__'):
+            x = [x]
+
+        #Remove first element if x lists composition of all elements
+        if len(x) == len(self.elements) - 1:
+            x = x[1:]
+
+        cond = self._getConditions(x, T, 0)
+
+        if removeCache:
+            self._matrix_cs = None
+            self._parentEq, self._matrix_cs = local_equilibrium(self.db, self.elements, [phase], cond,
+                                                        self.models, self.phase_records,
+                                                        composition_sets=self._matrix_cs)
+
+        cs_matrix = [cs for cs in self._matrix_cs if cs.phase_record.phase_name == phase][0]
+
+        if self.mobCallables[phase] is None:
+            #NOTE: This is note tested yet
+            Dtrace = tracer_diffusivity_from_diff(cs_matrix, self.diffCallables[phase], diffusivity_correction=self.mobility_correction)
+        else:
+            Dtrace = tracer_diffusivity(cs_matrix, self.mobCallables[phase], mobility_correction=self.mobility_correction)
+
+        sortIndices = np.argsort(self.elements[:-1])
+        unsortIndices = np.argsort(sortIndices)
+
+        Dtrace = Dtrace[unsortIndices]
+
+        return Dtrace
 
     def getDrivingForce(self, x, T, precPhase = None, returnComp = False, training = False):
         '''
@@ -1371,18 +1468,18 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
             matrix_cs = [cs for cs in composition_sets if cs.phase_record.phase_name == self.phases[0]][0]
 
-            if self.mobCallables is None:
+            if self.mobCallables[self.phases[0]] is None:
                 Dnkj, dMudxParent, invMob = inverseMobility_from_diffusivity(chemical_potentials, matrix_cs,
-                                                                             self.elements[0], self.diffCallables,
+                                                                             self.elements[0], self.diffCallables[self.phases[0]],
                                                                              diffusivity_correction=self.mobility_correction)
 
                 #NOTE: This is note tested yet
-                Dtrace = tracer_diffusivity_from_diff(matrix_cs, self.diffCallables, diffusivity_correction=self.mobility_correction)
+                Dtrace = tracer_diffusivity_from_diff(matrix_cs, self.diffCallables[self.phases[0]], diffusivity_correction=self.mobility_correction)
             else:
                 Dnkj, dMudxParent, invMob = inverseMobility(chemical_potentials, matrix_cs, self.elements[0],
-                                                            self.mobCallables,
+                                                            self.mobCallables[self.phases[0]],
                                                             mobility_correction=self.mobility_correction)
-                Dtrace = tracer_diffusivity(matrix_cs, self.mobCallables, mobility_correction=self.mobility_correction)
+                Dtrace = tracer_diffusivity(matrix_cs, self.mobCallables[self.phases[0]], mobility_correction=self.mobility_correction)
 
             xMFull = np.array(matrix_cs.X)
             xM = np.delete(xMFull, refIndex)

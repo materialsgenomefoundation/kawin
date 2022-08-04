@@ -32,7 +32,7 @@ class DiffusionModel:
 
     def update(self):
         #Get fluxes
-        fluxes, dt = self.mesh.getFluxes(self.interdiffusivity, T=self.T*np.ones(self.mesh.N-1))
+        fluxes, dt = self.mesh.getFluxes(self.T*np.ones(self.mesh.N-1))
 
         if self.t + dt > self.tf:
             dt = self.tf - self.t
@@ -42,6 +42,8 @@ class DiffusionModel:
         self.t += dt
 
     def solve(self, simTime, verbose=False, vIt=10):
+        self.mesh.setup(self.thermodynamics, self.T)
+
         self.t = 0
         self.tf = simTime
         i = 0

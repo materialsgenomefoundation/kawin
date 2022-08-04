@@ -321,14 +321,15 @@ class GeneralThermodynamics:
         -------
         Dataset from pycalphad equilibrium results
         '''
-        if precPhase == -1:
-            phases = [self.phases[0]]
-            phaseRec = {self.phases[0]: self.phase_records[self.phases[0]]}
-        else:
+        phases = [self.phases[0]]
+        if precPhase != -1:
             if precPhase is None:
                 precPhase = self.phases[1]
-            phases = [self.phases[0], precPhase]
-            phaseRec = {self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]}
+            if isinstance(precPhase, str):
+                phases.append(precPhase)
+            else:
+                phases = [p for p in precPhase]
+        phaseRec = {p: self.phase_records[p] for p in phases}
 
         if not hasattr(x, '__len__'):
             x = [x]
@@ -345,12 +346,14 @@ class GeneralThermodynamics:
         return eq
 
     def getLocalEq(self, x, T, gExtra = 0, precPhase = None, composition_sets = None):
-        if precPhase == -1:
-            phases = [self.phases[0]]
-        else:
+        phases = [self.phases[0]]
+        if precPhase != -1:
             if precPhase is None:
                 precPhase = self.phases[1]
-            phases = [self.phases[0], precPhase]
+            if isinstance(precPhase, str):
+                phases.append(precPhase)
+            else:
+                phases = [p for p in precPhase]
 
         if not hasattr(x, '__len__'):
             x = [x]

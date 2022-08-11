@@ -228,9 +228,9 @@ class PrecipitateBase:
                 csv.writer(f).writerows(rows)
         else:
             if compressed:
-                np.savez_compressed(filename, **vDict)
+                np.savez_compressed(filename, **vDict, allow_pickle=True)
             else:
-                np.savez(filename, **vDict)
+                np.savez(filename, **vDict, allow_pickle=True)
 
     def load(filename):
         '''
@@ -247,7 +247,7 @@ class PrecipitateBase:
         '''
         setupVars = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements']
         if '.np' in filename.lower():
-            data = np.load(filename)
+            data = np.load(filename, allow_pickle=True)
             model = PrecipitateBase(data['t0'], data['tf'], data['steps'], data['phases'], data['linearTimeSpacing'], data['elements'])
             for d in data:
                 if d not in setupVars:
@@ -1358,7 +1358,7 @@ class PrecipitateBase:
     def _setNucleateRadius(self, i):
         for p in range(len(self.phases)):
             #If nucleates form, then calculate radius of precipitate
-            #Radius is set slightly larger so preciptate 
+            #Radius is set slightly larger so precipitate 
             if self.nucRate[p,i]*(self.time[i]-self.time[i-1]) >= 1 and self.Rcrit[p, i] >= self.Rmin[p]:
                 self.Rad[p, i] = self.Rcrit[p, i] + 0.5 * np.sqrt(self.kB * self.T[i] / (np.pi * self.gamma[p]))
             else:

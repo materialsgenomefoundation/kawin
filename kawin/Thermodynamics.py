@@ -363,7 +363,6 @@ class GeneralThermodynamics:
             x = x[1:]
 
         cond = self._getConditions(x, T, gExtra)
-
         result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
                                                          self.models, self.phase_records,
                                                          composition_sets=composition_sets)

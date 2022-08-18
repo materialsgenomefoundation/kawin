@@ -931,20 +931,25 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.interfacialComposition[index] = composition
 
-    def setThermodynamics(self, therm, phase = None, removeCache = False):
+    def setThermodynamics(self, therm, phase = None, removeCache = False, addDiffusivity = True):
         '''
         Parameters
         ----------
         therm : Thermodynamics class
         phase : str (optional)
             Phase to consider (defaults to first precipitate in list)
+        removeCache : bool (optional)
+            Will not cache equilibrium results if True (defaults to False)
+        addDiffusivity : bool (optional)
+            For binary systems, will add diffusivity functions from the database if present
+            Defaults to True
         '''
         index = self.phaseIndex(phase)
         self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache)
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
-            if therm.mobCallables is not None or therm.diffCallables is not None:
+            if (therm.mobCallables is not None or therm.diffCallables is not None) and addDiffusivity:
                 self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
             self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = removeCache)

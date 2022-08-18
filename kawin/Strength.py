@@ -44,6 +44,13 @@ class StrengthModel:
         self.T = self.Tcomplex
         self.J = self.Jsimple
 
+    def _getStrengthFunctions(self):
+        wfuncs = [self.coherencyWeak, self.modulusWeak, self.APBweak, self.SFEweak, self.interfacialWeak]
+        sfuncs = [self.coherencyStrong, self.modulusStrong, self.APBstrong, self.SFEstrong, self.interfacialStrong]
+        contributions = [self.coherencyEffect, self.modulusEffect, self.APBEffect, self.SFEffect, self.IFEffect]
+        labels = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
+        return wfuncs, sfuncs, contributions, labels
+
     def setBaseStrength(self, sigma0):
         '''
         Sets base strength of matrix
@@ -69,7 +76,7 @@ class StrengthModel:
         self.ssweights = weights
         self.ssexp = exp
 
-    def setDislocationParameters(self, G, b, nu, ri = None, theta = 90, psi = 120):
+    def setDislocationParameters(self, G, b, nu = 1/3, ri = None, theta = 90, psi = 120):
         '''
         Parameters for dislocation line tension, used for all precipitate strength models
 
@@ -435,21 +442,12 @@ class StrengthModel:
     def _precStrength(self, rss, Ls, r0Weak, r0Strong):
         weakContributions = []
         strongContributions = []
-        if self.coherencyEffect:
-            weakContributions.append(self.coherencyWeak(rss, Ls, r0Weak))
-            strongContributions.append(self.coherencyStrong(rss, Ls, r0Strong))
-        if self.modulusEffect:
-            weakContributions.append(self.modulusWeak(rss, Ls, r0Weak))
-            strongContributions.append(self.modulusStrong(rss, Ls, r0Strong))
-        if self.APBEffect:
-            weakContributions.append(self.APBweak(rss, Ls, r0Weak))
-            strongContributions.append(self.APBstrong(rss, Ls, r0Strong))
-        if self.SFEffect:
-            weakContributions.append(self.SFEweak(rss, Ls, r0Weak))
-            strongContributions.append(self.SFEstrong(rss, Ls, r0Strong))
-        if self.IFEffect:
-            weakContributions.append(self.interfacialWeak(rss, Ls, r0Weak))
-            strongContributions.append(self.interfacialStrong(rss, Ls, r0Strong))
+        wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
+        for i in range(len(wfuncs)):
+            if contributions[i]:
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    weakContributions.append(wfuncs[i](rss, Ls, r0Weak))
+                    strongContributions.append(sfuncs[i](rss, Ls, r0Strong))
         weakContributions = np.array(weakContributions)
         weakContributions[weakContributions < 0] = 0
         strongContributions = np.array(strongContributions)
@@ -494,22 +492,24 @@ class StrengthModel:
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
         Leff = Ls / np.sqrt(np.cos(self.psi / 2))
         if plotContributions:
-            wfuncs = [self.coherencyWeak, self.modulusWeak, self.APBweak, self.SFEweak, self.interfacialWeak]
-            sfuncs = [self.coherencyStrong, self.modulusStrong, self.APBstrong, self.SFEstrong, self.interfacialStrong]
-            contributions = [self.coherencyEffect, self.modulusEffect, self.APBEffect, self.SFEffect, self.IFEffect]
+            wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
             row, col = [0, 0, 1, 1, 2], [0, 1, 0, 1, 0]
             ylabel = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
             wc, sc = [], []
             for i in range(len(row)):
                 if contributions[i]:
-                    weak = wfuncs[i](r, Ls, Leff)
-                    strong = sfuncs[i](r, Ls, Ls)
-                    wc.append(weak)
-                    sc.append(strong)
-                    ax[row[i], col[i]].plot(r, weak / yscale, r, strong / yscale)
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        weak = wfuncs[i](r, Ls, Leff)
+                        strong = sfuncs[i](r, Ls, Ls)
+                        wc.append(weak)
+                        sc.append(strong)
+                    ax[row[i], col[i]].plot(r, self.M * weak / yscale, r, self.M * strong / yscale)
                     ax[row[i], col[i]].legend(['Weak', 'Strong'])
+                    ax[row[i], col[i]].set_ylim(bottom=0)
+                else:
+                    ax[row[i], col[i]].plot(r, np.zeros(len(r)))
+                    ax[row[i], col[i]].set_ylim([-1, 1])
                 ax[row[i], col[i]].set_xlim([0, np.amax(r)])
-                ax[row[i], col[i]].set_ylim(bottom=0)
                 ax[row[i], col[i]].set_xlabel('Radius (m)')
                 ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
             wc, sc = np.array(wc), np.array(sc)
@@ -517,7 +517,7 @@ class StrengthModel:
             stot = np.power(np.sum(np.power(sc, 1.8), axis=0), 1/1.8)
             owo = self.orowan(r, Ls)
             smin = np.amin([wtot, stot, owo], axis=0)
-            ax[2,1].plot(r, wtot/yscale, r, stot/yscale, r, owo/yscale, r, smin/yscale)
+            ax[2,1].plot(r, self.M * wtot/yscale, r, self.M * stot/yscale, r, self.M * owo/yscale, r, self.M * smin/yscale)
             ax[2,1].set_xlim([0, np.amax(r)])
             ax[2,1].set_ylim(bottom=0)
             ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
@@ -552,22 +552,24 @@ class StrengthModel:
         r, Ls = self.getParticleSpacing(model, phase)
         Leff = Ls / np.sqrt(np.cos(self.psi / 2))
         if plotContributions:
-            wfuncs = [self.coherencyWeak, self.modulusWeak, self.APBweak, self.SFEweak, self.interfacialWeak]
-            sfuncs = [self.coherencyStrong, self.modulusStrong, self.APBstrong, self.SFEstrong, self.interfacialStrong]
-            contributions = [self.coherencyEffect, self.modulusEffect, self.APBEffect, self.SFEffect, self.IFEffect]
+            wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
             row, col = [0, 0, 1, 1, 2], [0, 1, 0, 1, 0]
             ylabel = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
             wc, sc = [], []
             for i in range(len(row)):
                 if contributions[i]:
-                    weak = wfuncs[i](r, Ls, Leff)
-                    strong = sfuncs[i](r, Ls, Ls)
-                    wc.append(weak)
-                    sc.append(strong)
-                    ax[row[i], col[i]].plot(model.time*timeScale, weak / yscale, model.time*timeScale, strong / yscale)
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        weak = wfuncs[i](r, Ls, Leff)
+                        strong = sfuncs[i](r, Ls, Ls)
+                        wc.append(weak)
+                        sc.append(strong)
+                    ax[row[i], col[i]].plot(model.time*timeScale, self.M * weak / yscale, model.time*timeScale, self.M * strong / yscale)
                     ax[row[i], col[i]].legend(['Weak', 'Strong'])
+                    ax[row[i], col[i]].set_ylim(bottom=0)
+                else:
+                    ax[row[i], col[i]].plot(model.time*timeScale, np.zeros(len(model.time)))
+                    ax[row[i], col[i]].set_ylim([-1, 1])
                 ax[row[i], col[i]].set_xlim([model.time[0], model.time[-1]])
-                ax[row[i], col[i]].set_ylim(bottom=0)
                 ax[row[i], col[i]].set_xlabel(timeLabel)
                 ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
                 ax[row[i], col[i]].set_xscale('log')
@@ -576,7 +578,7 @@ class StrengthModel:
             stot = np.power(np.sum(np.power(sc, 1.8), axis=0), 1/1.8)
             owo = self.orowan(r, Ls)
             smin = np.amin([wtot, stot, owo], axis=0)
-            ax[2,1].plot(model.time*timeScale, wtot/yscale, model.time*timeScale, stot/yscale, model.time*timeScale, owo/yscale, model.time*timeScale, smin/yscale)
+            ax[2,1].plot(model.time*timeScale, self.M * wtot/yscale, model.time*timeScale, self.M * stot/yscale, model.time*timeScale, self.M * owo/yscale, model.time*timeScale, self.M * smin/yscale)
             ax[2,1].set_xlim([model.time[0], model.time[-1]])
             ax[2,1].set_ylim(bottom=0)
             ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')

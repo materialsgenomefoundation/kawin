@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from kawin.Mobility import mobility_from_composition_set
 import time
 import csv
+import copy
 from itertools import zip_longest
 
 class DiffusionModel:
@@ -40,8 +41,11 @@ class DiffusionModel:
         self.LBC, self.RBC = self.FLUX*np.ones(len(self.elements)), self.FLUX*np.ones(len(self.elements))
         self.LBCvalue, self.RBCvalue = np.zeros(len(self.elements)), np.zeros(len(self.elements))
 
+        self.cache = True
         self.setHashSensitivity(4)
-        self.minComposition = 1e-9
+        self.minComposition = 1e-6
+
+        self.maxCompositionChange = 0.002
 
     def reset(self):
         if self.therm is not None:
@@ -129,7 +133,11 @@ class DiffusionModel:
         self.hashSensitivity = np.power(10, int(s))
 
     def _getHash(self, x):
-        return int(np.sum(np.power(self.hashSensitivity, 1+np.arange(len(x))) * x))
+        return hash(tuple((x*self.hashSensitivity).astype(np.int32)))
+        #return int(np.sum(np.power(self.hashSensitivity, 1+np.arange(len(x))) * x))
+
+    def useCache(self, use):
+        self.cache = use
 
     def _getElementIndex(self, element = None):
         '''
@@ -367,12 +375,14 @@ class SinglePhaseModel(DiffusionModel):
             d = np.zeros(self.N-1)
         else:
             d = np.zeros((self.N-1, len(self.elements), len(self.elements)))
-        for i in range(self.N-1):
-            hashValue = self._getHash(xMid[:,i])
-            if hashValue not in self.hashTable:
-                self.hashTable[hashValue] = self.therm.getInterdiffusivity(xMid[:,i], self.T, phase=self.phases[0])
-            d[i] = self.hashTable[hashValue]
-        #d = self.therm.getInterdiffusivity(xMid.T, self.T*np.ones(self.N-1), phase=self.phases[0])
+        if self.cache:
+            for i in range(self.N-1):
+                hashValue = self._getHash(xMid[:,i])
+                if hashValue not in self.hashTable:
+                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(xMid[:,i], self.T, phase=self.phases[0])
+                d[i] = self.hashTable[hashValue]
+        else:
+            d = self.therm.getInterdiffusivity(xMid.T, self.T*np.ones(self.N-1), phase=self.phases[0])
 
         dxdz = (self.x[:,1:] - self.x[:,:-1]) / self.dz
         fluxes = np.zeros((len(self.elements), self.N+1))
@@ -435,29 +445,58 @@ class HomogenizationModel(DiffusionModel):
 
     def setup(self):
         super().setup()
-        self.updateCompSets()
+        #self.midX = 0.5 * (self.x[:,1:] + self.x[:,:-1])
+        self.p = self.updateCompSets(self.x)
 
-    def updateCompSets(self):
-        self.p = np.zeros((len(self.phases), self.N))
-        for i in range(self.N):
-            if self.compSets[i] is None:
-                eq = self.therm.getEq(self.x[:,i], self.T, 0, self.phases)
-                state_variables = np.array([0, 1, 101325, self.T], dtype=np.float64)
-                stable_phases = eq.Phase.values.ravel()
-                phase_amounts = eq.NP.values.ravel()
-                self.compSets[i] = []
-                for p in stable_phases:
-                    if p != '':
-                        idx = np.where(stable_phases == p)[0]
-                        cs, misc = self.therm._createCompositionSet(eq, state_variables, p, phase_amounts, idx)
-                        self.compSets[i].append(cs)
-            results, self.compSets[i] = self.therm.getLocalEq(self.x[:,i], self.T, 0, self.phases, self.compSets[i])
+    def solve(self, simTime, verbose=False, vIt=10):
+        super().solve(simTime, verbose, vIt)
+
+    def _newEqCalc(self, x):
+        eq = self.therm.getEq(x, self.T, 0, self.phases)
+        state_variables = np.array([0, 1, 101325, self.T], dtype=np.float64)
+        stable_phases = eq.Phase.values.ravel()
+        phase_amounts = eq.NP.values.ravel()
+        comp = []
+        for p in stable_phases:
+            if p != '':
+                idx = np.where(stable_phases == p)[0]
+                cs, misc = self.therm._createCompositionSet(eq, state_variables, p, phase_amounts, idx)
+                comp.append(cs)
+
+        if len(comp) == 0:
+            comp = None
+
+        return self.therm.getLocalEq(x, self.T, 0, self.phases, comp)
+
+    def updateCompSets(self, xarray):
+        parray = np.zeros((len(self.phases), xarray.shape[1]))
+        for i in range(parray.shape[1]):
+            if self.cache:
+                hashValue = self._getHash(xarray[:,i])
+                if hashValue not in self.hashTable:
+                    result, comp = self._newEqCalc(xarray[:,i])
+                    #result, comp = self.therm.getLocalEq(xarray[:,i], self.T, 0, self.phases, self.compSets[i])
+                    self.hashTable[hashValue] = (result, comp, None)
+                else:
+                    result, comp, _ = self.hashTable[hashValue]
+                results, self.compSets[i] = copy.copy(result), copy.copy(comp)
+            else:
+                if self.compSets[i] is None:
+                    results, self.compSets[i] = self._newEqCalc(xarray[:,i])
+                else:
+                    results, self.compSets[i] = self.therm.getLocalEq(xarray[:,i], self.T, 0, self.phases, self.compSets[i])
             self.mu[:,i] = results.chemical_potentials[self.unsortIndices]
             cs_phases = [cs.phase_record.phase_name for cs in self.compSets[i]]
             for p in range(len(cs_phases)):
-                self.p[self._getPhaseIndex(cs_phases[p]), i] = self.compSets[i][p].NP
+                parray[self._getPhaseIndex(cs_phases[p]), i] = self.compSets[i][p].NP
+        
+        #print(self.N, parray.shape[1])
+        #for i in range(self.N):
+        #    print(i, self.compSets[i], parray[:,i], xarray[:,i])
+        #print(self.N, len(self.hashTable))
+        return parray
 
-    def getMobility(self):
+    def getMobility(self, xarray):
         '''
         Gets mobility of all phases
 
@@ -465,28 +504,39 @@ class HomogenizationModel(DiffusionModel):
         -------
         (p, e+1, N) array - p is number of phases, e is number of elements, N is number of nodes
         '''
-        mob = self.defaultMob * np.ones((len(self.phases), len(self.elements)+1, self.N))
-        for i in range(self.N):
-            maxPhaseAmount = 0
-            maxPhaseIndex = 0
-            for p in range(len(self.phases)):
-                if self.p[p,i] > 0:
-                    if self.p[p,i] > maxPhaseAmount:
-                        maxPhaseAmount = self.p[p,i]
-                        maxPhaseIndex = p
-                    if self.phases[p] in self.therm.mobCallables:
-                        compset = [cs for cs in self.compSets[i] if cs.phase_record.phase_name == self.phases[p]][0]
-                        mob[p,:,i] = mobility_from_composition_set(compset, self.therm.mobCallables[self.phases[p]], self.therm.mobility_correction)[self.unsortIndices]
-                        mob[p,:,i] *= np.concatenate(([1-np.sum(self.x[:,i])], self.x[:,i]))
-                    else:
-                        mob[p,:,i] = -1
-            for p in range(len(self.phases)):
-                if any(mob[p,:,i] == -1):
-                    mob[p,:,i] = mob[maxPhaseIndex,:,i]
+        mob = self.defaultMob * np.ones((len(self.phases), len(self.elements)+1, xarray.shape[1]))
+        for i in range(xarray.shape[1]):
+            if self.cache:
+                hashValue = self._getHash(xarray[:,i])
+                _, _, mTemp = self.hashTable[hashValue]
+            else:
+                mTemp = None
+            if mTemp is None or not self.cache:
+                maxPhaseAmount = 0
+                maxPhaseIndex = 0
+                for p in range(len(self.phases)):
+                    if self.p[p,i] > 0:
+                        if self.p[p,i] > maxPhaseAmount:
+                            maxPhaseAmount = self.p[p,i]
+                            maxPhaseIndex = p
+                        if self.phases[p] in self.therm.mobCallables:
+                            #print(self.phases, self.phases[p], xarray[:,i], self.p[:,i], i, self.compSets[i])
+                            compset = [cs for cs in self.compSets[i] if cs.phase_record.phase_name == self.phases[p]][0]
+                            mob[p,:,i] = mobility_from_composition_set(compset, self.therm.mobCallables[self.phases[p]], self.therm.mobility_correction)[self.unsortIndices]
+                            mob[p,:,i] *= np.concatenate(([1-np.sum(xarray[:,i])], xarray[:,i]))
+                        else:
+                            mob[p,:,i] = -1
+                for p in range(len(self.phases)):
+                    if any(mob[p,:,i] == -1):
+                        mob[p,:,i] = mob[maxPhaseIndex,:,i]
+                if self.cache:
+                    self.hashTable[hashValue] = (self.hashTable[hashValue][0], self.hashTable[hashValue][1], mob[p,:,i])
+            else:
+                mob[:,:,i] = mTemp
 
         return mob
 
-    def wienerUpper(self):
+    def wienerUpper(self, xarray):
         '''
         Upper wiener bounds for average mobility
 
@@ -494,11 +544,11 @@ class HomogenizationModel(DiffusionModel):
         -------
         (e+1, N) mobility array - e is number of elements, N is number of nodes
         '''
-        mob = self.getMobility()
+        mob = self.getMobility(xarray)
         avgMob = np.sum(np.multiply(self.p[:,np.newaxis], mob), axis=0)
         return avgMob
 
-    def wienerLower(self):
+    def wienerLower(self, xarray):
         '''
         Lower wiener bounds for average mobility
 
@@ -507,7 +557,7 @@ class HomogenizationModel(DiffusionModel):
         (e+1, N) mobility array - e is number of elements, N is number of nodes
         '''
         #(p, e, N)
-        mob = self.getMobility()
+        mob = self.getMobility(xarray)
         avgMob = 1/np.sum(np.multiply(self.p[:,np.newaxis], 1/mob), axis=0)
         return avgMob
 
@@ -532,8 +582,12 @@ class HomogenizationModel(DiffusionModel):
         pass
 
     def getFluxes(self):
+        self.p = self.updateCompSets(self.x)
+        #for i in range(self.N):
+        #    print(i, self.compSets[i], self.p[:,i], self.x[:,i])
+
         #Get average mobility between nodes
-        avgMob = self.mobilityFunction()
+        avgMob = self.mobilityFunction(self.x)
         avgMob = 0.5 * (avgMob[:,1:] + avgMob[:,:-1])
 
         #Composition between nodes
@@ -565,24 +619,12 @@ class HomogenizationModel(DiffusionModel):
 
         #Time increment
         #HOW DO WE DO THIS!?!?!?
-        #nonzero = (vfluxes[:,1:-1] != 0) & (dxdz[1:,:] != 0)
-        #D = vfluxes[:,1:-1][nonzero] / dxdz[1:,:][nonzero]
-        #dt = 0.1 * self.dz**2 / np.amax(np.abs(D))
-        #print(dt, np.amax(np.abs(D)), np.amax(vfluxes[:,1:-1][nonzero]), np.amin(dxdz[1:,:][nonzero]))
-
         dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
-        dt = 0.005 / np.amax(dJ[dJ!=0])
-        print(dt)
-        #nonzero = (self.x != 0) & (dJ != 0)
-        #dt = 0.05 * np.amin(self.x[nonzero]) / np.amax(dJ[nonzero])
-        #dt = 0.01 * np.amin(self.x[nonzero] / dJ[nonzero])
-        #dt = 10
-
-        self.updateCompSets()
+        dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
+        #print(dt)
 
         return vfluxes, dt
         
-
     def updateMesh(self, fluxes, dt):
         for e in range(len(self.elements)):
             self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz

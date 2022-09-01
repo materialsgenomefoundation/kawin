@@ -64,7 +64,7 @@ class DiffusionModel:
     def save(self, filename, compressed = False, toCSV = False):
         #Saves mesh, composition and phases
         if toCSV:
-            headers = ['Distance (m)']
+            headers = ['Distance(m)']
             arrays = [self.z]
             for i in range(len(self.allElements)):
                 headers.append('x(' + self.allElements[i] + ')')
@@ -244,6 +244,25 @@ class DiffusionModel:
         zIndex = np.argmin(np.abs(self.z-z))
         self.x[eIndex,zIndex] = value
 
+    def setCompositionInBounds(self, value, Lbound, Rbound, element = None):
+        '''
+        Sets single node to specified composition
+
+        Parameters
+        ----------
+        value : float
+            Composition
+        Lbound : float
+            Position of left bound
+        Rbound : float
+            Position of right bound
+        element : str
+            Element to apply composition profile to
+        '''
+        eIndex = self._getElementIndex(element)
+        indices = (self.z >= Lbound) & (self.z <= Rbound)
+        self.x[eIndex,indices] = value
+
     def setCompositionFunction(self, func, element = None):
         '''
         Sets composition as a function of z
@@ -259,6 +278,7 @@ class DiffusionModel:
         self.x[eIndex,:] = func(self.z)
 
     def setup(self):
+        self.x[self.x > 1-self.minComposition] = 1-self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
 
     def getFluxes(self):
@@ -430,18 +450,45 @@ class HomogenizationModel(DiffusionModel):
         self.unsortIndices = np.argsort(self.sortIndices)
 
     def setMobilityFunction(self, function):
+        '''
+        Sets averaging function to use for mobility
+
+        Parameters
+        ----------
+        function : str
+            Options - 'upper wiener', 'lower wiener', 'upper hashin-shtrikman', 'lower hashin-strikman', 'labyrinth'
+        '''
         if 'upper' in function and 'wiener' in function:
             self.mobilityFunction = self.wienerUpper
             self.defaultMob = 0
         elif 'lower' in function and 'wiener' in function:
             self.mobilityFunction = self.wienerLower
             self.defaultMob = 1
-        elif 'upper' in function and 'hasin' in function:
+        elif 'upper' in function and 'hashin' in function:
             self.mobilityFunction = self.hashin_shtrikmanUpper
             self.defaultMob = 0
         elif 'lower' in function and 'hashin' in function:
             self.mobilityFunction = self.hashin_shtrikmanLower
             self.defaultMob = 1
+        elif 'lab' in function:
+            self.mobilityFunction = self.labyrinth
+            self.defaultMob = 0
+
+    def setLabyrinthFactor(self, n):
+        '''
+        Labyrinth factor
+
+        Parameters
+        ----------
+        n : int
+            Either 1 or 2
+            Note: n = 1 will the same as the weiner upper bounds
+        '''
+        if n < 1:
+            n = 1
+        if n > 2:
+            n = 2
+        self.labFactor = n
 
     def setup(self):
         super().setup()
@@ -519,7 +566,7 @@ class HomogenizationModel(DiffusionModel):
                         if self.p[p,i] > maxPhaseAmount:
                             maxPhaseAmount = self.p[p,i]
                             maxPhaseIndex = p
-                        if self.phases[p] in self.therm.mobCallables:
+                        if self.phases[p] in self.therm.mobCallables and self.therm.mobCallables[self.phases[p]] is not None:
                             #print(self.phases, self.phases[p], xarray[:,i], self.p[:,i], i, self.compSets[i])
                             compset = [cs for cs in self.compSets[i] if cs.phase_record.phase_name == self.phases[p]][0]
                             mob[p,:,i] = mobility_from_composition_set(compset, self.therm.mobCallables[self.phases[p]], self.therm.mobility_correction)[self.unsortIndices]
@@ -530,7 +577,7 @@ class HomogenizationModel(DiffusionModel):
                     if any(mob[p,:,i] == -1):
                         mob[p,:,i] = mob[maxPhaseIndex,:,i]
                 if self.cache:
-                    self.hashTable[hashValue] = (self.hashTable[hashValue][0], self.hashTable[hashValue][1], mob[p,:,i])
+                    self.hashTable[hashValue] = (self.hashTable[hashValue][0], self.hashTable[hashValue][1], copy.copy(mob[:,:,i]))
             else:
                 mob[:,:,i] = mTemp
 
@@ -559,6 +606,18 @@ class HomogenizationModel(DiffusionModel):
         #(p, e, N)
         mob = self.getMobility(xarray)
         avgMob = 1/np.sum(np.multiply(self.p[:,np.newaxis], 1/mob), axis=0)
+        return avgMob
+
+    def labyrinth(self, xarray):
+        '''
+        Labyrinth mobility
+
+        Returns
+        -------
+        (e+1, N) mobility array - e is number of elements, N is number of nodes
+        '''
+        mob = self.getMobility(xarray)
+        avgMob = np.sum(np.multiply(np.power(self.p[:,np.newaxis], self.labFactor), mob), axis=0)
         return avgMob
 
     def hashin_shtrikmanUpper(self):

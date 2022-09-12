@@ -277,6 +277,27 @@ class DiffusionModel:
         eIndex = self._getElementIndex(element)
         self.x[eIndex,:] = func(self.z)
 
+    def setCompositionProfile(self, z, x, element = None):
+        '''
+        Sets composition profile by linear interpolation
+
+        Parameters
+        ----------
+        z : array
+            z-coords of composition profile
+        x : array
+            Composition profile
+        element : str
+            Element to apply composition profile to
+        '''
+        eIndex = self._getElementIndex(element)
+        z = np.array(z)
+        x = np.array(x)
+        sortIndices = np.argsort(z)
+        z = z[sortIndices]
+        x = x[sortIndices]
+        self.x[eIndex,:] = np.interp(self.z, z, x)
+
     def setup(self):
         self.x[self.x > 1-self.minComposition] = 1-self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
@@ -318,7 +339,7 @@ class DiffusionModel:
         tf = time.time()
         print(str(i) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, tf-t0))
 
-    def plot(self, ax, plotReference = True, zScale = 1):
+    def plot(self, ax, plotReference = True, zScale = 1, *args, **kwargs):
         '''
         Plots composition profile
 
@@ -331,16 +352,16 @@ class DiffusionModel:
         '''
         if plotReference:
             refE = 1 - np.sum(self.x, axis=0)
-            ax.plot(self.z/zScale, refE, label=self.allElements[0])
+            ax.plot(self.z/zScale, refE, label=self.allElements[0], *args, **kwargs)
         for e in range(len(self.elements)):
-            ax.plot(self.z/zScale, self.x[e], label=self.elements[e])
+            ax.plot(self.z/zScale, self.x[e], label=self.elements[e], *args, **kwargs)
             
         ax.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
         ax.legend()
         ax.set_xlabel('Distance (m)')
         ax.set_ylabel('Composition (at.%)')
 
-    def plotTwoAxis(self, axL, Lelements, Relements, zScale = 1):
+    def plotTwoAxis(self, axL, Lelements, Relements, zScale = 1, *args, **kwargs):
         if type(Lelements) is str:
             Lelements = [Lelements]
         if type(Relements) is str:
@@ -352,18 +373,18 @@ class DiffusionModel:
         for e in range(len(Lelements)):
             if Lelements[e] in self.elements:
                 eIndex = self._getElementIndex(Lelements[e])
-                axL.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci))
+                axL.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
                 ci = ci+1 if ci <= 9 else 0
             elif Lelements[e] in self.allElements:
-                axL.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci))
+                axL.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci), *args, **kwargs)
                 ci = ci+1 if ci <= 9 else 0
         for e in range(len(Relements)):
             if Relements[e] in self.elements:
                 eIndex = self._getElementIndex(Relements[e])
-                axR.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci))
+                axR.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
                 ci = ci+1 if ci <= 9 else 0
             elif Relements[e] in self.allElements:
-                axR.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci))
+                axR.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci), *args, **kwargs)
                 ci = ci+1 if ci <= 9 else 0
 
         
@@ -378,9 +399,9 @@ class DiffusionModel:
 
         return axL, axR
 
-    def plotPhases(self, ax, zScale = 1):
+    def plotPhases(self, ax, zScale = 1, *args, **kwargs):
         for p in range(len(self.phases)):
-            ax.plot(self.z * zScale, self.p[p], label=self.phases[p])
+            ax.plot(self.z * zScale, self.p[p], label=self.phases[p], *args, **kwargs)
         ax.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
         ax.set_ylim([0, 1])
         ax.set_xlabel('Distance (m)')
@@ -620,17 +641,26 @@ class HomogenizationModel(DiffusionModel):
         avgMob = np.sum(np.multiply(np.power(self.p[:,np.newaxis], self.labFactor), mob), axis=0)
         return avgMob
 
-    def hashin_shtrikmanUpper(self):
+    def hashin_shtrikmanUpper(self, xarray):
         '''
         Upper hashin shtrikman bounds for average mobility
 
         Returns
         -------
-        (e, N) mobility array - e is number of elements, N is number of nodes
+        (e+1, N) mobility array - e is number of elements, N is number of nodes
         '''
-        pass
+        #self.p                                 #(p,N)
+        mob = self.getMobility(xarray)          #(p,e+1,N)
+        maxMob = np.amax(mob, axis=0)           #(e+1,N)
 
-    def hashin_shtrikmanLower(self):
+        # 1 / ((1 / mPhi - mAlpha) + 1 / (3mAlpha)) = 3mAlpha * (mPhi - mAlpha) / (2mAlpha + mPhi)
+        Ak = 3 * maxMob * (mob - maxMob) / (2*maxMob + mob)
+        Ak = Ak * self.p[:,np.newaxis]
+        Ak = np.sum(Ak, axis=0)
+        avgMob = maxMob + Ak / (1 - Ak / (3*maxMob))
+        return avgMob
+
+    def hashin_shtrikmanLower(self, xarray):
         '''
         Lower hashin shtrikman bounds for average mobility
 
@@ -638,7 +668,17 @@ class HomogenizationModel(DiffusionModel):
         -------
         (e, N) mobility array - e is number of elements, N is number of nodes
         '''
-        pass
+        #self.p                                 #(p,N)
+        mob = self.getMobility(xarray)          #(p,e+1,N)
+        minMob = np.amin(mob, axis=0)           #(e+1,N)
+
+        # 1 / ((1 / mPhi - mAlpha) + 1 / (3mAlpha)) = 3mAlpha * (mPhi - mAlpha) / (2mAlpha + mPhi)
+        Ak = 3 * minMob * (mob - minMob) / (2*minMob + mob)
+
+        Ak = Ak * self.p[:,np.newaxis]
+        Ak = np.sum(Ak, axis=0)
+        avgMob = minMob + Ak / (1 - Ak / (3*minMob))
+        return avgMob
 
     def getFluxes(self):
         self.p = self.updateCompSets(self.x)

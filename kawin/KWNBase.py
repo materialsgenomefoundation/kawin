@@ -947,8 +947,8 @@ class PrecipitateBase:
             if therm.mobCallables[therm.phases[0]] is not None or therm.diffCallables[therm.phases[0]] is not None:
                 self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
-            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = removeCache)
-            self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = removeCache)
+            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = False)
+            self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = False)
 
     def setSurrogate(self, surr, phase = None):
         '''

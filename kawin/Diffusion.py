@@ -49,7 +49,7 @@ class DiffusionModel:
 
     def reset(self):
         if self.therm is not None:
-            self.therm.removeCache()
+            self.therm.clearCache()
         
         self.x = np.zeros((len(self.elements), self.N))
         self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
@@ -299,6 +299,7 @@ class DiffusionModel:
         self.x[eIndex,:] = np.interp(self.z, z, x)
 
     def setup(self):
+        self.therm.clearCache()
         self.x[self.x > 1-self.minComposition] = 1-self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
 
@@ -339,7 +340,34 @@ class DiffusionModel:
         tf = time.time()
         print(str(i) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, tf-t0))
 
-    def plot(self, ax, plotReference = True, zScale = 1, *args, **kwargs):
+    def getX(self, element):
+        '''
+        Gets composition profile of element
+        
+        Parameters
+        ----------
+        element : str
+            Element to get profile of
+        '''
+        if element in self.allElements and element not in self.elements:
+            return 1 - np.sum(self.x, axis=0)
+        else:
+            e = self._getElementIndex(element)
+            return self.x[e]
+
+    def getP(self, phase):
+        '''
+        Gets phase profile
+
+        Parameters
+        ----------
+        phase : str
+            Phase to get profile of
+        '''
+        p = self._getPhaseIndex(phase)
+        return self.p[p]
+
+    def plot(self, ax, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
         '''
         Plots composition profile
 
@@ -349,12 +377,24 @@ class DiffusionModel:
             Axis to plot on
         plotReference : bool
             Whether to plot reference element (composition = 1 - sum(composition of rest of elements))
+        plotElement : None or str
+            Plots single element if it is defined, otherwise, all elements are plotted
+        zScale : float
+            Scale factor for z-coordinates
         '''
-        if plotReference:
-            refE = 1 - np.sum(self.x, axis=0)
-            ax.plot(self.z/zScale, refE, label=self.allElements[0], *args, **kwargs)
-        for e in range(len(self.elements)):
-            ax.plot(self.z/zScale, self.x[e], label=self.elements[e], *args, **kwargs)
+        if plotElement is not None:
+            if plotElement not in self.elements and plotElement in self.allElements:
+                x = 1 - np.sum(self.x, axis=0)
+            else:
+                e = self._getElementIndex(plotElement)
+                x = self.x[e]
+            ax.plot(self.z/zScale, x, *args, **kwargs)
+        else:
+            if plotReference:
+                refE = 1 - np.sum(self.x, axis=0)
+                ax.plot(self.z/zScale, refE, label=self.allElements[0], *args, **kwargs)
+            for e in range(len(self.elements)):
+                ax.plot(self.z/zScale, self.x[e], label=self.elements[e], *args, **kwargs)
             
         ax.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
         ax.legend()
@@ -399,9 +439,25 @@ class DiffusionModel:
 
         return axL, axR
 
-    def plotPhases(self, ax, zScale = 1, *args, **kwargs):
-        for p in range(len(self.phases)):
-            ax.plot(self.z * zScale, self.p[p], label=self.phases[p], *args, **kwargs)
+    def plotPhases(self, ax, plotPhase = None, zScale = 1, *args, **kwargs):
+        '''
+        Plots phase fractions over z
+
+        Parameters
+        ----------
+        ax : matplotlib Axes object
+            Axis to plot on
+        plotPhase : None or str
+            Plots single phase if it is defined, otherwise, all phases are plotted
+        zScale : float
+            Scale factor for z-coordinates
+        '''
+        if plotPhase is not None:
+            p = self._getPhaseIndex(plotPhase)
+            ax.plot(self.z/zScale, self.p[p], *args, **kwargs)
+        else:
+            for p in range(len(self.phases)):
+                ax.plot(self.z/zScale, self.p[p], label=self.phases[p], *args, **kwargs)
         ax.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
         ax.set_ylim([0, 1])
         ax.set_xlabel('Distance (m)')
@@ -461,14 +517,17 @@ class HomogenizationModel(DiffusionModel):
     def __init__(self, *args):
         super().__init__(*args)
 
-        self.mu = np.zeros((len(self.elements)+1, self.N))
-        self.compSets = [None for _ in range(self.N)]
         self.mobilityFunction = self.wienerUpper
         self.defaultMob = 0
         self.eps = 0.05
 
         self.sortIndices = np.argsort(self.allElements)
         self.unsortIndices = np.argsort(self.sortIndices)
+
+    def reset(self):
+        super().reset()
+        self.mu = np.zeros((len(self.elements)+1, self.N))
+        self.compSets = [None for _ in range(self.N)]
 
     def setMobilityFunction(self, function):
         '''

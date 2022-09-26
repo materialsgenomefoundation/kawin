@@ -43,7 +43,7 @@ class DiffusionModel:
 
         self.cache = True
         self.setHashSensitivity(4)
-        self.minComposition = 1e-6
+        self.minComposition = 1e-8
 
         self.maxCompositionChange = 0.002
 
@@ -54,6 +54,7 @@ class DiffusionModel:
         self.x = np.zeros((len(self.elements), self.N))
         self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
         self.hashTable = {}
+        self.isSetup = False
 
     def setThermodynamics(self, thermodynamics):
         self.therm = thermodynamics
@@ -300,8 +301,12 @@ class DiffusionModel:
 
     def setup(self):
         self.therm.clearCache()
-        self.x[self.x > 1-self.minComposition] = 1-self.minComposition
+        xsum = np.sum(self.x, axis=0)
+        if any(xsum > 1):
+            raise Exception('Warning: some compositions sum up to above 1')
+        self.x[self.x > self.minComposition] = self.x[self.x > self.minComposition] - len(self.allElements) * self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
+        self.isSetup = True
 
     def getFluxes(self):
         return [], []
@@ -382,6 +387,9 @@ class DiffusionModel:
         zScale : float
             Scale factor for z-coordinates
         '''
+        if not self.isSetup:
+            self.setup()
+
         if plotElement is not None:
             if plotElement not in self.elements and plotElement in self.allElements:
                 x = 1 - np.sum(self.x, axis=0)
@@ -402,6 +410,23 @@ class DiffusionModel:
         ax.set_ylabel('Composition (at.%)')
 
     def plotTwoAxis(self, axL, Lelements, Relements, zScale = 1, *args, **kwargs):
+        '''
+        Plots composition profile with two y-axes
+
+        Parameters
+        ----------
+        axL : matplotlib Axes object
+            Left axis to plot on
+        Lelements : list of str
+            Elements to plot on left axis
+        Relements : list of str
+            Elements to plot on right axis
+        zScale : float
+            Scale factor for z-coordinates
+        '''
+        if not self.isSetup:
+            self.setup()
+
         if type(Lelements) is str:
             Lelements = [Lelements]
         if type(Relements) is str:
@@ -452,6 +477,9 @@ class DiffusionModel:
         zScale : float
             Scale factor for z-coordinates
         '''
+        if not self.isSetup:
+            self.setup()
+
         if plotPhase is not None:
             p = self._getPhaseIndex(plotPhase)
             ax.plot(self.z/zScale, self.p[p], *args, **kwargs)
@@ -533,26 +561,30 @@ class HomogenizationModel(DiffusionModel):
         '''
         Sets averaging function to use for mobility
 
+        Default mobility value should be that a phase of unknown mobility will be ignored for average mobility calcs
+
         Parameters
         ----------
         function : str
             Options - 'upper wiener', 'lower wiener', 'upper hashin-shtrikman', 'lower hashin-strikman', 'labyrinth'
         '''
+        #np.finfo(dtype).max - largest representable value
+        #np.finfo(dtype).tiny - smallest positive usable value
         if 'upper' in function and 'wiener' in function:
             self.mobilityFunction = self.wienerUpper
-            self.defaultMob = 0
+            self.defaultMob = np.finfo(np.float64).tiny
         elif 'lower' in function and 'wiener' in function:
             self.mobilityFunction = self.wienerLower
-            self.defaultMob = 1
+            self.defaultMob = np.finfo(np.float64).max
         elif 'upper' in function and 'hashin' in function:
             self.mobilityFunction = self.hashin_shtrikmanUpper
-            self.defaultMob = 0
+            self.defaultMob = np.finfo(np.float64).tiny
         elif 'lower' in function and 'hashin' in function:
             self.mobilityFunction = self.hashin_shtrikmanLower
-            self.defaultMob = 1
+            self.defaultMob = np.finfo(np.float64).max
         elif 'lab' in function:
             self.mobilityFunction = self.labyrinth
-            self.defaultMob = 0
+            self.defaultMob = np.finfo(np.float64).tiny
 
     def setLabyrinthFactor(self, n):
         '''
@@ -654,8 +686,10 @@ class HomogenizationModel(DiffusionModel):
                         else:
                             mob[p,:,i] = -1
                 for p in range(len(self.phases)):
-                    if any(mob[p,:,i] == -1):
+                    if any(mob[p,:,i] == -1) and not all(mob[p,:,i] == -1):
                         mob[p,:,i] = mob[maxPhaseIndex,:,i]
+                    if all(mob[p,:,i] == -1):
+                        mob[p,:,i] = self.defaultMob
                 if self.cache:
                     self.hashTable[hashValue] = (self.hashTable[hashValue][0], self.hashTable[hashValue][1], copy.copy(mob[:,:,i]))
             else:
@@ -730,6 +764,9 @@ class HomogenizationModel(DiffusionModel):
         #self.p                                 #(p,N)
         mob = self.getMobility(xarray)          #(p,e+1,N)
         minMob = np.amin(mob, axis=0)           #(e+1,N)
+
+        #This prevents an infinite mobility which could cause the time interval to be 0
+        minMob[minMob == np.inf] = 0
 
         # 1 / ((1 / mPhi - mAlpha) + 1 / (3mAlpha)) = 3mAlpha * (mPhi - mAlpha) / (2mAlpha + mPhi)
         Ak = 3 * minMob * (mob - minMob) / (2*minMob + mob)

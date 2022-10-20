@@ -113,7 +113,7 @@ class PrecipitateBase:
         self.interfacialComposition = [None for i in self.phases]
 
         if self.numberOfElements == 1:
-            self._Beta = self._BetaBinary
+            self._Beta = self._BetaBinary1
         else:
             self._Beta = self._BetaMulti
             self._betaFuncs = [None for p in phases]
@@ -449,6 +449,25 @@ class PrecipitateBase:
         for key, value in kwargs.items():
             setattr(self, key, value)
         
+    def setBetaBinary(self, functionType = 1):
+        '''
+        Sets function for beta calculation in binary systems
+
+        If using a multicomponent system, this function will not do anything
+
+        Parameters
+        ----------
+        functionType : int
+            ID for function
+                1 for implementation seen in Perez et al, 2008 (default)
+                2 for implementation similar to multicomponent systems
+        '''
+        if self.numberOfElements == 1:
+            if functionType == 2:
+                self.beta = self._BetaBinary2
+            else:
+                self.beta = self._BetaBinary1
+
     def setInitialComposition(self, xInit):
         '''
         Parameters
@@ -1305,9 +1324,11 @@ class PrecipitateBase:
     def _Zeldovich(self, p, i):
         return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * self.T[i])) / (2 * np.pi * self.avo * self.Rcrit[p,i]**2)
         
-    def _BetaBinary(self, p, i):
+    def _BetaBinary1(self, p, i):
+        return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * self.xComp[0] * self.Diffusivity(self.xComp[i-1], self.T[i]) / self.aAlpha**4
+
+    def _BetaBinary2(self, p, i):
         #This will follow the same equation as with _BetaMulti; however, some simplications can be made based off the summation contraint
-        #return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * self.xComp[0] * self.Diffusivity(self.xComp[i-1], self.T[i]) / self.aAlpha**4
         D = self.Diffusivity(self.xComp[i-1], self.T[i])
         Dfactor = (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / (self.xEqAlpha[p,i-1]*D) + (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / ((1 - self.xEqAlpha[p,i-1])*D)
         return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * (1/Dfactor) / self.aAlpha**4

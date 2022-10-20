@@ -140,6 +140,9 @@ class DiffusionModel:
     def useCache(self, use):
         self.cache = use
 
+    def clearCache(self):
+        self.hashTable = {}
+
     def _getElementIndex(self, element = None):
         '''
         Gets index of element in self.elements
@@ -542,8 +545,8 @@ class SinglePhaseModel(DiffusionModel):
             self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz
 
 class HomogenizationModel(DiffusionModel):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha']):
+        super().__init__(zlim, N, elements, phases)
 
         self.mobilityFunction = self.wienerUpper
         self.defaultMob = 0
@@ -551,6 +554,7 @@ class HomogenizationModel(DiffusionModel):
 
         self.sortIndices = np.argsort(self.allElements)
         self.unsortIndices = np.argsort(self.sortIndices)
+        self.labFactor = 1
 
     def reset(self):
         super().reset()
@@ -649,10 +653,6 @@ class HomogenizationModel(DiffusionModel):
             for p in range(len(cs_phases)):
                 parray[self._getPhaseIndex(cs_phases[p]), i] = self.compSets[i][p].NP
         
-        #print(self.N, parray.shape[1])
-        #for i in range(self.N):
-        #    print(i, self.compSets[i], parray[:,i], xarray[:,i])
-        #print(self.N, len(self.hashTable))
         return parray
 
     def getMobility(self, xarray):

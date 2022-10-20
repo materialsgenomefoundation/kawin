@@ -36,7 +36,7 @@ class PrecipitateModel (PrecipitateBase):
 
         if self.numberOfElements == 1:
             self._growthRate = self._growthRateBinary
-            self._Beta = self._BetaBinary
+            self._Beta = self._BetaBinary1
         else:
             self._growthRate = self._growthRateMulti
             self._Beta = self._BetaMulti

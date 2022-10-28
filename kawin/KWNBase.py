@@ -113,7 +113,7 @@ class PrecipitateBase:
         self.interfacialComposition = [None for i in self.phases]
 
         if self.numberOfElements == 1:
-            self._Beta = self._BetaBinary
+            self._Beta = self._BetaBinary1
         else:
             self._Beta = self._BetaMulti
             self._betaFuncs = [None for p in phases]
@@ -229,8 +229,10 @@ class PrecipitateBase:
         else:
             if compressed:
                 np.savez_compressed(filename, **vDict)
+                #np.savez_compressed(filename, **vDict, allow_pickle=True)
             else:
                 np.savez(filename, **vDict)
+                #np.savez(filename, **vDict, allow_pickle=True)
 
     def load(filename):
         '''
@@ -247,7 +249,7 @@ class PrecipitateBase:
         '''
         setupVars = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements']
         if '.np' in filename.lower():
-            data = np.load(filename)
+            data = np.load(filename, allow_pickle=True)
             model = PrecipitateBase(data['t0'], data['tf'], data['steps'], data['phases'], data['linearTimeSpacing'], data['elements'])
             for d in data:
                 if d not in setupVars:
@@ -397,13 +399,15 @@ class PrecipitateBase:
         self.minNucleationRate = 1e-5
 
         self.checkVolumePre = True
-        self.checkVolumePost = True
+        self.checkVolumePost = False
         self.maxVolumeChange = 0.001
         
-        self.checkComposition = True
+        self.checkComposition = False
         self.checkCompositionPre = False
         self.maxCompositionChange = 0.001
         self.minComposition = 0
+
+        self.minNucleateDensity = 1e-5
 
     def setConstraints(self, **kwargs):
         '''
@@ -441,10 +445,31 @@ class PrecipitateBase:
         checkComposition - checks maximum change in composition (True)
         chekcCompositionPre - estimates maximum change in composition (False)
         maxCompositionChange - maximum change in composition in single time step (0.01)
+
+        minNucleateDensity - minimum nucleate density to consider nucleation to have occurred (1e-5)
         '''
         for key, value in kwargs.items():
             setattr(self, key, value)
         
+    def setBetaBinary(self, functionType = 1):
+        '''
+        Sets function for beta calculation in binary systems
+
+        If using a multicomponent system, this function will not do anything
+
+        Parameters
+        ----------
+        functionType : int
+            ID for function
+                1 for implementation seen in Perez et al, 2008 (default)
+                2 for implementation similar to multicomponent systems
+        '''
+        if self.numberOfElements == 1:
+            if functionType == 2:
+                self.beta = self._BetaBinary2
+            else:
+                self.beta = self._BetaBinary1
+
     def setInitialComposition(self, xInit):
         '''
         Parameters
@@ -944,9 +969,11 @@ class PrecipitateBase:
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
+            if therm.mobCallables[therm.phases[0]] is not None or therm.diffCallables[therm.phases[0]] is not None:
+                self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
-            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = removeCache)
-            self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = removeCache)
+            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = False)
+            self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = False)
 
     def setSurrogate(self, surr, phase = None):
         '''
@@ -1224,7 +1251,7 @@ class PrecipitateBase:
 
         #Only do this if there is some parent phase left (brute force solution for to avoid numerical errors)
         if self.betaFrac[p, i-1] < 1:
-            
+
             #Calculate critical radius
             #For bulk or dislocation nucleation sites, use previous critical radius to get aspect ratio
             if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
@@ -1248,7 +1275,7 @@ class PrecipitateBase:
             self.betas[p,i] = self._Beta(p, i)
             if self.betas[p,i] == 0:
                 return self._noDrivingForce(p, i)
-                
+
             #Incubation time, either isothermal or nonisothermal
             self.incubationSum[p] = self._incubation(Z, p, i)
             if self.incubationSum[p] > 1:
@@ -1299,8 +1326,14 @@ class PrecipitateBase:
     def _Zeldovich(self, p, i):
         return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * self.T[i])) / (2 * np.pi * self.avo * self.Rcrit[p,i]**2)
         
-    def _BetaBinary(self, p, i):
-        return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * self.xComp[0] * self.Diffusivity(self.xComp[i], self.T[i]) / self.aAlpha**4
+    def _BetaBinary1(self, p, i):
+        return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * self.xComp[0] * self.Diffusivity(self.xComp[i-1], self.T[i]) / self.aAlpha**4
+
+    def _BetaBinary2(self, p, i):
+        #This will follow the same equation as with _BetaMulti; however, some simplications can be made based off the summation contraint
+        D = self.Diffusivity(self.xComp[i-1], self.T[i])
+        Dfactor = (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / (self.xEqAlpha[p,i-1]*D) + (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / ((1 - self.xEqAlpha[p,i-1])*D)
+        return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * (1/Dfactor) / self.aAlpha**4
             
     def _BetaMulti(self, p, i):
         if self._betaFuncs[p] is None:
@@ -1356,8 +1389,8 @@ class PrecipitateBase:
     def _setNucleateRadius(self, i):
         for p in range(len(self.phases)):
             #If nucleates form, then calculate radius of precipitate
-            #Radius is set slightly larger so preciptate 
-            if self.nucRate[p,i]*(self.time[i]-self.time[i-1]) >= 1 and self.Rcrit[p, i] >= self.Rmin[p]:
+            #Radius is set slightly larger so precipitate 
+            if self.nucRate[p,i]*(self.time[i]-self.time[i-1]) >= self.minNucleateDensity and self.Rcrit[p, i] >= self.Rmin[p]:
                 self.Rad[p, i] = self.Rcrit[p, i] + 0.5 * np.sqrt(self.kB * self.T[i] / (np.pi * self.gamma[p]))
             else:
                 self.Rad[p, i] = 0

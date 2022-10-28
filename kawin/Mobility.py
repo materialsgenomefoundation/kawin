@@ -110,9 +110,41 @@ class MobilityModel(Model):
 
         return mob, diff
 
+def mobility_from_composition_set(composition_set, mobility_callables = None, mobility_correction = None):
+    '''
+    Computes mobility from equilibrium results
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_callables : dict
+        Pre-computed mobility callables for each element
+    mobility_correction : dict (optional)
+        Factor to multiply mobility by for each given element (defaults to 1)
+
+    Returns
+    -------
+    Array for floats for mobility of each element (alphabetical order)
+    '''
+    if mobility_callables is None:
+        raise ValueError('mobility_callables is required')
+
+    elements = list(composition_set.phase_record.nonvacant_elements)
+
+    #Set mobility correction if not set
+    if mobility_correction is None:
+        mobility_correction = {A: 1 for A in elements}
+    else:
+        for A in elements:
+            if A not in mobility_correction:
+                mobility_correction[A] = 1
+
+    return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
+    
+
 def tracer_diffusivity(composition_set, mobility_callables = None, mobility_correction = None):
     '''
-    Computers tracer diffusivity for given equilibrium results
+    Computes tracer diffusivity for given equilibrium results
     D = MRT
 
     Parameters
@@ -132,17 +164,7 @@ def tracer_diffusivity(composition_set, mobility_callables = None, mobility_corr
 
     R = 8.314
     T = composition_set.dof[composition_set.phase_record.state_variables.index(v.T)]
-    elements = list(composition_set.phase_record.nonvacant_elements)
-
-    #Set mobility correction if not set
-    if mobility_correction is None:
-        mobility_correction = {A: 1 for A in elements}
-    else:
-        for A in elements:
-            if A not in mobility_correction:
-                mobility_correction[A] = 1
-
-    return R * T * np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
+    return R * T * mobility_from_composition_set(composition_set, mobility_callables, mobility_correction)
 
 def tracer_diffusivity_from_diff(composition_set, diffusivity_callables = None, diffusivity_correction = None):
     '''
@@ -195,21 +217,11 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     Matrix of floats
         Each index along an axis correspond to elements in alphabetical order
     '''
-    if mobility_callables is None:
-        raise ValueError('mobility_callables is required')
-
     elements = list(composition_set.phase_record.nonvacant_elements)
     X = composition_set.X
 
-    #Set mobility correction if not set
-    if mobility_correction is None:
-        mobility_correction = {A: 1 for A in elements}
-    else:
-        for A in elements:
-            if A not in mobility_correction:
-                mobility_correction[A] = 1
-
-    mob = np.array([X[A] * mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
+    computedMob = mobility_from_composition_set(composition_set, mobility_callables, mobility_correction)
+    mob = np.array([X[A] * computedMob[A] for A in range(len(elements))])
 
     mobMatrix = np.zeros((len(elements), len(elements)))
     for a in range(len(elements)):

@@ -39,6 +39,7 @@ class StrainEnergy:
         self._gElasticConstant = 0
 
         #Cached values for calculating equilibrium aspect ratio
+        self.ifmethod = 1
         self._aspectRatios = None
         self._normEnergies = None
         self._cachedRange = 5
@@ -63,6 +64,21 @@ class StrainEnergy:
         '''
         self._cachedRange = cachedRange
         self._cachedIntervals = int(1 / resolution)
+
+    def setInterfacialEnergyMethod(self, method):
+        '''
+        Sets method for calculating interfacial energy as a function of aspect ratio
+
+        Parameters
+        ----------
+        method : str
+            'eqradius' - interfacial energy is determined using the equivalent spherical radius
+            'thermo' - interfacial energy is determined using dG/dSA (default)
+        '''
+        if method == 'eqradius':
+            self.ifmethod = 0
+        else:
+            self.ifmethod = 1
 
     def setSpherical(self):
         '''
@@ -722,8 +738,7 @@ class StrainEnergy:
             Default is 1.001 and 100
         '''
         normR = shpFactor._normalRadiiEquation
-        #interfacial = shpFactor._eqRadiusEquation
-        interfacial = shpFactor._thermoEquation
+        interfacial = shpFactor._thermoEquation if self.ifmethod == 1 else shpFactor._eqRadiusEquation
         if hasattr(Rsph, '__len__'):
             eqAR = np.ones(len(Rsph))
             for i in range(len(Rsph)):
@@ -793,8 +808,7 @@ class StrainEnergy:
         shpFactor : ShapeFactor object
         '''
         normR = shpFactor._normalRadiiEquation
-        #interfacial = shpFactor._eqRadiusEquation
-        interfacial = shpFactor._thermoEquation
+        interfacial = shpFactor._thermoEquation if self.ifmethod == 1 else shpFactor._eqRadiusEquation
         if hasattr(Rsph, '__len__'):
             eqAR = np.ones(len(Rsph))
             for i in range(len(Rsph)):

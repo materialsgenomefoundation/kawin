@@ -61,16 +61,6 @@ class PopulationBalanceModel:
         
         self.reset()
 
-        #Hidden variable for use in KWNEuler when determining composition assuming no diffusion in precipitate
-        #Represents d(PSD)/dr * growth rate * dt
-        #I would like this variable to be in KWNEuler, but this way is much easier
-        self._fv = np.zeros(self.bins + 1)
-
-        #Hidden variable for use in KWNEuler when adaptive time stepping is enabled
-        #This allows for PSD to revert to its previous value if a time constraint is not met
-        self._prevPSD = np.zeros(self.bins)
-        self._prevPSDbounds = np.zeros(self.bins)
-
         self._adaptiveBinSize = True
 
     def setAdaptiveBinSize(self, adaptive):
@@ -148,6 +138,16 @@ class PopulationBalanceModel:
         self.PSDsize = 0.5 * (self.PSDbounds[:-1] + self.PSDbounds[1:])
             
         self.PSD = np.zeros(self.bins)
+
+        #Hidden variable for use in KWNEuler when determining composition assuming no diffusion in precipitate
+        #Represents d(PSD)/dr * growth rate * dt
+        #I would like this variable to be in KWNEuler, but this way is much easier
+        self._fv = np.zeros(self.bins + 1)
+
+        #Hidden variable for use in KWNEuler when adaptive time stepping is enabled
+        #This allows for PSD to revert to its previous value if a time constraint is not met
+        self._prevPSD = np.zeros(self.bins)
+        self._prevPSDbounds = np.zeros(self.bins+1)
 
     def changeSizeClasses(self, cMin, cMax, bins = None, resetPSD = False):
         '''
@@ -461,6 +461,8 @@ class PopulationBalanceModel:
         '''
         if hasattr(scale, '__len__'):
             scale = np.interp(self.PSDsize, self.PSDbounds, scale)
+        else:
+            scale = scale * np.ones(self.PSDsize)
 
         if fill:
             axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
@@ -492,6 +494,8 @@ class PopulationBalanceModel:
         '''
         if hasattr(scale, '__len__'):
             scale = np.interp(self.PSDsize, self.PSDbounds, scale)
+        else:
+            scale = scale * np.ones(self.PSDsize)
 
         if fill:
             axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
@@ -501,12 +505,12 @@ class PopulationBalanceModel:
         #Set x-limits
         if logX:
             if self.min == 0:
-                axes.set_xlim([self.PSDbounds[1]*scale, self.max*scale])
+                axes.set_xlim([self.PSDbounds[1]*scale[0], self.max*scale[-1]])
             else:
-                axes.set_xlim([self.min*scale, self.max*scale])
+                axes.set_xlim([self.min*scale[0], self.max*scale[-1]])
             axes.set_xscale('log')
         else:
-            axes.set_xlim([self.min*scale, self.max*scale]) 
+            axes.set_xlim([self.min*scale[0], self.max*scale[-1]]) 
 
         #Set y-limits
         if logY:
@@ -545,6 +549,8 @@ class PopulationBalanceModel:
 
         if hasattr(scale, '__len__'):
             scale = np.interp(x, self.PSDbounds, scale)
+        else:
+            scale = scale * np.ones(x)
         
         if fill:
             axes.fill_between(x * scale, y, np.zeros(len(y)), *args, **kwargs)
@@ -587,6 +593,8 @@ class PopulationBalanceModel:
 
         if hasattr(scale, '__len__'):
             scale = np.interp(xCoord, self.PSDbounds, scale)
+        else:
+            scale = scale * np.ones(xCoord)
 
         if outline != 'no outline':
             axes.plot(xCoord * scale, yCoord, *args, **kwargs)
@@ -617,6 +625,8 @@ class PopulationBalanceModel:
         '''
         if hasattr(scale, '__len__'):
             scale = np.interp(self.PSDsize, self.PSDbounds, scale)
+        else:
+            scale = scale * np.ones(self.PSDsize)
 
         axes.plot(self.PSDsize * scale, self.CumulativeMoment(order) / self.Moment(order), *args, **kwargs)
         self.setAxes(axes, scale, logX, False) 
@@ -637,12 +647,12 @@ class PopulationBalanceModel:
         '''    
         if logX:
             if self.min == 0:
-                axes.set_xlim([self.PSDbounds[1]*scale, self.max*scale])
+                axes.set_xlim([self.PSDbounds[1]*scale[0], self.max*scale[-1]])
             else:
-                axes.set_xlim([self.min*scale, self.max*scale])
+                axes.set_xlim([self.min*scale[0], self.max*scale[-1]])
             axes.set_xscale('log')
         else:
-            axes.set_xlim([self.min*scale, self.max*scale])
+            axes.set_xlim([self.min*scale[0], self.max*scale[-1]])
 
         #Don't set y limits if the PSD is empty
         if any(self.PSD > 0): 

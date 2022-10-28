@@ -41,8 +41,8 @@ def test_Surr_binary_DG_output():
     assert hasattr(xParray, '__len__') and len(xParray) == 2
 
     #Compare to Thermodynamics, high tolerance since we're just checking that functions are interchangeable
-    assert_allclose(dg, dgT, rtol=1e-1)
-    assert_allclose(xP, xPT, rtol=1e-1)
+    assert_allclose(dg, dgT, atol=0, rtol=1e-1)
+    assert_allclose(xP, xPT, atol=0, rtol=1e-1)
 
 def test_Surr_binary_IC_output():
     '''
@@ -74,8 +74,8 @@ def test_Surr_binary_IC_output():
     assert hasattr(xparray2, '__len__') and len(xparray2) == 2
 
     #Compare to Thermodynamics, high tolerance since we're just checking that functions are interchangeable
-    assert_allclose(xm, xmT, rtol=1e-1)
-    assert_allclose(xp, xpT, rtol=1e-1)
+    assert_allclose(xm, xmT, atol=0, rtol=1e-1)
+    assert_allclose(xp, xpT, atol=0, rtol=1e-1)
 
 
 def test_Surr_binary_Diff_output():
@@ -102,7 +102,7 @@ def test_Surr_binary_Diff_output():
     assert hasattr(dnkjarray, '__len__') and len(dnkjarray) == 2
 
     #Compare to Thermodynamics, high tolerance since we're just checking that functions are interchangeable
-    assert_allclose(dnkj, dnkjT, rtol=1e-1)
+    assert_allclose(dnkj, dnkjT, atol=0, rtol=1e-1)
 
 def test_Surr_binary_save():
     '''
@@ -151,7 +151,7 @@ def test_Surr_binary_save_missing():
 
     os.remove('kawin/tests/alzr')
 
-    assert_allclose(a, a2, rtol=1e-3)
+    assert_allclose(a, a2, atol=0, rtol=1e-3)
 
 def test_Surr_ternary_DG_output():
     '''
@@ -178,8 +178,8 @@ def test_Surr_ternary_DG_output():
     assert xParray.shape == (3, 2)
 
     #Compare to Thermodynamics, high tolerance since we're just checking that functions are interchangeable
-    assert_allclose(dg, dgT, rtol=1e-1)
-    assert_allclose(xP, xPT, rtol=1e-1)
+    assert_allclose(dg, dgT, atol=0, rtol=1e-1)
+    assert_allclose(xP, xPT, atol=0, rtol=1e-1)
 
 def test_Surr_ternary_IC_output():
     '''
@@ -212,9 +212,9 @@ def test_Surr_ternary_IC_output():
     assert hasattr(caEQarray, '__len__') and len(caEQarray) == 2
 
     #Compare to Thermodynamics, high tolerance since we're just checking that functions are interchangeable
-    assert_allclose(g, gT, rtol=1e-1)
-    assert_allclose(ca, caT, rtol=1e-1)
-    assert_allclose(cb, cbT, rtol=1e-1)
+    assert_allclose(g, gT, atol=0, rtol=1e-1)
+    assert_allclose(ca, caT, atol=0, rtol=1e-1)
+    assert_allclose(cb, cbT, atol=0, rtol=1e-1)
 
 def test_Surr_ternary_save():
     '''
@@ -240,7 +240,7 @@ def test_Surr_ternary_save():
 
     os.remove('kawin/tests/nicral')
 
-    assert_allclose([a, b[0], b[1], g, ca[0], ca[1], cb[0], cb[1], beta], [a2, b2[0], b2[1], g2, ca2[0], ca2[1], cb2[0], cb2[1], beta2], rtol=1e-3)
+    assert_allclose([a, b[0], b[1], g, ca[0], ca[1], cb[0], cb[1], beta], [a2, b2[0], b2[1], g2, ca2[0], ca2[1], cb2[0], cb2[1], beta2], atol=0, rtol=1e-3)
 
 def test_Surr_ternary_save_missing():
     '''
@@ -258,4 +258,4 @@ def test_Surr_ternary_save_missing():
     a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25, True)
     os.remove('kawin/tests/nicral')
 
-    assert_allclose([a, b[0], b[1]], [a2, b2[0], b2[1]], rtol=1e-3)
+    assert_allclose([a, b[0], b[1]], [a2, b2[0], b2[1]], atol=0, rtol=1e-3)

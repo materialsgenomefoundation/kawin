@@ -37,7 +37,7 @@ def test_addBins():
     assert_allclose(pbm.max, finalLength, rtol=1e-6)
     assert(len(pbm.PSDbounds) == bins+qBins+1)
     assert(len(pbm.PSDsize) == bins+qBins)
-    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), rtol=1e-6)
+    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
     pbm.reset()
 
 def test_increaseBinSize():
@@ -53,7 +53,7 @@ def test_increaseBinSize():
     assert_allclose(pbm.max, finalLength, rtol=1e-6)
     assert(len(pbm.PSDbounds) == minBins+1)
     assert(len(pbm.PSDsize) == minBins)
-    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), rtol=1e-6)
+    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
     pbm.reset()
 
 def test_decreaseBinSize():
@@ -69,7 +69,7 @@ def test_decreaseBinSize():
     assert_allclose(pbm.max, finalLength, rtol=1e-6)
     assert(len(pbm.PSDbounds) == maxBins+1)
     assert(len(pbm.PSDsize) == maxBins)
-    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), rtol=1e-6)
+    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
     pbm.reset()
 
 def test_nucleateSmall():
@@ -95,7 +95,7 @@ def test_nucleateBig():
     assert(len(pbm.PSDsize) == bins)
     assert(pbm.Moment(0) == 10)
     assert_allclose(pbm.PSDbounds[-1], 5*r, rtol=1e-6)
-    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), rtol=1e-6)
+    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
     pbm.reset()
 
 def test_DT():

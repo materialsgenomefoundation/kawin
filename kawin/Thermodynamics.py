@@ -49,10 +49,9 @@ class GeneralThermodynamics:
     gOffset = 1      #Small value to add to precipitate phase for when order/disorder models are used
 
     def __init__(self, database, elements, phases, drivingForceMethod = 'approximate'):
-        if type(database) == str:
+        if isinstance(database, str):
             database = Database(database)
         self.db = database
-        assert type(self.db) == Database  # make sure we have a pycalphad database at this point
         
         self.elements = elements
 

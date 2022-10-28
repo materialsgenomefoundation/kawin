@@ -51,7 +51,7 @@ class GeneralThermodynamics:
     def __init__(self, database, elements, phases, drivingForceMethod = 'approximate'):
         if isinstance(database, str):
             database = Database(database)
-
+        self.db = database
         self.elements = copy.copy(elements)
 
         if 'VA' not in self.elements:

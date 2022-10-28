@@ -228,9 +228,11 @@ class PrecipitateBase:
                 csv.writer(f).writerows(rows)
         else:
             if compressed:
-                np.savez_compressed(filename, **vDict, allow_pickle=True)
+                np.savez_compressed(filename, **vDict)
+                #np.savez_compressed(filename, **vDict, allow_pickle=True)
             else:
-                np.savez(filename, **vDict, allow_pickle=True)
+                np.savez(filename, **vDict)
+                #np.savez(filename, **vDict, allow_pickle=True)
 
     def load(filename):
         '''

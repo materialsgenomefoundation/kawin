@@ -48,6 +48,12 @@ class DiffusionModel:
         self.maxCompositionChange = 0.002
 
     def reset(self):
+        '''
+        Resets model
+
+        This involves clearing any caches in the Thermodynamics object and this model
+        as well as resetting the composition and phase profiles
+        '''
         if self.therm is not None:
             self.therm.clearCache()
         
@@ -57,13 +63,40 @@ class DiffusionModel:
         self.isSetup = False
 
     def setThermodynamics(self, thermodynamics):
+        '''
+        Defines thermodynamics object for the diffusion model
+
+        Parameters
+        ----------
+        thermodynamics : Thermodynamics object
+            Requires the elements in the Thermodynamics and DiffusionModel objects to have the same order
+        '''
         self.therm = thermodynamics
 
     def setTemperature(self, T):
+        '''
+        Sets iso-thermal temperature
+
+        Parameters
+        ----------
+        T : float
+            Temperature in Kelvin
+        '''
         self.T = T
 
     def save(self, filename, compressed = False, toCSV = False):
-        #Saves mesh, composition and phases
+        '''
+        Saves mesh, composition and phases
+
+        Parameters
+        ----------
+        filename : str
+            File to save to
+        compressed : bool
+            Whether to compress data if saving to numpy binary format (toCSV = False)
+        toCSV : bool
+            Whether to output data to a .CSV file format
+        '''
         if toCSV:
             headers = ['Distance(m)']
             arrays = [self.z]
@@ -91,6 +124,12 @@ class DiffusionModel:
                 np.savez(filename, **vDict, allow_pickle=True)
 
     def load(filename):
+        '''
+        Loads a previously saved model
+
+        filename : str
+            File name to load model from, must include file extension
+        '''
         if '.np' in filename.lower():
             data = np.load(filename, allow_pickle=True)
             model = DiffusionModel(data['zlim'], data['N'], data['allElements'], data['phases'])
@@ -131,16 +170,48 @@ class DiffusionModel:
         return model   
 
     def setHashSensitivity(self, s):
+        '''
+        Sets sensitivity of the hash table by significant digits
+
+        For example, if a composition set is (0.5693, 0.2937) and s = 3, then
+        the hash will be stored as (0.569, 0.294)
+
+        Lower s values will give faster simulation times at the expense of accuracy
+
+        Parameters
+        ----------
+        s : int
+            Number of significant digits to keep for the hash table
+        '''
         self.hashSensitivity = np.power(10, int(s))
 
     def _getHash(self, x):
+        '''
+        Gets hash value for a composition set
+
+        Parameters
+        ----------
+        x : list of floats
+            Composition set to create hash
+        '''
         return hash(tuple((x*self.hashSensitivity).astype(np.int32)))
         #return int(np.sum(np.power(self.hashSensitivity, 1+np.arange(len(x))) * x))
 
     def useCache(self, use):
+        '''
+        Whether to use the hash table
+
+        Parameters
+        ----------
+        use : bool
+            If True, then the hash table will be used
+        '''
         self.cache = use
 
     def clearCache(self):
+        '''
+        Clears hash table
+        '''
         self.hashTable = {}
 
     def _getElementIndex(self, element = None):
@@ -149,7 +220,7 @@ class DiffusionModel:
 
         Parameters
         ----------
-        elements : str
+        element : str
             Specified element, will return first element if None
         '''
         if element is None:
@@ -158,6 +229,14 @@ class DiffusionModel:
             return self.elements.index(element)
 
     def _getPhaseIndex(self, phase = None):
+        '''
+        Gets index of phase in self.phases
+
+        Parameters
+        ----------
+        phase : str
+            Specified phase, will return first phase if None
+        '''
         if phase is None:
             return 0
         else:
@@ -303,21 +382,39 @@ class DiffusionModel:
         self.x[eIndex,:] = np.interp(self.z, z, x)
 
     def setup(self):
-        self.therm.clearCache()
+        '''
+        General setup function for all diffusio models
+
+        This will clear any cached values in the thermodynamics function and check if all compositions add up to 1
+
+        This will also make sure that all compositions are not 0 or 1 to speed up equilibrium calculations
+        '''
+        if self.therm is not None:
+            self.therm.clearCache()
         xsum = np.sum(self.x, axis=0)
         if any(xsum > 1):
-            raise Exception('Warning: some compositions sum up to above 1')
+            print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[xsum>1]), np.amax(self.z[xsum>1])))
+            raise Exception('Some compositions sum up to above 1')
         self.x[self.x > self.minComposition] = self.x[self.x > self.minComposition] - len(self.allElements) * self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
         self.isSetup = True
 
     def getFluxes(self):
+        '''
+        "Virtual" function to be implemented by child objects
+        '''
         return [], []
 
     def updateMesh(self):
+        '''
+        "Virtual" function to be implemented by child objects
+        '''
         pass
 
     def update(self):
+        '''
+        Updates the mesh by a given dt that is calculated for numerical stability
+        '''
         #Get fluxes
         fluxes, dt = self.getFluxes()
 
@@ -330,6 +427,9 @@ class DiffusionModel:
         self.t += dt
 
     def solve(self, simTime, verbose=False, vIt=10):
+        '''
+        Solves the model by updated the mesh until the final simulation time is met
+        '''
         self.setup()
 
         self.t = 0
@@ -497,6 +597,17 @@ class DiffusionModel:
 
 class SinglePhaseModel(DiffusionModel):
     def getFluxes(self):
+        '''
+        Gets fluxes at the boundary of each nodes
+
+        Returns
+        -------
+        fluxes : (e-1, n+1) array of floats
+            e - number of elements including reference element
+            n - number of nodes
+        dt : float
+            Maximum calculated time interval for numerical stability
+        '''
         xMid = (self.x[:,1:] + self.x[:,:-1]) / 2
 
         if len(self.elements) == 1:
@@ -557,6 +668,11 @@ class HomogenizationModel(DiffusionModel):
         self.labFactor = 1
 
     def reset(self):
+        '''
+        Resets model
+
+        This also includes chemical potential and pycalphad CompositionSets for each node
+        '''
         super().reset()
         self.mu = np.zeros((len(self.elements)+1, self.N))
         self.compSets = [None for _ in range(self.N)]
@@ -607,14 +723,19 @@ class HomogenizationModel(DiffusionModel):
         self.labFactor = n
 
     def setup(self):
+        '''
+        Sets up model
+
+        This also includes getting the CompositionSets for each node
+        '''
         super().setup()
         #self.midX = 0.5 * (self.x[:,1:] + self.x[:,:-1])
         self.p = self.updateCompSets(self.x)
 
-    def solve(self, simTime, verbose=False, vIt=10):
-        super().solve(simTime, verbose, vIt)
-
     def _newEqCalc(self, x):
+        '''
+        Calculates equilibrium and returns a CompositionSet
+        '''
         eq = self.therm.getEq(x, self.T, 0, self.phases)
         state_variables = np.array([0, 1, 101325, self.T], dtype=np.float64)
         stable_phases = eq.Phase.values.ravel()
@@ -632,6 +753,27 @@ class HomogenizationModel(DiffusionModel):
         return self.therm.getLocalEq(x, self.T, 0, self.phases, comp)
 
     def updateCompSets(self, xarray):
+        '''
+        Updates the array of CompositionSets
+
+        If an equilibrium calculation is already done for a given composition, 
+        the CompositionSet will be taken out of the hash table
+
+        Otherwise, a new equilibrium calculation will be performed
+
+        Parameters
+        ----------
+        xarray : (e-1, N) array
+            Composition for each node
+            e is number of elements
+            N is number of nodes
+
+        Returns
+        -------
+        parray : (p, N) array
+            Phase fractions for each node
+            p is number of phases
+        '''
         parray = np.zeros((len(self.phases), xarray.shape[1]))
         for i in range(parray.shape[1]):
             if self.cache:
@@ -777,9 +919,10 @@ class HomogenizationModel(DiffusionModel):
         return avgMob
 
     def getFluxes(self):
+        '''
+        Return fluxes and time interval for the current iteration
+        '''
         self.p = self.updateCompSets(self.x)
-        #for i in range(self.N):
-        #    print(i, self.compSets[i], self.p[:,i], self.x[:,i])
 
         #Get average mobility between nodes
         avgMob = self.mobilityFunction(self.x)
@@ -813,13 +956,16 @@ class HomogenizationModel(DiffusionModel):
             vfluxes[e,-1] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else vfluxes[e,-2]
 
         #Time increment
-        #HOW DO WE DO THIS!?!?!?
+        #This is done by finding the time interval such that the composition
+        # change caused by the fluxes will be lower than self.maxCompositionChange
         dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
         dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
-        #print(dt)
 
         return vfluxes, dt
         
     def updateMesh(self, fluxes, dt):
+        '''
+        Updates the mesh based off the fluxes and time interval
+        '''
         for e in range(len(self.elements)):
             self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz

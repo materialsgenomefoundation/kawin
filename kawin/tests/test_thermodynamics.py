@@ -5,7 +5,9 @@ from kawin.tests.datasets import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='approximate')
 NiCrAlTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
+NiCrAlThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
 NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
+NiAlCrThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
 AlCrNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'CR', 'NI'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
 
 #Set constant sampling densities for each Thermodynamics object
@@ -15,8 +17,12 @@ AlZrTherm.setDFSamplingDensity(2000)
 AlZrTherm.setEQSamplingDensity(500)
 NiCrAlTherm.setDFSamplingDensity(2000)
 NiCrAlTherm.setEQSamplingDensity(500)
+NiCrAlThermDiff.setDFSamplingDensity(2000)
+NiCrAlThermDiff.setEQSamplingDensity(500)
 NiAlCrTherm.setDFSamplingDensity(2000)
 NiAlCrTherm.setEQSamplingDensity(500)
+NiAlCrThermDiff.setDFSamplingDensity(2000)
+NiAlCrThermDiff.setEQSamplingDensity(500)
 AlCrNiTherm.setDFSamplingDensity(2000)
 AlCrNiTherm.setEQSamplingDensity(500)
 
@@ -25,7 +31,7 @@ def test_DG_binary():
     Checks value of binary driving force calculation
     '''
     dg, _ = AlZrTherm.getDrivingForce(0.004, 673.15, training = True)
-    assert_allclose(dg, 6346.929428, rtol=1e-3)
+    assert_allclose(dg, 6346.929428, atol=0, rtol=1e-3)
 
 def test_DG_binary_output():
     '''
@@ -47,7 +53,7 @@ def test_DG_ternary():
     Checks value of ternary driving force calculation
     '''
     dg, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
-    assert_allclose(dg, 244.012027, rtol=1e-3)
+    assert_allclose(dg, 244.012027, atol=0, rtol=1e-3)
 
 def test_DG_ternary_output():
     '''
@@ -73,15 +79,15 @@ def test_DG_ternary_order():
     dg1, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
     dg2, _ = NiAlCrTherm.getDrivingForce([0.1, 0.08], 1073.15, training = True)
     dg3, _ = AlCrNiTherm.getDrivingForce([0.08, 0.82], 1073.15, training = True)
-    assert_allclose(dg1, dg2, rtol=1e-3)
-    assert_allclose(dg2, dg3, rtol=1e-3)
+    assert_allclose(dg1, dg2, atol=0, rtol=1e-3)
+    assert_allclose(dg2, dg3, atol=0, rtol=1e-3)
 
 def test_IC_binary():
     '''
     Check value of interfacial composition for binary case
     '''
     xm, xp = AlZrTherm.getInterfacialComposition(673.15, 10000)
-    assert_allclose(xm, 0.0233507, rtol=1e-3)
+    assert_allclose(xm, 0.0233507, atol=0, rtol=1e-3)
 
 def test_IC_unstable():
     '''
@@ -114,7 +120,7 @@ def test_Mob_binary():
     Checks value of binary interdiffusvity calculation
     '''
     dnkj = AlZrTherm.getInterdiffusivity(0.004, 673.15)
-    assert_allclose(dnkj, 1.280344e-20, rtol=1e-3)
+    assert_allclose(dnkj, 1.280344e-20, atol=0, rtol=1e-3)
 
 def test_Mob_binary_output():
     '''
@@ -133,7 +139,7 @@ def test_Mob_ternary():
     Checks value of ternary interdiffusivity calculation
     '''
     dnkj = NiCrAlTherm.getInterdiffusivity([0.08, 0.1], 1073.15)
-    assert_allclose(dnkj, [[8.239509e-18, 4.433713e-18], [2.339385e-17, 5.049116e-17]], rtol=1e-3)
+    assert_allclose(dnkj, [[8.239509e-18, 4.433713e-18], [2.339385e-17, 5.049116e-17]], atol=0, rtol=1e-3)
 
 def test_Mob_ternary_output():
     '''
@@ -158,7 +164,7 @@ def test_Mob_order():
     dnkj2 = NiAlCrTherm.getInterdiffusivity([0.1, 0.08], 1073.15)
     dnkj2[:,[0,1]] = dnkj2[:,[1,0]]
     dnkj2[[0,1],:] = dnkj2[[1,0],:]
-    assert_allclose(dnkj1, dnkj2, rtol=1e-3)
+    assert_allclose(dnkj1, dnkj2, atol=0, rtol=1e-3)
 
 def test_Curv_ternary():
     '''
@@ -178,16 +184,16 @@ def test_Curv_ternary():
 
     #Will only test d3, b3 and ca3,cb3
     #n3 and g3 cannot be directly compared to n1 and g1
-    assert_allclose(n1, n2, rtol=1e-3)
-    assert_allclose(d1, d2, rtol=1e-3)
-    assert_allclose(d1, d3, rtol=1e-3)
-    assert_allclose(g1, g2, rtol=1e-3)
-    assert_allclose(b1, b2, rtol=1e-3)
-    assert_allclose(b1, b3, rtol=1e-3)
-    assert_allclose(ca1, ca2, rtol=1e-3)
-    assert_allclose(ca1, ca3change, rtol=1e-3)
-    assert_allclose(cb1, cb2, rtol=1e-3)
-    assert_allclose(cb1, cb3change, rtol=1e-3)
+    assert_allclose(n1, n2, atol=0, rtol=1e-3)
+    assert_allclose(d1, d2, atol=0, rtol=1e-3)
+    assert_allclose(d1, d3, atol=0, rtol=1e-3)
+    assert_allclose(g1, g2, atol=0, rtol=1e-3)
+    assert_allclose(b1, b2, atol=0, rtol=1e-3)
+    assert_allclose(b1, b3, atol=0, rtol=1e-3)
+    assert_allclose(ca1, ca2, atol=0, rtol=1e-3)
+    assert_allclose(ca1, ca3change, atol=0, rtol=1e-3)
+    assert_allclose(cb1, cb2, atol=0, rtol=1e-3)
+    assert_allclose(cb1, cb3change, atol=0, rtol=1e-3)
 
 def test_IC_ternary():
     '''
@@ -207,14 +213,14 @@ def test_IC_ternary():
     ca3change = [ca3[0], 1-ca3[0]-ca3[1]]
     cb3change = [cb3[0], 1-cb3[0]-cb3[1]]
 
-    assert_allclose(g1, -1.618827e-09, rtol=1e-3)
+    assert_allclose(g1, -1.618827e-09, atol=0, rtol=1e-3)
 
-    assert_allclose(g1, g2, rtol=1e-3)
-    assert_allclose(g1, g3, rtol=1e-3)
-    assert_allclose(ca1, ca2, rtol=1e-3)
-    assert_allclose(ca1, ca3change, rtol=1e-3)
-    assert_allclose(cb1, cb2, rtol=1e-3)
-    assert_allclose(cb1, cb3change, rtol=1e-3)
+    assert_allclose(g1, g2, atol=0, rtol=1e-3)
+    assert_allclose(g1, g3, atol=0, rtol=1e-3)
+    assert_allclose(ca1, ca2, atol=0, rtol=1e-3)
+    assert_allclose(ca1, ca3change, atol=0, rtol=1e-3)
+    assert_allclose(cb1, cb2, atol=0, rtol=1e-3)
+    assert_allclose(cb1, cb3change, atol=0, rtol=1e-3)
 
 def test_IC_ternary_output():
     '''
@@ -232,3 +238,75 @@ def test_IC_ternary_output():
     assert hasattr(garray, '__len__') and len(garray) == 3
     assert caarray.shape == (3, 2)
     assert cbarray.shape == (3, 2)
+
+def test_Mob_tracer_ternary():
+    '''
+    Checks value of ternary tracer diffusivity calculation
+    '''
+    td = NiCrAlTherm.getTracerDiffusivity([0.08, 0.1], 1073.15)
+    assert_allclose(td, [8.039466e-18, 5.465542e-18, 1.520994e-17], rtol=1e-3)
+
+def test_Mob_tracer_ternary_output():
+    '''
+    Checks output of multicomponent mobility follows input
+    Ex. f(x, T) = diff
+        (array, scalar) -> 2D array
+        (2D array, array) -> 3D array
+    '''
+    td = NiCrAlTherm.getTracerDiffusivity([0.08, 0.1], 1073.15)
+    tdarray = NiCrAlTherm.getTracerDiffusivity([[0.08, 0.1], [0.085, 0.1]], [1073.15, 1078.15])
+
+    assert td.shape == (3,)
+    assert tdarray.shape == (2, 3)
+
+def test_Diff_ternary():
+    '''
+    Checks value of ternary interdiffusivity calculation
+    '''
+    dnkj = NiCrAlThermDiff.getInterdiffusivity([0.08, 0.1], 1073.15)
+    assert_allclose(dnkj, [[3.099307e-8, 0], [0, 1.958226e-8]], atol=0, rtol=1e-3)
+
+def test_Diff_ternary_output():
+    '''
+    Checks output of multicomponent mobility follows input
+    Ex. f(x, T) = diff
+        (array, scalar) -> 2D array
+        (2D array, array) -> 3D array
+    '''
+    dnkj = NiCrAlThermDiff.getInterdiffusivity([0.08, 0.1], 1073.15)
+    dnkjarray = NiCrAlThermDiff.getInterdiffusivity([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15])
+
+    assert dnkj.shape == (2, 2)
+    assert dnkjarray.shape == (3, 2, 2)
+
+def test_Diff_order():
+    '''
+    Test diffusivity matrix is given in correct order as input elements
+    Ex. [Ni, Cr, Al] should give diffusivity matrix of [[D_CrCr, D_CrAl], [D_AlCr, D_AlAl]]
+        and [Ni, Al, Cr] should give [[D_AlAl, D_AlCr], [D_CrAl, D_CrCr]]
+    '''
+    dnkj1 = NiCrAlThermDiff.getInterdiffusivity([0.08, 0.1], 1073.15)
+    dnkj2 = NiAlCrThermDiff.getInterdiffusivity([0.1, 0.08], 1073.15)
+    dnkj2[:,[0,1]] = dnkj2[:,[1,0]]
+    dnkj2[[0,1],:] = dnkj2[[1,0],:]
+    assert_allclose(dnkj1, dnkj2, atol=0, rtol=1e-3)
+
+def test_Diff_tracer_ternary():
+    '''
+    Checks value of ternary tracer diffusivity calculation
+    '''
+    td = NiCrAlThermDiff.getTracerDiffusivity([0.08, 0.1], 1073.15)
+    assert_allclose(td, [7.357088e-18, 3.099307e-8, 1.958226e-8], atol=0, rtol=1e-3)
+
+def test_Diff_tracer_ternary_output():
+    '''
+    Checks output of multicomponent mobility follows input
+    Ex. f(x, T) = diff
+        (array, scalar) -> 2D array
+        (2D array, array) -> 3D array
+    '''
+    td = NiCrAlTherm.getTracerDiffusivity([0.08, 0.1], 1073.15)
+    tdarray = NiCrAlTherm.getTracerDiffusivity([[0.08, 0.1], [0.085, 0.1]], [1073.15, 1078.15])
+
+    assert td.shape == (3,)
+    assert tdarray.shape == (2, 3)

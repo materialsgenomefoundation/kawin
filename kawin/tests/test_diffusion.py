@@ -44,7 +44,7 @@ def test_SinglePhaseFluxes():
     singleModelBinary.reset()
     singleModelBinary.setCompositionStep(0.2, 0.8, 0, 'CR')
     singleModelBinary.setThermodynamics(NiCrTherm)
-    singleModelBinary.setTemperature(800)
+    singleModelBinary.setTemperature(1073)
     singleModelBinary.setup()
 
     fBinary, _ = singleModelBinary.getFluxes()
@@ -53,7 +53,7 @@ def test_SinglePhaseFluxes():
     singleModelTernary.setCompositionStep(0.2, 0.4, 0, 'CR')
     singleModelTernary.setCompositionStep(0.4, 0.4, 0, 'AL')
     singleModelTernary.setThermodynamics(NiCrAlTherm)
-    singleModelTernary.setTemperature(800)
+    singleModelTernary.setTemperature(1073)
     singleModelTernary.setup()
 
     fTernary, _ = singleModelTernary.getFluxes()
@@ -72,7 +72,7 @@ def test_HomogenizationMobility():
     homogenizationBinary.reset()
     homogenizationBinary.setCompositionStep(0.2, 0.8, 0, 'CR')
     homogenizationBinary.setThermodynamics(NiCrTherm)
-    homogenizationBinary.setTemperature(800)
+    homogenizationBinary.setTemperature(1073)
     homogenizationBinary.setup()
 
     mobBinary = homogenizationBinary.getMobility(homogenizationBinary.x)
@@ -81,7 +81,7 @@ def test_HomogenizationMobility():
     homogenizationTernary.setCompositionStep(0.2, 0.4, 0, 'CR')
     homogenizationTernary.setCompositionStep(0.4, 0.4, 0, 'AL')
     homogenizationTernary.setThermodynamics(NiCrAlTherm)
-    homogenizationTernary.setTemperature(800)
+    homogenizationTernary.setTemperature(1073)
     homogenizationTernary.setup()
 
     mobTernary = homogenizationTernary.getMobility(homogenizationTernary.x)
@@ -95,10 +95,11 @@ def test_homogenizationSinglePhaseMobility():
     the same mobility of the single phase itself
     '''
     homogenizationTernary.reset()
-    homogenizationTernary.setCompositionStep(0.1, 0.4, 0, 'CR')
-    homogenizationTernary.setCompositionStep(0.1, 0.4, 0, 'AL')
+    #Ni-5Cr-5Al should always be FCC_A1
+    homogenizationTernary.setCompositionStep(0.05, 0.4, 0, 'CR')
+    homogenizationTernary.setCompositionStep(0.05, 0.4, 0, 'AL')
     homogenizationTernary.setThermodynamics(NiCrAlTherm)
-    homogenizationTernary.setTemperature(800)
+    homogenizationTernary.setTemperature(1073)
     homogenizationTernary.setup()
 
     mob = homogenizationTernary.getMobility(homogenizationTernary.x)
@@ -110,5 +111,97 @@ def test_homogenizationSinglePhaseMobility():
         homogenizationTernary.setup()
         homogenizationTernary.setMobilityFunction(f)
         mobs.append(homogenizationTernary.mobilityFunction(homogenizationTernary.x))
-        assert(np.allclose(mobs[-1][:,0], mob[0,:,0], rtol=1e-3))
+        assert(np.allclose(mobs[-1][:,0], mob[0,:,0], atol=0, rtol=1e-3))
+
+def test_homogenization_wiener_upper():
+    '''
+    Tests output of wiener upper bounds in single and two-phase regions
+    '''
+    homogenizationTernary.clearCache()
+    homogenizationTernary.reset()
+    #Ni-5Cr-5Al should always be FCC_A1
+    homogenizationTernary.setCompositionStep(0.05, 0.7, 0, 'CR')
+    homogenizationTernary.setCompositionStep(0.05, 0.05, 0, 'AL')
+    homogenizationTernary.setThermodynamics(NiCrAlTherm)
+    homogenizationTernary.setTemperature(1073)
+    homogenizationTernary.setup()
+    homogenizationTernary.setMobilityFunction('wiener upper')
+
+    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
+    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
+    assert(np.allclose(mob[:,-1], [2.025338e-22, 5.106062e-22, 8.524977e-23], atol=0, rtol=1e-3))
+
+def test_homogenization_wiener_lower():
+    '''
+    Tests output of wiener upper bounds in single and two-phase regions
+    '''
+    homogenizationTernary.clearCache()
+    homogenizationTernary.reset()
+    #Ni-5Cr-5Al should always be FCC_A1
+    homogenizationTernary.setCompositionStep(0.05, 0.7, 0, 'CR')
+    homogenizationTernary.setCompositionStep(0.05, 0.05, 0, 'AL')
+    homogenizationTernary.setThermodynamics(NiCrAlTherm)
+    homogenizationTernary.setTemperature(1073)
+    homogenizationTernary.setup()
+    homogenizationTernary.setMobilityFunction('wiener lower')
+
+    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
+    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
+    assert(np.allclose(mob[:,-1], [1.527894e-21, 3.851959e-21, 6.431152e-22], atol=0, rtol=1e-3))
+
+def test_homogenization_hashin_upper():
+    '''
+    Tests output of wiener upper bounds in single and two-phase regions
+    '''
+    homogenizationTernary.clearCache()
+    homogenizationTernary.reset()
+    #Ni-5Cr-5Al should always be FCC_A1
+    homogenizationTernary.setCompositionStep(0.05, 0.7, 0, 'CR')
+    homogenizationTernary.setCompositionStep(0.05, 0.05, 0, 'AL')
+    homogenizationTernary.setThermodynamics(NiCrAlTherm)
+    homogenizationTernary.setTemperature(1073)
+    homogenizationTernary.setup()
+    homogenizationTernary.setMobilityFunction('hashin upper')
+
+    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
+    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
+    assert(np.allclose(mob[:,-1], [1.536725e-22, 3.874223e-22, 6.468323e-23], atol=0, rtol=1e-3))
+
+def test_homogenization_hashin_lower():
+    '''
+    Tests output of wiener upper bounds in single and two-phase regions
+    '''
+    homogenizationTernary.clearCache()
+    homogenizationTernary.reset()
+    #Ni-5Cr-5Al should always be FCC_A1
+    homogenizationTernary.setCompositionStep(0.05, 0.7, 0, 'CR')
+    homogenizationTernary.setCompositionStep(0.05, 0.05, 0, 'AL')
+    homogenizationTernary.setThermodynamics(NiCrAlTherm)
+    homogenizationTernary.setTemperature(1073)
+    homogenizationTernary.setup()
+    homogenizationTernary.setMobilityFunction('hashin lower')
+
+    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
+    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
+    assert(np.allclose(mob[:,-1], [3.471117e-21, 8.751001e-21, 1.461049e-21], atol=0, rtol=1e-3))
+
+def test_homogenization_lab():
+    '''
+    Tests output of wiener upper bounds in single and two-phase regions
+    '''
+    homogenizationTernary.clearCache()
+    homogenizationTernary.reset()
+    #Ni-5Cr-5Al should always be FCC_A1
+    homogenizationTernary.setCompositionStep(0.05, 0.7, 0, 'CR')
+    homogenizationTernary.setCompositionStep(0.05, 0.05, 0, 'AL')
+    homogenizationTernary.setThermodynamics(NiCrAlTherm)
+    homogenizationTernary.setTemperature(1073)
+    homogenizationTernary.setup()
+    homogenizationTernary.setMobilityFunction('lab')
+
+    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
+    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
+    assert(np.allclose(mob[:,-1], [2.025338e-22, 5.106062e-22, 8.524977e-23], atol=0, rtol=1e-3))
+
+
 

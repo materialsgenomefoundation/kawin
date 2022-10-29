@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.testing import assert_allclose
-from kawin.Thermodynamics import BinaryThermodynamics, GeneralThermodynamics, GeneralThermodynamics, MulticomponentThermodynamics
+from kawin.Thermodynamics import BinaryThermodynamics, GeneralThermodynamics, MulticomponentThermodynamics
 from kawin.tests.datasets import *
 from pycalphad import Database
 

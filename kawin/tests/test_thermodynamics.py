@@ -1,7 +1,8 @@
 import numpy as np
 from numpy.testing import assert_allclose
-from kawin.Thermodynamics import BinaryThermodynamics, MulticomponentThermodynamics
+from kawin.Thermodynamics import BinaryThermodynamics, GeneralThermodynamics, MulticomponentThermodynamics
 from kawin.tests.datasets import *
+from pycalphad import Database
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='approximate')
 NiCrAlTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
@@ -238,6 +239,19 @@ def test_IC_ternary_output():
     assert hasattr(garray, '__len__') and len(garray) == 3
     assert caarray.shape == (3, 2)
     assert cbarray.shape == (3, 2)
+
+
+def test_initialize_with_pycalphad_database():
+    """
+    Checks that a pycalphad Database object can be passed to the kawin.GeneralThermodynamics class.
+    """
+    GeneralThermodynamics(Database(ALZR_TDB), ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='approximate')
+
+def test_initialize_with_single_phase():
+    """
+    Checks if a single phase was passed as a string instead of multiple phases passed as a list of strings.
+    """
+    GeneralThermodynamics(ALZR_TDB, ['AL', 'ZR'], 'FCC_A1')
 
 def test_Mob_tracer_ternary():
     '''

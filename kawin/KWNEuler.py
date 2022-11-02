@@ -36,13 +36,14 @@ class PrecipitateModel (PrecipitateBase):
 
         if self.numberOfElements == 1:
             self._growthRate = self._growthRateBinary
-            self._Beta = self._BetaBinary
+            self._Beta = self._BetaBinary1
         else:
             self._growthRate = self._growthRateMulti
             self._Beta = self._BetaMulti
 
         #Additional outputs
         self.additionalFunctions = []
+        self.additionalFunctionNames = []
         self.additionalOutputs = None
 
     def _resetArrays(self):
@@ -85,12 +86,13 @@ class PrecipitateModel (PrecipitateBase):
         vDict = {v: getattr(self, v) for v in variables}
         if self.additionalOutputs is not None:
             vDict['additionalOutputs'] = self.additionalOutputs
-            tempFunctions = {f['name']: f['func'] for f in self.additionalFunctions}
-            for f in self.additionalFunctions:
-                f['func'] = None
-            vDict['additionalFunctions'] = self.additionalFunctions
-            for f in self.additionalFunctions:
-                f['func'] = tempFunctions[f['name']]
+            vDict['additionalFunctionNames'] = self.additionalFunctionNames
+            #tempFunctions = {f['name']: f['func'] for f in self.additionalFunctions}
+            #for f in self.additionalFunctions:
+            #    f['func'] = None
+            #vDict['additionalFunctions'] = self.additionalFunctions
+            #for f in self.additionalFunctions:
+            #    f['func'] = tempFunctions[f['name']]
         for p in range(len(self.phases)):
             vDict['PSDdata_'+self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
             vDict['PSDsize_' + self.phases[p]] = self.PBM[p].PSDsize
@@ -137,9 +139,11 @@ class PrecipitateModel (PrecipitateBase):
                 csv.writer(f).writerows(rows)
         else:
             if compressed:
-                np.savez_compressed(filename, **vDict, allow_pickle=True)
+                np.savez_compressed(filename, **vDict)
+                #np.savez_compressed(filename, **vDict, allow_pickle=True)
             else:
-                np.savez(filename, **vDict, allow_pickle=True)
+                np.savez(filename, **vDict)
+                #np.savez(filename, **vDict, allow_pickle=True)
 
     def load(filename):
         '''
@@ -177,6 +181,7 @@ class PrecipitateModel (PrecipitateBase):
             if 'additionalOutputs' not in data:
                 model.additionalOutputs = None
                 model.additionalFunctions = []
+                model.additionalFunctionNames = []
         elif '.csv' in filename.lower():
             with open(filename, 'r') as csvFile:
                 data = csv.reader(csvFile, delimiter=',')
@@ -294,24 +299,29 @@ class PrecipitateModel (PrecipitateBase):
         index = self.phaseIndex(phase)
         self.PBM[index].LoadDistribution(data)
 
-    def addAdditionalOutput(self, name, f, moment=1, normalize='none'):
+    def addAdditionalOutput(self, name, f):
         '''
         Creates output based off PSD
 
         Parameters
         ----------
+        name : str
+            Name of the function
         f : function
-            Takes in radius and returns a value
-        moment : integer
-            Moment to calculate function
-        normalize : str
-            Method to normalize radius
-            Options are:
-                'none' - no normalization
-                'avg' - normalized by average radius
-                'crit' - normalized by critcal radius
+            Takes in model, phase index and iteration index and returns a value
         '''
-        self.additionalFunctions = np.append(self.additionalFunctions, {'name': name, 'func': f})
+        if name in self.additionalFunctionNames:
+            i = 1
+            name = name + '_{}'.format(i)
+            while name in self.additionalFunctionNames:
+                i += 1
+                name = name[:-2]
+                name = name + '_{}'.format(i)
+            print('Warning: Function \'{}\' has already been set, this function will be stored as \'{}\''.format(name[:-2], name))
+            
+        self.additionalFunctions.append(f)
+        self.additionalFunctionNames = np.append(self.additionalFunctionNames, name)
+        #self.additionalFunctions = np.append(self.additionalFunctions, {'name': name, 'func': f})
 
     def _setupAdditionalOutputs(self):
         '''
@@ -327,7 +337,25 @@ class PrecipitateModel (PrecipitateBase):
         '''
         for f in range(len(self.additionalFunctions)):
             for p in range(len(self.phases)):
-                self.additionalOutputs[p, i, f] = self.additionalFunctions[f]['func'](self, p, i)
+                self.additionalOutputs[p, i, f] = self.additionalFunctions[f](self, p, i)
+                #self.additionalOutputs[p, i, f] = self.additionalFunctions[f]['func'](self, p, i)
+
+    def getAdditionalOutput(self, name):
+        '''
+        Gets additional output by name
+
+        Parameters
+        ----------
+        name : str
+            Name of function used for the additional output
+
+        Returns
+        -------
+        (p, N) array for the output for each phase
+        '''
+        if name in self.additionalFunctionNames:
+            index, = np.where(self.additionalFunctionNames ==name)
+            return self.additionalOutputs[:, :, index[0]]
 
     def particleRadius(self, phase = None):
         '''

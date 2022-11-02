@@ -61,16 +61,6 @@ class PopulationBalanceModel:
         
         self.reset()
 
-        #Hidden variable for use in KWNEuler when determining composition assuming no diffusion in precipitate
-        #Represents d(PSD)/dr * growth rate * dt
-        #I would like this variable to be in KWNEuler, but this way is much easier
-        self._fv = np.zeros(self.bins + 1)
-
-        #Hidden variable for use in KWNEuler when adaptive time stepping is enabled
-        #This allows for PSD to revert to its previous value if a time constraint is not met
-        self._prevPSD = np.zeros(self.bins)
-        self._prevPSDbounds = np.zeros(self.bins)
-
         self._adaptiveBinSize = True
 
     def setAdaptiveBinSize(self, adaptive):
@@ -148,6 +138,16 @@ class PopulationBalanceModel:
         self.PSDsize = 0.5 * (self.PSDbounds[:-1] + self.PSDbounds[1:])
             
         self.PSD = np.zeros(self.bins)
+
+        #Hidden variable for use in KWNEuler when determining composition assuming no diffusion in precipitate
+        #Represents d(PSD)/dr * growth rate * dt
+        #I would like this variable to be in KWNEuler, but this way is much easier
+        self._fv = np.zeros(self.bins + 1)
+
+        #Hidden variable for use in KWNEuler when adaptive time stepping is enabled
+        #This allows for PSD to revert to its previous value if a time constraint is not met
+        self._prevPSD = np.zeros(self.bins)
+        self._prevPSDbounds = np.zeros(self.bins+1)
 
     def changeSizeClasses(self, cMin, cMax, bins = None, resetPSD = False):
         '''

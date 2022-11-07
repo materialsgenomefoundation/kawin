@@ -40,7 +40,7 @@ class PrecipitateBase:
         self.steps = int(steps)             #This includes the number of steps added when adaptive time stepping is enabled
         self.t0 = t0
         self.tf = tf
-        self.phases = phases
+        self.phases = np.array(phases)
         self.linearTimeSpacing = linearTimeSpacing
 
         #Change t0 to finite value if logarithmic time spacing
@@ -128,7 +128,7 @@ class PrecipitateBase:
         phase : str (optional)
             Precipitate phase (defaults to None, which will return 0)
         '''
-        return 0 if phase is None else self.phases.index(phase)
+        return 0 if phase is None else np.where(self.phases == phase)[0][0]
         
     def reset(self):
         '''

@@ -1,6 +1,15 @@
 import numpy as np
 
 class StrengthModel:
+    '''
+    Defines strength model
+
+    6 contributions are accounted for
+    For dislocation cutting, contributions are coherency, modulus, anti-phase boundary, stacking fault energy and interfacial energy
+    For dislocation bowing, contribution is orowan
+
+    Contributions can be added for all phases or for a single phase
+    '''
     def __init__(self):
         self.rssName = 'rss'
         self.LsName = 'Ls'
@@ -15,36 +24,45 @@ class StrengthModel:
         self.M = 2.24
 
         #Precipitate strength factors
-        self.coherencyEffect = False        #Coherency effect
-        self.modulusEffect = False          #Modulus effect
-        self.APBEffect = False              #Anti-phase boundary effect
-        self.SFEffect = False               #Stacking fault energy effect
-        self.IFEffect = False               #Interfacial energy effect
-        self.orowanEffect = False           #Non-shearable (Orowan) mechanism
+        self.coherencyEffect = {'all': False}        #Coherency effect
+        self.modulusEffect = {'all': False}          #Modulus effect
+        self.APBEffect = {'all': False}              #Anti-phase boundary effect
+        self.SFEffect = {'all': False}               #Stacking fault energy effect
+        self.IFEffect = {'all': False}               #Interfacial energy effect
+        self.orowanEffect = {'all': False}           #Non-shearable (Orowan) mechanism
 
-        #Parameters for dislocation line tension and general shear strength
-        self.G, self.b, self.nu, self.theta, self.ri, self.theta, self.psi = None, None, None, 0, None, 90*np.pi/180, 120*np.pi/180
+        #Parameters for dislocation line tension, general shear strength and orowan strengthening
+        #These parameters are for the matrix phase
+        self.G, self.b, self.nu, self.ri, self.theta, self.psi = None, None, None, None, 90*np.pi/180, 120*np.pi/180
 
+        #eps, GP, yAPB, ySFP and gamma are specific to a phase
         #Parameters for coherency effect
-        self.eps = None
+        self.eps = {}
 
         #Parameters for modulus effect
-        self.Gp, self.w1, self.w2 = None, 0.0722, 0.81
+        self.Gp, self.w1, self.w2 = {}, 0.0722, 0.81
 
         #Parameters for anti-phase boundary effect
-        self.yAPB, self.s, self.beta, self.V = None, 2, 1, 2.8
+        self.yAPB, self.s, self.beta, self.V = {}, 2, 1, 2.8
 
         #Parameters for stacking fault energy effect
-        self.ySFM, self.ySFP, self.bp = None, None, None
+        self.ySFM, self.ySFP, self.bp = None, {}, {}
 
         #Parameters for interfacial effect
-        self.gamma = None
+        self.gamma = {}
 
         #Model types for line tension and J
         self.T = self.Tcomplex
         self.J = self.Jsimple
 
     def _getStrengthFunctions(self):
+        '''
+        Internal function that creates arrays for dislocation cutting mechanisms
+
+        wfuncs, sfuncs - list of functions for each contribution for weak and strong effects
+        contributions - each contribution has a dictionary of str : boolean to say whether a phase has that contribution
+        labels - labels for plotting
+        '''
         wfuncs = [self.coherencyWeak, self.modulusWeak, self.APBweak, self.SFEweak, self.interfacialWeak]
         sfuncs = [self.coherencyStrong, self.modulusStrong, self.APBstrong, self.SFEstrong, self.interfacialStrong]
         contributions = [self.coherencyEffect, self.modulusEffect, self.APBEffect, self.SFEffect, self.IFEffect]
@@ -76,6 +94,9 @@ class StrengthModel:
         self.ssweights = weights
         self.ssexp = exp
 
+    def setTaylorFactor(self, M):
+        self.M = M
+
     def setDislocationParameters(self, G, b, nu = 1/3, ri = None, theta = 90, psi = 120):
         '''
         Parameters for dislocation line tension, used for all precipitate strength models
@@ -103,44 +124,12 @@ class StrengthModel:
         '''
         self.G = G
         self.b = b
-        if self.bp is None:
-            self.bp = b
         self.nu = nu
         self.ri = b if ri is None else ri
         self.theta = theta * np.pi/180
         self.psi = psi * np.pi/180
 
-    def _setFunctions(self):
-        '''
-        Sets strength contribution functions based off edge or screw dislocation
-        '''
-        if self.edgeDis:
-            self.coherencyWeakFunction = self.coherencyWeakEdge
-            self.coherencyStrongFunction = self.coherencyStrongEdge
-            self.modulusWeakFunction = self.modulusWeakEdge
-            self.APBweakFunction = self.APBweakEdge
-            self.APBstrongFunction = self.APBstrongEdge
-            self.SFEweakNarrowFunction = self.SFEweakNarrowEdge
-            self.SFEweakWideFunction = self.SFEweakWideEdge
-            self.SFEstrongNarrowFunction = self.SFEstrongNarrowEdge
-            self.interfacialweakFunction = self.interfacialWeakEdge
-        else:
-            self.coherencyWeakFunction = self.coherencyWeakScrew
-            self.coherencyStrongFunction = self.coherencyStrongScrew
-            self.modulusWeakFunction = self.modulusWeakScrew
-            self.APBweakFunction = self.APBweakScrew
-            self.APBstrongFunction = self.APBstrongScrew
-            self.SFEweakNarrowFunction = self.SFEweakNarrowScrew
-            self.SFEweakWideFunction = self.SFEweakWideScrew
-            self.SFEstrongNarrowFunction = self.SFEstrongNarrowScrew
-            self.interfacialweakFunction = self.interfacialWeakScrew
-
-        self.modulusStrongFunction = self.modulusStrong
-        self.SFEstrongWidefunction = self.SFEstrongWide
-        self.interfacialstrongfunction = self.interfacialStrong
-        self.orowanfunction = self.orowan
-
-    def setCoherencyParameters(self, eps):
+    def setCoherencyParameters(self, eps, phase = 'all'):
         '''
         Parameters for coherency effect
 
@@ -148,11 +137,16 @@ class StrengthModel:
         ----------
         eps : float
             Lattice misfit strain
+        phase : str (optional)
+            Defaults to 'all'
+            If 'all', contribution and parameters will be applied to all phases
+            If name of a specific phase (must be one that is defined in the PrecipitateModel)
+                contribution and parameters will only be applied to that phase
         '''
-        self.coherencyEffect = True
-        self.eps = eps
+        self.coherencyEffect[phase] = True
+        self.eps[phase] = eps
 
-    def setModulusParameters(self, Gp, w1 = 0.05, w2 = 0.85):
+    def setModulusParameters(self, Gp, w1 = 0.05, w2 = 0.85, phase = 'all'):
         '''
         Parameters for modulus effect
 
@@ -160,19 +154,24 @@ class StrengthModel:
         ----------
         Gp : float
             Shear modulus of precipitate
-        w1 : float
+        w1 : float (optional)
             First factor for Nembach model taking value between 0.0175 and 0.0722
             Default at 0.05
-        w2 : float
+        w2 : float (optional)
             Second factor for Nembach model taking value of 0.81 +/- 0.09
             Default at 0.85
+        phase : str (optional)
+            Defaults to 'all'
+            If 'all', contribution and parameters will be applied to all phases
+            If name of a specific phase (must be one that is defined in the PrecipitateModel)
+                contribution and parameters will only be applied to that phase
         '''
-        self.modulusEffect = True
-        self.Gp = Gp
+        self.modulusEffect[phase] = True
+        self.Gp[phase] = Gp
         self.w1 = w1
         self.w2 = w2
 
-    def setAPBParameters(self, yAPB, s = 2, beta = 1, V = 2.8):
+    def setAPBParameters(self, yAPB, s = 2, beta = 1, V = 2.8, phase = 'all'):
         '''
         Parameters for anti-phase boundary effect for ordered precipitates in a disordered matrix
 
@@ -180,23 +179,28 @@ class StrengthModel:
         ----------
         yAPB : float
             Anti-phase boundary energy
-        s : int
+        s : int (optional)
             Number of leading + trailing dislocations to repair anti-phase boundary
             Default at 2
-        beta : float
+        beta : float (optional)
             Factor representating dislocation shape (between 0 and 1)
             Default at 1
-        V : float
+        V : float (optional)
             Correction factor accounting for extra dislocations and uncertainties
             Default at 2.8
+        phase : str (optional)
+            Defaults to 'all'
+            If 'all', contribution and parameters will be applied to all phases
+            If name of a specific phase (must be one that is defined in the PrecipitateModel)
+                contribution and parameters will only be applied to that phase
         '''
-        self.APBEffect = True
-        self.yAPB = yAPB
+        self.APBEffect[phase] = True
+        self.yAPB[phase] = yAPB
         self.s = s
         self.beta = beta
         self.V = V
 
-    def setSFEParameters(self, ySFM, ySFP, bp = None):
+    def setSFEParameters(self, ySFM, ySFP, bp = None, phase = 'all'):
         '''
         Parameters for stacking fault energy effect
 
@@ -206,16 +210,21 @@ class StrengthModel:
             Stacking fault energy of matrix
         ySFP : float
             Stacking fault energy of precipitate
-        bp : float
+        bp : float (optional)
             Burgers vector in precipitate
             If None, will be set to burgers vector in matrix
+        phase : str (optional)
+            Defaults to 'all'
+            If 'all', contribution and parameters will be applied to all phases
+            If name of a specific phase (must be one that is defined in the PrecipitateModel)
+                contribution and parameters will only be applied to that phase
         '''
-        self.SFEffect = True
+        self.SFEffect[phase] = True
         self.ySFM = ySFM
-        self.ySFP = ySFP
-        self.bp = self.b if bp is None else bp
+        self.ySFP[phase] = ySFP
+        self.bp[phase] = self.b if bp is None else bp
 
-    def setInterfacialParameters(self, gamma):
+    def setInterfacialParameters(self, gamma, phase = 'all'):
         '''
         Parameters for interfacial effect
 
@@ -223,9 +232,14 @@ class StrengthModel:
         ----------
         gamma : float
             Interfacial energy of matrix/precipitate surface
+        phase : str (optional)
+            Defaults to 'all'
+            If 'all', contribution and parameters will be applied to all phases
+            If name of a specific phase (must be one that is defined in the PrecipitateModel)
+                contribution and parameters will only be applied to that phase
         '''
-        self.IFEffect = True
-        self.gamma = gamma
+        self.IFEffect[phase] = True
+        self.gamma[phase] = gamma
 
     def setTmodel(self, modelType = 'complex'):
         '''
@@ -257,11 +271,11 @@ class StrengthModel:
         else:
             self.J = self.Jcomplex
 
-    def epsMisfit(self):
+    def epsMisfit(self, delta, phase='all'):
         '''
         Strain from lattice misfit
         '''
-        self.eps = (1/3) * (1+self.nu) / (1-self.nu) * self.delta
+        self.eps['all'] = (1/3) * (1+self.nu) / (1-self.nu) * delta
 
     def Tcomplex(self, theta, r0):
         '''
@@ -283,86 +297,86 @@ class StrengthModel:
     def Jsimple(self):
         return 1
 
-    def coherencyWeak(self, r, Ls, r0):
+    def coherencyWeak(self, r, Ls, r0, phase='all'):
         '''
         Coherency effect for mixed dislocation on weak and shearable particles
         '''
-        return (1.3416*np.cos(self.theta)**2 + 4.1127*np.sin(self.theta)**2) / Ls * np.sqrt(self.G**3 * self.eps**3 * r**3 * self.b / self.T(self.theta, r0))
+        return (1.3416*np.cos(self.theta)**2 + 4.1127*np.sin(self.theta)**2) / Ls * np.sqrt(self.G**3 * self.eps[phase]**3 * r**3 * self.b / self.T(self.theta, r0))
 
-    def coherencyStrong(self, r, Ls, r0):
+    def coherencyStrong(self, r, Ls, r0, phase='all'):
         '''
         Coherency effect for mixed dislocation on strong and shearable particles
         '''
-        return (2*np.cos(self.theta)**2 + 2.1352*np.sin(self.theta)**2) / Ls * np.power(self.T(self.theta, r0)**3 * self.G * self.eps * r / self.b**3, 1/4)
+        return (2*np.cos(self.theta)**2 + 2.1352*np.sin(self.theta)**2) / Ls * np.power(self.T(self.theta, r0)**3 * self.G * self.eps[phase] * r / self.b**3, 1/4)
 
-    def Fmod(self, r):
+    def Fmod(self, r, phase='all'):
         '''
         Term for modulus effect
         '''
-        return self.w1 * np.abs(self.G - self.Gp) * self.b**2 * np.power(r / self.b, self.w2)
+        return self.w1 * np.abs(self.G - self.Gp[phase]) * self.b**2 * np.power(r / self.b, self.w2)
 
-    def modulusWeak(self, r, Ls, r0):
+    def modulusWeak(self, r, Ls, r0, phase='all'):
         '''
         Modulus effect for mixed dislocation on weak and shearable particles
         '''
-        return 2 * self.T(self.theta, r0) / (self.b * Ls) * np.power(self.Fmod(r) / (2 * self.T(self.theta, r0)), 3/2)
+        return 2 * self.T(self.theta, r0) / (self.b * Ls) * np.power(self.Fmod(r, phase) / (2 * self.T(self.theta, r0)), 3/2)
 
-    def modulusStrong(self, r, Ls, r0):
+    def modulusStrong(self, r, Ls, r0, phase='all'):
         '''
         Modulus effect for edge or screw dislocation on strong and shearable particles
         '''
-        return self.J * self.Fmod(r) / (self.b * Ls)
+        return self.J * self.Fmod(r, phase) / (self.b * Ls)
 
-    def APBweak(self, r, Ls, r0):
+    def APBweak(self, r, Ls, r0, phase='all'):
         '''
         Anti-phase boundary effect for mixed dislocation on weak and shearable particles
         '''
-        return 2 / (self.s * self.b * Ls) * (2 * self.T(self.theta, r0) * np.power(r * self.yAPB / self.T(self.theta, r0), 3/2) - 16 * self.beta * self.yAPB * r**2 / (3 * np.pi * Ls))
+        return 2 / (self.s * self.b * Ls) * (2 * self.T(self.theta, r0) * np.power(r * self.yAPB[phase] / self.T(self.theta, r0), 3/2) - 16 * self.beta * self.yAPB[phase] * r**2 / (3 * np.pi * Ls))
 
-    def APBstrong(self, r, Ls, r0):
+    def APBstrong(self, r, Ls, r0, phase='all'):
         '''
         Anti-phase boundary effect for mixed dislocation on strong and shearable particles
         '''
-        return 0.69 / (self.b * Ls) * np.sqrt(8 * self.V * self.T(self.theta, r0) * r * self.yAPB / 3)
+        return 0.69 / (self.b * Ls) * np.sqrt(8 * self.V * self.T(self.theta, r0) * r * self.yAPB[phase] / 3)
 
-    def K(self, theta):
-        return self.G * self.bp**2 * (2 - self.nu - 2 * self.nu * np.cos(2 * theta)) / (8 * np.pi * (1 - self.nu))
+    def K(self, theta, phase='all'):
+        return self.G * self.bp[phase]**2 * (2 - self.nu - 2 * self.nu * np.cos(2 * theta)) / (8 * np.pi * (1 - self.nu))
 
-    def SFEWeff(self, theta):
+    def SFEWeff(self, theta, phase='all'):
         '''
         Effective stacking fault width for mixed dislocations
         '''
-        return 2* self.K(theta) / (self.ySFM + self.ySFP)
+        return 2* self.K(theta, phase) / (self.ySFM + self.ySFP[phase])
 
-    def SFEFterm(self, r):
+    def SFEFterm(self, r, phase='all'):
         '''
         Stacking fault term
         '''
-        return 2 * (self.ySFM - self.ySFP) * np.sqrt(self.SFEWeff(self.theta) * r - self.SFEWeff(self.theta)**2 / 4)
+        return 2 * (self.ySFM - self.ySFP[phase]) * np.sqrt(self.SFEWeff(self.theta, phase) * r - self.SFEWeff(self.theta, phase)**2 / 4)
 
-    def interfacialWeak(self, r, Ls, r0):
+    def interfacialWeak(self, r, Ls, r0, phase='all'):
         '''
         Interfacial energy effect for mixed dislocation on weak and shearable particles
         '''
-        return 2 * self.T(self.theta, r0) / (self.b * Ls) * np.power(2 * self.gamma * self.b / (2 * self.T(self.theta, r0)), 3/2)
+        return 2 * self.T(self.theta, r0) / (self.b * Ls) * np.power(2 * self.gamma[phase] * self.b / (2 * self.T(self.theta, r0)), 3/2)
 
-    def interfacialStrong(self, r, Ls, r0):
+    def interfacialStrong(self, r, Ls, r0, phase='all'):
         '''
         Interfacial energy effect for mixed dislocations on strong and shearable particles
         '''
-        return 2 * self.gamma / Ls
+        return 2 * self.gamma[phase] / Ls
 
-    def SFEweak(self, r, Ls, r0):
+    def SFEweak(self, r, Ls, r0, phase='all'):
         '''
         Stacking fault energy effect for mixed dislocations on weak and shearable particles
         '''
-        return 2 * self.T(self.theta, r0) / (self.b * Ls) * np.power(self.SFEFterm(r) / (2 * self.T(self.theta, r0)), 3/2)
+        return 2 * self.T(self.theta, r0) / (self.b * Ls) * np.power(self.SFEFterm(r, phase) / (2 * self.T(self.theta, r0)), 3/2)
 
-    def SFEstrong(self, r, Ls, r0):
+    def SFEstrong(self, r, Ls, r0, phase='all'):
         '''
         Stacking fault energy effect for mixed dislocations on strong and shearable particles
         '''
-        return self.SFEFterm(r) / (self.b * Ls)
+        return self.SFEFterm(r, phase) / (self.b * Ls)
 
     def orowan(self, r, Ls):
         '''
@@ -422,41 +436,47 @@ class StrengthModel:
 
     def getParticleSpacing(self, model, phase = None):
         index = model.phaseIndex(phase)
-        funcs = [p['name'] for p in model.additionalFunctions]
-        rss = model.additionalOutputs[index,:,funcs.index('rss')]
-        Ls = model.additionalOutputs[index,:,funcs.index('Ls')]
+        rss = model.getAdditionalOutput(self.rssName)[index]
+        Ls = model.getAdditionalOutput(self.LsName)[index]
         return rss, Ls
 
     def precStrength(self, model):
-        funcs = [p['name'] for p in model.additionalFunctions]
-        rss = model.additionalOutputs[:,:,funcs.index('rss')]
-        Ls = model.additionalOutputs[:,:,funcs.index('Ls')]
+        rss = model.getAdditionalOutput(self.rssName)
+        Ls = model.getAdditionalOutput(self.LsName)
 
         ps = []
         for i in range(len(model.phases)):
             r0Strong = Ls[i]
             r0Weak = Ls[i] / np.sqrt(np.cos(self.psi / 2))
-            ps.append(self._precStrength(rss[i], Ls[i], r0Weak, r0Strong))
+            ps.append(self._precStrength(*self._precStrengthContributions(rss[i], Ls[i], r0Weak, r0Strong, model.phases[i])))
+            #ps.append(self._precStrength(rss[i], Ls[i], r0Weak, r0Strong, model.phases[i]))
         return np.power(np.sum(np.power(ps, 1.8), axis=0), 1/1.8)
 
-    def _precStrength(self, rss, Ls, r0Weak, r0Strong):
+    def _precStrengthContributions(self, rss, Ls, r0Weak, r0Strong, phase = 'all'):
         weakContributions = []
         strongContributions = []
         wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
         for i in range(len(wfuncs)):
-            if contributions[i]:
+            if contributions[i]['all'] or (phase in contributions[i] and contributions[i][phase]):
                 with np.errstate(divide='ignore', invalid='ignore'):
-                    weakContributions.append(wfuncs[i](rss, Ls, r0Weak))
-                    strongContributions.append(sfuncs[i](rss, Ls, r0Strong))
+                    if contributions[i]['all']:
+                        weakContributions.append(wfuncs[i](rss, Ls, r0Weak, 'all'))
+                        strongContributions.append(sfuncs[i](rss, Ls, r0Strong, 'all'))
+                    else:
+                        weakContributions.append(wfuncs[i](rss, Ls, r0Weak, phase))
+                        strongContributions.append(sfuncs[i](rss, Ls, r0Strong, phase))
         weakContributions = np.array(weakContributions)
         weakContributions[weakContributions < 0] = 0
         strongContributions = np.array(strongContributions)
         strongContributions[strongContributions < 0] = 0
+        tauowo = self.orowan(rss, Ls)
 
+        return weakContributions, strongContributions, tauowo
+
+    def _precStrength(self, weakContributions, strongContributions, orowan):
         tausumweak = np.power(np.sum(np.power(weakContributions, 1.8), axis=0), 1/1.8)
         tausumstrong = np.power(np.sum(np.power(strongContributions, 1.8), axis=0), 1/1.8)
-        tauowo = self.orowan(rss, Ls)
-        taumin = np.amin(np.array([tausumweak, tausumstrong, tauowo]), axis=0)
+        taumin = np.amin(np.array([tausumweak, tausumstrong, orowan]), axis=0)
         return self.M * taumin
 
     def getStrengthUnits(self, strengthUnits = 'Pa'):
@@ -473,7 +493,7 @@ class StrengthModel:
             ylabel = 'Strength (GPa)'
         return yscale, ylabel
 
-    def plotPrecipitateStrengthOverR(self, ax, r, Ls, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
+    def plotPrecipitateStrengthOverR(self, ax, r, Ls, phase=None, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
         '''
         Plots precipitate strength contribution as a function of radius
 
@@ -489,6 +509,9 @@ class StrengthModel:
         plotContributions : bool
             Whether to plot all contributions
         '''
+        if phase is None:
+            phase = 'all'
+
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
         Leff = Ls / np.sqrt(np.cos(self.psi / 2))
         if plotContributions:
@@ -497,10 +520,14 @@ class StrengthModel:
             ylabel = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
             wc, sc = [], []
             for i in range(len(row)):
-                if contributions[i]:
+                if contributions[i]['all'] or (phase in contributions[i] and contributions[i][phase]):
                     with np.errstate(divide='ignore', invalid='ignore'):
-                        weak = wfuncs[i](r, Ls, Leff)
-                        strong = sfuncs[i](r, Ls, Ls)
+                        if contributions[i]['all']:
+                            weak = wfuncs[i](r, Ls, Leff, 'all')
+                            strong = sfuncs[i](r, Ls, Ls, 'all')
+                        else:
+                            weak = wfuncs[i](r, Ls, Leff, phase)
+                            strong = sfuncs[i](r, Ls, Ls, phase)
                         wc.append(weak)
                         sc.append(strong)
                     ax[row[i], col[i]].plot(r, self.M * weak / yscale, r, self.M * strong / yscale)
@@ -515,16 +542,16 @@ class StrengthModel:
             wc, sc = np.array(wc), np.array(sc)
             wtot = np.power(np.sum(np.power(wc, 1.8), axis=0), 1/1.8)
             stot = np.power(np.sum(np.power(sc, 1.8), axis=0), 1/1.8)
-            owo = self.orowan(r, Ls)
-            smin = np.amin([wtot, stot, owo], axis=0)
-            ax[2,1].plot(r, self.M * wtot/yscale, r, self.M * stot/yscale, r, self.M * owo/yscale, r, self.M * smin/yscale)
+            oro = self.orowan(r, Ls)
+            smin = np.amin([wtot, stot, oro], axis=0)
+            ax[2,1].plot(r, self.M * wtot/yscale, r, self.M * stot/yscale, r, self.M * oro/yscale, r, self.M * smin/yscale)
             ax[2,1].set_xlim([0, np.amax(r)])
             ax[2,1].set_ylim(bottom=0)
             ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
             ax[2,1].set_xlabel('Radius (m)')
             ax[2,1].legend(['Weak', 'Strong', 'Orowan', 'Minimum'])
         else:
-            strength = self._precStrength(r, Ls, Leff, Ls)
+            strength = self._precStrength(r, Ls, Leff, Ls, phase)
             ax.plot(r, strength / yscale)
             ax.set_xlabel('Radius (m)')
             ax.set_xlim([0, np.amax(r)])
@@ -547,9 +574,12 @@ class StrengthModel:
         plotContributions : bool
             Whether to plot all contributions
         '''
+        r, Ls = self.getParticleSpacing(model, phase)
+        if phase is None:
+            phase = 'all'
+
         timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
-        r, Ls = self.getParticleSpacing(model, phase)
         Leff = Ls / np.sqrt(np.cos(self.psi / 2))
         if plotContributions:
             wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
@@ -557,10 +587,14 @@ class StrengthModel:
             ylabel = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
             wc, sc = [], []
             for i in range(len(row)):
-                if contributions[i]:
+                if contributions[i]['all'] or (phase in contributions[i] and contributions[i][phase]):
                     with np.errstate(divide='ignore', invalid='ignore'):
-                        weak = wfuncs[i](r, Ls, Leff)
-                        strong = sfuncs[i](r, Ls, Ls)
+                        if contributions[i]['all']:
+                            weak = wfuncs[i](r, Ls, Leff, 'all')
+                            strong = sfuncs[i](r, Ls, Ls, 'all')
+                        else:
+                            weak = wfuncs[i](r, Ls, Leff, phase)
+                            strong = sfuncs[i](r, Ls, Ls, phase)
                         wc.append(weak)
                         sc.append(strong)
                     ax[row[i], col[i]].plot(model.time*timeScale, self.M * weak / yscale, model.time*timeScale, self.M * strong / yscale)
@@ -576,9 +610,9 @@ class StrengthModel:
             wc, sc = np.array(wc), np.array(sc)
             wtot = np.power(np.sum(np.power(wc, 1.8), axis=0), 1/1.8)
             stot = np.power(np.sum(np.power(sc, 1.8), axis=0), 1/1.8)
-            owo = self.orowan(r, Ls)
-            smin = np.amin([wtot, stot, owo], axis=0)
-            ax[2,1].plot(model.time*timeScale, self.M * wtot/yscale, model.time*timeScale, self.M * stot/yscale, model.time*timeScale, self.M * owo/yscale, model.time*timeScale, self.M * smin/yscale)
+            oro = self.orowan(r, Ls)
+            smin = np.amin([wtot, stot, oro], axis=0)
+            ax[2,1].plot(model.time*timeScale, self.M * wtot/yscale, model.time*timeScale, self.M * stot/yscale, model.time*timeScale, self.M * oro/yscale, model.time*timeScale, self.M * smin/yscale)
             ax[2,1].set_xlim([model.time[0], model.time[-1]])
             ax[2,1].set_ylim(bottom=0)
             ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
@@ -642,68 +676,68 @@ class StrengthModel:
 
     The following functions are from Ahmadi et al and are for specific cases regarding dislocation behavior
     '''
-    def coherencyWeakEdge(self, r, Ls, r0):
-        return np.sqrt((592 / 35) * self.G**3 * self.b * self.eps**3 * r**3 / (Ls**2 * self.T(np.pi/2, r0)))
+    def coherencyWeakEdge(self, r, Ls, r0, phase='all'):
+        return np.sqrt((592 / 35) * self.G**3 * self.b * self.eps[phase]**3 * r**3 / (Ls**2 * self.T(np.pi/2, r0)))
 
-    def coherencyWeakScrew(self, r, Ls, r0):
-        return np.sqrt((9/5) * self.G**3 * self.b * self.eps**3 * r**3 / (Ls**2 * self.T(0, r0)))
+    def coherencyWeakScrew(self, r, Ls, r0, phase='all'):
+        return np.sqrt((9/5) * self.G**3 * self.b * self.eps[phase]**3 * r**3 / (Ls**2 * self.T(0, r0)))
 
-    def coherencyStrongEdge(self, r, Ls, r0):
-        return np.sqrt(2) * np.power(3, 3/8) * self.J / Ls * np.power((self.T(np.pi/2, r0)**3 * self.G * self.eps * r) / self.b**3, 1/4)
+    def coherencyStrongEdge(self, r, Ls, r0, phase='all'):
+        return np.sqrt(2) * np.power(3, 3/8) * self.J / Ls * np.power((self.T(np.pi/2, r0)**3 * self.G * self.eps[phase] * r) / self.b**3, 1/4)
 
-    def coherencyStrongScrew(self, r, Ls, r0):
-        return 2 * self.J / Ls * np.power((self.T(0, r0)**3 * self.G * self.eps * r) / self.b**3, 1/4)
+    def coherencyStrongScrew(self, r, Ls, r0, phase='all'):
+        return 2 * self.J / Ls * np.power((self.T(0, r0)**3 * self.G * self.eps[phase] * r) / self.b**3, 1/4)
 
-    def modulusWeakEdge(self, r, Ls, r0):
-        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(self.w1 * np.abs(self.Gp - self.G) * self.b**2 * np.power(r/self.b, self.w2) / (2*self.T(np.pi/2, r0)), 3/2)
+    def modulusWeakEdge(self, r, Ls, r0, phase='all'):
+        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(self.w1 * np.abs(self.Gp[phase] - self.G) * self.b**2 * np.power(r/self.b, self.w2) / (2*self.T(np.pi/2, r0)), 3/2)
 
-    def modulusWeakScrew(self, r, Ls, r0):
-        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(self.w1 * np.abs(self.Gp - self.G) * self.b**2 * np.power(r/self.b, self.w2) / (2*self.T(0, r0)), 3/2)
+    def modulusWeakScrew(self, r, Ls, r0, phase='all'):
+        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(self.w1 * np.abs(self.Gp[phase] - self.G) * self.b**2 * np.power(r/self.b, self.w2) / (2*self.T(0, r0)), 3/2)
 
-    def APBweakEdge(self, r, Ls, r0):
-        xi = 16 * self.yAPB * r**2 / (3 * np.pi * self.b * Ls**2)
-        return 2/self.s * (2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(2 * self.yAPB * r / (2*self.T(np.pi/2, r0)), 3/2) - self.beta * xi)
+    def APBweakEdge(self, r, Ls, r0, phase='all'):
+        xi = 16 * self.yAPB[phase] * r**2 / (3 * np.pi * self.b * Ls**2)
+        return 2/self.s * (2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(2 * self.yAPB[phase] * r / (2*self.T(np.pi/2, r0)), 3/2) - self.beta * xi)
 
-    def APBweakScrew(self, r, Ls, r0):
-        xi = 16 * self.yAPB * r**2 / (3 * np.pi * self.b * Ls**2)
-        return 2/self.s * (2 * self.T(0, r0) / (self.b * Ls) * np.power(2 * self.yAPB * r / (2*self.T(0, r0)), 3/2) - self.beta * xi)
+    def APBweakScrew(self, r, Ls, r0, phase='all'):
+        xi = 16 * self.yAPB[phase] * r**2 / (3 * np.pi * self.b * Ls**2)
+        return 2/self.s * (2 * self.T(0, r0) / (self.b * Ls) * np.power(2 * self.yAPB[phase] * r / (2*self.T(0, r0)), 3/2) - self.beta * xi)
 
-    def APBstrongEdge(self, r, Ls, r0):
+    def APBstrongEdge(self, r, Ls, r0, phase='all'):
         #Equation from paper gives np.sqrt((np.pi * self.yAPB * r) / (self.V * self.T(np.pi/2)) - 1), but their plots say otherwise
-        return (2 * self.V * self.T(np.pi/2, r0)) / (np.pi * self.b * Ls) * np.sqrt((np.pi * self.yAPB * r) / (self.V * self.T(np.pi/2, r0)))
+        return (2 * self.V * self.T(np.pi/2, r0)) / (np.pi * self.b * Ls) * np.sqrt((np.pi * self.yAPB[phase] * r) / (self.V * self.T(np.pi/2, r0)))
 
-    def APBstrongScrew(self, r, Ls, r0):
+    def APBstrongScrew(self, r, Ls, r0, phase='all'):
         #Equation from paper gives np.sqrt((np.pi * self.yAPB * r) / (self.V * self.T(0)) - 1), but their plots say otherwise
-        return (2 * self.V * self.T(0, r0)) / (np.pi * self.b * Ls) * np.sqrt((np.pi * self.yAPB * r) / (self.V * self.T(0, r0)))
+        return (2 * self.V * self.T(0, r0)) / (np.pi * self.b * Ls) * np.sqrt((np.pi * self.yAPB[phase] * r) / (self.V * self.T(0, r0)))
 
-    def SFEweakWideEdge(self, r, Ls, r0):
-        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(r * (self.ySFM - self.ySFP) / self.T(np.pi/2, r0), 3/2)
+    def SFEweakWideEdge(self, r, Ls, r0, phase='all'):
+        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(r * (self.ySFM - self.ySFP[phase]) / self.T(np.pi/2, r0), 3/2)
 
-    def SFEweakWideScrew(self, r, Ls, r0):
-        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(r * (self.ySFM - self.ySFP) / self.T(0, r0), 3/2)
+    def SFEweakWideScrew(self, r, Ls, r0, phase='all'):
+        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(r * (self.ySFM - self.ySFP[phase]) / self.T(0, r0), 3/2)
 
-    def SFEstrongWide(self, r, Ls, r0):
-        return self.J * 2 * r * (self.ySFM - self.ySFP) / (self.b * Ls)
+    def SFEstrongWide(self, r, Ls, r0, phase='all'):
+        return self.J * 2 * r * (self.ySFM - self.ySFP[phase]) / (self.b * Ls)
 
-    def SFEweakNarrowEdge(self, r, Ls, r0):
-        return (2 * self.T(np.pi/2, r0)) / (self.b * Ls) * np.power((self.ySFM - self.ySFP) * np.sqrt(self.SFEWeff(np.pi/2) * r - self.SFEWeff(np.pi/2)**2 / 4) / self.T(np.pi/2, r0), 3/2)
+    def SFEweakNarrowEdge(self, r, Ls, r0, phase='all'):
+        return (2 * self.T(np.pi/2, r0)) / (self.b * Ls) * np.power((self.ySFM - self.ySFP[phase]) * np.sqrt(self.SFEWeff(np.pi/2, phase) * r - self.SFEWeff(np.pi/2, phase)**2 / 4) / self.T(np.pi/2, r0), 3/2)
 
-    def SFEweakNarrowScrew(self, r, Ls, r0):
-        return (2 * self.T(0, r0)) / (self.b * Ls) * np.power((self.ySFM - self.ySFP) * np.sqrt(self.SFEWeff(0) * r - self.SFEWeff(0)**2 / 4) / self.T(0, r0), 3/2)
+    def SFEweakNarrowScrew(self, r, Ls, r0, phase='all'):
+        return (2 * self.T(0, r0)) / (self.b * Ls) * np.power((self.ySFM - self.ySFP[phase]) * np.sqrt(self.SFEWeff(0, phase) * r - self.SFEWeff(0, phase)**2 / 4) / self.T(0, r0), 3/2)
 
-    def SFEstrongNarrowEdge(self, r, Ls, r0):
-        return self.J * 2 * (self.ySFM - self.ySFP) * np.sqrt(self.SFEWeff(np.pi/2) * r - self.SFEWeff(np.pi/2)**2 / 4) / (self.b * Ls)
+    def SFEstrongNarrowEdge(self, r, Ls, r0, phase='all'):
+        return self.J * 2 * (self.ySFM - self.ySFP[phase]) * np.sqrt(self.SFEWeff(np.pi/2, phase) * r - self.SFEWeff(np.pi/2, phase)**2 / 4) / (self.b * Ls)
 
-    def SFEstrongNarrowScrew(self, r, Ls, r0):
-        return self.J * 2 * (self.ySFM - self.ySFP) * np.sqrt(self.SFEWeff(0) * r - self.SFEWeff(0)**2 / 4) / (self.b * Ls)
+    def SFEstrongNarrowScrew(self, r, Ls, r0, phase='all'):
+        return self.J * 2 * (self.ySFM - self.ySFP[phase]) * np.sqrt(self.SFEWeff(0, phase) * r - self.SFEWeff(0, phase)**2 / 4) / (self.b * Ls)
 
-    def interfacialWeakEdge(self, r, Ls, r0):
-        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(self.gamma * self.b / self.T(np.pi/2, r0), 3/2)
+    def interfacialWeakEdge(self, r, Ls, r0, phase='all'):
+        return 2 * self.T(np.pi/2, r0) / (self.b * Ls) * np.power(self.gamma[phase] * self.b / self.T(np.pi/2, r0), 3/2)
 
-    def interfacialWeakScrew(self, r, Ls, r0):
-        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(self.gamma * self.b / self.T(0, r0), 3/2)
+    def interfacialWeakScrew(self, r, Ls, r0, phase='all'):
+        return 2 * self.T(0, r0) / (self.b * Ls) * np.power(self.gamma[phase] * self.b / self.T(0, r0), 3/2)
 
-    def interfacialStrongOld(self, r, Ls, r0):
-        return self.J * 2 * self.gamma / Ls
+    def interfacialStrongOld(self, r, Ls, r0, phase='all'):
+        return self.J * 2 * self.gamma[phase] / Ls
 
     

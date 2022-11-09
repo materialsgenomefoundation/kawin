@@ -141,9 +141,9 @@ def test_strength_output():
     orowan = sm.orowan(rs, Ls)
 
 
-    tauall = sm._precStrengthContributions(rs, Ls, Leff, Ls)
-    taualpha = sm._precStrengthContributions(rs, Ls, Leff, Ls, 'alpha')
-    taubeta = sm._precStrengthContributions(rs, Ls, Leff, Ls, 'beta')
+    tauall = sm.getStrengthContributions(rs, Ls, Leff, Ls)
+    taualpha = sm.getStrengthContributions(rs, Ls, Leff, Ls, 'alpha')
+    taubeta = sm.getStrengthContributions(rs, Ls, Leff, Ls, 'beta')
 
     assert(np.allclose(tauall[0], [cohWeak, modWeak, ifeWeak], atol=0, rtol=1e-3))
     assert(np.allclose(tauall[1], [cohStrong, modStrong, ifeStrong], atol=0, rtol=1e-3))

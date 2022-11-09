@@ -55,6 +55,13 @@ class StrengthModel:
         self.T = self.Tcomplex
         self.J = self.Jsimple
 
+        #Single phase superposition functions exponent
+        self.singlePhaseExp = 1.8
+
+        #Multi-phase superposition functions exponents
+        self.multiphaseSameExp = 1.8
+        self.multiphaseMixedExp = 1.4
+
     def _getStrengthFunctions(self):
         '''
         Internal function that creates arrays for dislocation cutting mechanisms
@@ -445,39 +452,54 @@ class StrengthModel:
         Ls = model.getAdditionalOutput(self.LsName)
 
         ps = []
+        totalCompare = np.zeros(len(rss[0]))
         for i in range(len(model.phases)):
             r0Strong = Ls[i]
             r0Weak = Ls[i] / np.sqrt(np.cos(self.psi / 2))
-            ps.append(self._precStrength(*self._precStrengthContributions(rss[i], Ls[i], r0Weak, r0Strong, model.phases[i])))
-            #ps.append(self._precStrength(rss[i], Ls[i], r0Weak, r0Strong, model.phases[i]))
-        return np.power(np.sum(np.power(ps, 1.8), axis=0), 1/1.8)
+            weakContributions, strongContributions, orowan, _ = self.getStrengthContributions(rss[i], Ls[i], r0Weak, r0Strong, model.phases[i])
+            strength, compare = self.combineStrengthContributions(weakContributions, strongContributions, orowan, returnComparison=True)
+            compare[~np.isfinite(strength)] = 0
+            strength[~np.isfinite(strength)] = 0
+            ps.append(strength)
+            totalCompare += np.array(compare, dtype='int')
+        ps = np.array(ps)
+        totalStrength = np.zeros(len(ps[0]))
+        indices = (totalCompare == 0) | (totalCompare == len(model.phases))
+        totalStrength[indices] = np.power(np.sum(np.power(ps[:,indices], self.multiphaseSameExp), axis=0), 1/self.multiphaseSameExp)
+        totalStrength[~indices] = np.power(np.sum(np.power(ps[:,~indices], self.multiphaseMixedExp), axis=0), 1/self.multiphaseMixedExp)
+        return totalStrength
 
-    def _precStrengthContributions(self, rss, Ls, r0Weak, r0Strong, phase = 'all'):
+    def getStrengthContributions(self, rss, Ls, r0Weak, r0Strong, phase = 'all'):
         weakContributions = []
         strongContributions = []
+        contributionsList = []
         wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
         for i in range(len(wfuncs)):
             if contributions[i]['all'] or (phase in contributions[i] and contributions[i][phase]):
                 with np.errstate(divide='ignore', invalid='ignore'):
-                    if contributions[i]['all']:
-                        weakContributions.append(wfuncs[i](rss, Ls, r0Weak, 'all'))
-                        strongContributions.append(sfuncs[i](rss, Ls, r0Strong, 'all'))
-                    else:
+                    if (phase in contributions[i] and contributions[i][phase]):
                         weakContributions.append(wfuncs[i](rss, Ls, r0Weak, phase))
                         strongContributions.append(sfuncs[i](rss, Ls, r0Strong, phase))
+                    else:
+                        weakContributions.append(wfuncs[i](rss, Ls, r0Weak, 'all'))
+                        strongContributions.append(sfuncs[i](rss, Ls, r0Strong, 'all'))
+                    contributionsList.append(ylabel[i])
         weakContributions = np.array(weakContributions)
-        weakContributions[weakContributions < 0] = 0
+        weakContributions[(weakContributions < 0)] = 0
         strongContributions = np.array(strongContributions)
-        strongContributions[strongContributions < 0] = 0
+        strongContributions[(strongContributions < 0)] = 0
         tauowo = self.orowan(rss, Ls)
 
-        return weakContributions, strongContributions, tauowo
+        return weakContributions, strongContributions, tauowo, contributionsList
 
-    def _precStrength(self, weakContributions, strongContributions, orowan):
-        tausumweak = np.power(np.sum(np.power(weakContributions, 1.8), axis=0), 1/1.8)
-        tausumstrong = np.power(np.sum(np.power(strongContributions, 1.8), axis=0), 1/1.8)
+    def combineStrengthContributions(self, weakContributions, strongContributions, orowan, returnComparison = False):
+        tausumweak = np.power(np.sum(np.power(weakContributions, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
+        tausumstrong = np.power(np.sum(np.power(strongContributions, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
         taumin = np.amin(np.array([tausumweak, tausumstrong, orowan]), axis=0)
-        return self.M * taumin
+        if returnComparison:
+            return self.M * taumin, (tausumweak > tausumstrong) & (tausumweak > orowan)
+        else:
+            return self.M * taumin
 
     def getStrengthUnits(self, strengthUnits = 'Pa'):
         yscale = 1
@@ -512,55 +534,11 @@ class StrengthModel:
         if phase is None:
             phase = 'all'
 
-        yscale, ylabel = self.getStrengthUnits(strengthUnits)
-        Leff = Ls / np.sqrt(np.cos(self.psi / 2))
-        if plotContributions:
-            wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
-            row, col = [0, 0, 1, 1, 2], [0, 1, 0, 1, 0]
-            ylabel = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
-            wc, sc = [], []
-            for i in range(len(row)):
-                if contributions[i]['all'] or (phase in contributions[i] and contributions[i][phase]):
-                    with np.errstate(divide='ignore', invalid='ignore'):
-                        if contributions[i]['all']:
-                            weak = wfuncs[i](r, Ls, Leff, 'all')
-                            strong = sfuncs[i](r, Ls, Ls, 'all')
-                        else:
-                            weak = wfuncs[i](r, Ls, Leff, phase)
-                            strong = sfuncs[i](r, Ls, Ls, phase)
-                        wc.append(weak)
-                        sc.append(strong)
-                    ax[row[i], col[i]].plot(r, self.M * weak / yscale, r, self.M * strong / yscale)
-                    ax[row[i], col[i]].legend(['Weak', 'Strong'])
-                    ax[row[i], col[i]].set_ylim(bottom=0)
-                else:
-                    ax[row[i], col[i]].plot(r, np.zeros(len(r)))
-                    ax[row[i], col[i]].set_ylim([-1, 1])
-                ax[row[i], col[i]].set_xlim([0, np.amax(r)])
-                ax[row[i], col[i]].set_xlabel('Radius (m)')
-                ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
-            wc, sc = np.array(wc), np.array(sc)
-            wtot = np.power(np.sum(np.power(wc, 1.8), axis=0), 1/1.8)
-            stot = np.power(np.sum(np.power(sc, 1.8), axis=0), 1/1.8)
-            oro = self.orowan(r, Ls)
-            smin = np.amin([wtot, stot, oro], axis=0)
-            ax[2,1].plot(r, self.M * wtot/yscale, r, self.M * stot/yscale, r, self.M * oro/yscale, r, self.M * smin/yscale)
-            ax[2,1].set_xlim([0, np.amax(r)])
-            ax[2,1].set_ylim(bottom=0)
-            ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
-            ax[2,1].set_xlabel('Radius (m)')
-            ax[2,1].legend(['Weak', 'Strong', 'Orowan', 'Minimum'])
-        else:
-            strength = self._precStrength(r, Ls, Leff, Ls, phase)
-            ax.plot(r, strength / yscale)
-            ax.set_xlabel('Radius (m)')
-            ax.set_xlim([0, np.amax(r)])
-            ax.set_ylabel('Yield ' + ylabel)
-            ax.set_ylim(bottom=0)
+        self.plotPrecipitateStrengthOverX(ax, r, r, Ls, phase, strengthUnits, plotContributions, *args, **kwargs)
 
     def plotPrecipitateStrengthOverTime(self, ax, model, phase = None, bounds = None, timeUnits = 's', strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
         '''
-        Plots precipitate strength contribution as a function of radius
+        Plots precipitate strength contribution as a function of time
 
         Parameters
         ----------
@@ -575,58 +553,73 @@ class StrengthModel:
             Whether to plot all contributions
         '''
         r, Ls = self.getParticleSpacing(model, phase)
-        if phase is None:
-            phase = 'all'
 
         timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
+
+        self.plotPrecipitateStrengthOverX(ax, model.time*timeScale, r, Ls, phase, strengthUnits, plotContributions, *args, **kwargs)
+        if plotContributions:
+            row, col = [0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1]
+            for i in range(len(row)):
+                ax[row[i], col[i]].set_xlabel(timeLabel)
+                ax[row[i], col[i]].set_xlim([model.time[0]*timeScale, model.time[-1]*timeScale])
+                ax[row[i], col[i]].set_xscale('log')
+        else:
+            ax.set_xlabel(timeLabel)
+            ax.set_xlim([model.time[0]*timeScale, model.time[-1]*timeScale])
+            ax.set_xscale('log')
+
+    def plotPrecipitateStrengthOverX(self, ax, x, r, Ls, phase = None, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
+        '''
+        Plots precipitate strength contribution as a function of x
+
+        Parameters
+        ----------
+        ax : Axis
+        x : list
+            X coordinates to plot against
+        r : list
+            Equivalent radius, must correspond to x
+        Ls : list
+            Surface to surface particle distance, must correspond to x
+        strengthUnits : str
+            Units for strength, options are 'Pa', 'kPa', 'MPa' or 'GPa'
+        plotContributions : bool
+            Whether to plot all contributions
+        '''
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
         Leff = Ls / np.sqrt(np.cos(self.psi / 2))
         if plotContributions:
-            wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
+            _, _, _, ylabel = self._getStrengthFunctions()
             row, col = [0, 0, 1, 1, 2], [0, 1, 0, 1, 0]
-            ylabel = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
-            wc, sc = [], []
+            weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, Leff, Ls, phase)
             for i in range(len(row)):
-                if contributions[i]['all'] or (phase in contributions[i] and contributions[i][phase]):
-                    with np.errstate(divide='ignore', invalid='ignore'):
-                        if contributions[i]['all']:
-                            weak = wfuncs[i](r, Ls, Leff, 'all')
-                            strong = sfuncs[i](r, Ls, Ls, 'all')
-                        else:
-                            weak = wfuncs[i](r, Ls, Leff, phase)
-                            strong = sfuncs[i](r, Ls, Ls, phase)
-                        wc.append(weak)
-                        sc.append(strong)
-                    ax[row[i], col[i]].plot(model.time*timeScale, self.M * weak / yscale, model.time*timeScale, self.M * strong / yscale)
+                if ylabel[i] in contributionList:
+                    index = contributionList.index(ylabel[i])
+                    ax[row[i], col[i]].plot(x, self.M * weak[index] / yscale, x, self.M * strong[index] / yscale, *args, **kwargs)
                     ax[row[i], col[i]].legend(['Weak', 'Strong'])
                     ax[row[i], col[i]].set_ylim(bottom=0)
                 else:
-                    ax[row[i], col[i]].plot(model.time*timeScale, np.zeros(len(model.time)))
+                    ax[row[i], col[i]].plot(x, np.zeros(len(x)), *args, **kwargs)
                     ax[row[i], col[i]].set_ylim([-1, 1])
-                ax[row[i], col[i]].set_xlim([model.time[0], model.time[-1]])
-                ax[row[i], col[i]].set_xlabel(timeLabel)
+                ax[row[i], col[i]].set_xlabel('Radius (m)')
                 ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
-                ax[row[i], col[i]].set_xscale('log')
-            wc, sc = np.array(wc), np.array(sc)
-            wtot = np.power(np.sum(np.power(wc, 1.8), axis=0), 1/1.8)
-            stot = np.power(np.sum(np.power(sc, 1.8), axis=0), 1/1.8)
-            oro = self.orowan(r, Ls)
+
+            wtot = np.power(np.sum(np.power(weak, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
+            stot = np.power(np.sum(np.power(strong, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
             smin = np.amin([wtot, stot, oro], axis=0)
-            ax[2,1].plot(model.time*timeScale, self.M * wtot/yscale, model.time*timeScale, self.M * stot/yscale, model.time*timeScale, self.M * oro/yscale, model.time*timeScale, self.M * smin/yscale)
-            ax[2,1].set_xlim([model.time[0], model.time[-1]])
+            ax[2,1].plot(x, self.M * wtot/yscale, x, self.M * stot/yscale, x, self.M * oro/yscale, x, self.M * smin/yscale, *args, **kwargs)
             ax[2,1].set_ylim(bottom=0)
             ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
-            ax[2,1].set_xlabel(timeLabel)
+            ax[2,1].set_xlabel('Radius (m)')
             ax[2,1].legend(['Weak', 'Strong', 'Orowan', 'Minimum'])
-            ax[2,1].set_xscale('log')
+
         else:
-            strength = self._precStrength(r, Ls, Leff, Ls)
-            ax.plot(model.time*timeScale, strength / yscale)
-            ax.set_xlabel(timeLabel)
-            ax.set_xlim([model.time[0], model.time[-1]])
+            weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, Leff, Ls, phase)
+            strength = self.combineStrengthContributions(weak, strong, oro)
+            ax.plot(x, strength / yscale, *args, **kwargs)
             ax.set_ylabel('Yield ' + ylabel)
             ax.set_ylim(bottom=0)
-            ax.set_xscale('log')
+
 
     def plotStrength(self, ax, model, plotContributions = False, bounds = None, timeUnits = 's', strengthUnits = 'MPa', *args, **kwargs):
         '''

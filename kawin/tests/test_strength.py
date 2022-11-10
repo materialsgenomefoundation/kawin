@@ -9,10 +9,15 @@ yAPB, ySFM, ySFP, gamma = 0.04, 0.1, 0.05, 0.5
 sm.setDislocationParameters(G, b, nu, ri, theta=90, psi=120)
 sm.setCoherencyParameters(eps)
 sm.setModulusParameters(Gp, phase='all')
+sm.setModulusParameters(2*Gp, phase='beta')
 sm.setAPBParameters(yAPB, phase='alpha')
 sm.setSFEParameters(ySFM, ySFP, bp, phase='beta')
 sm.setInterfacialParameters(gamma)
 sm.setTaylorFactor(1)
+
+sm2 = StrengthModel()
+sm2.setDislocationParameters(G, b, nu, ri, theta=90, psi=120)
+sm2.setCoherencyParameters(eps, phase='alpha')
 
 rs = 50e-9
 Lss = 300e-9 - 2*rs
@@ -130,8 +135,13 @@ def test_strength_output():
 
     cohWeak = sm.coherencyWeak(rs, Ls, Leff)
     cohStrong = sm.coherencyStrong(rs, Ls, Ls)
+
+    #Values for 'all' and 'beta' will be defined separately to make sure getting strength
+    #for the beta phase will override 'all'
     modWeak = sm.modulusWeak(rs, Ls, Leff)
     modStrong = sm.modulusStrong(rs, Ls, Ls)
+    modWeakBeta = sm.modulusWeak(rs, Ls, Leff, 'beta')
+    modStrongBeta = sm.modulusStrong(rs, Ls, Ls, 'beta')
     apbWeak = sm.APBweak(rs, Ls, Leff, 'alpha')
     apbStrong = sm.APBstrong(rs, Ls, Ls, 'alpha')
     sfeWeak = sm.SFEweak(rs, Ls, Leff, 'beta')
@@ -153,6 +163,31 @@ def test_strength_output():
     assert(np.allclose(taualpha[1], [cohStrong, modStrong, apbStrong, ifeStrong], atol=0, rtol=1e-3))
     assert(np.allclose(taualpha[2], [orowan], atol=0, rtol=1e-3))
 
-    assert(np.allclose(taubeta[0], [cohWeak, modWeak, sfeWeak, ifeWeak], atol=0, rtol=1e-3))
-    assert(np.allclose(taubeta[1], [cohStrong, modStrong, sfeStrong, ifeStrong], atol=0, rtol=1e-3))
+    assert(np.allclose(taubeta[0], [cohWeak, modWeakBeta, sfeWeak, ifeWeak], atol=0, rtol=1e-3))
+    assert(np.allclose(taubeta[1], [cohStrong, modStrongBeta, sfeStrong, ifeStrong], atol=0, rtol=1e-3))
     assert(np.allclose(taubeta[2], [orowan], atol=0, rtol=1e-3))
+
+def test_no_strength_contribution():
+    '''
+    Tests that strength model will return 0 if there is no strength contribution
+
+    Also test that the model will return an array of 0s if the input is an array
+    '''
+    rs = 50e-9
+    Ls = 300e-9 - 2*rs
+    Leff = Ls / np.sqrt(np.cos(sm.psi / 2))
+
+    taugamma = sm2.getStrengthContributions(rs, Ls, Leff, Ls, 'gamma')
+    strengthgamma = sm2.combineStrengthContributions(taugamma[0], taugamma[1], taugamma[2])
+
+    N = 5
+    rs = np.linspace(10e-9, 50e-9, N)
+    Ls = 300e-9 - 2*rs
+    Leff = Ls / np.sqrt(np.cos(sm.psi / 2))
+
+    taugamma2 = sm2.getStrengthContributions(rs, Ls, Leff, Ls, 'gamma')
+    strengthgamma2 = sm2.combineStrengthContributions(taugamma[0], taugamma[1], taugamma[2])
+
+
+    assert(np.allclose(strengthgamma, 0, atol=0, rtol=1e-3))
+    assert(np.allclose(strengthgamma2, np.zeros(N), atol=0, rtol=1e-3))

@@ -55,12 +55,15 @@ class StrengthModel:
         self.T = self.Tcomplex
         self.J = self.Jsimple
 
-        #Single phase superposition functions exponent
+        #Single phase superposition exponent
         self.singlePhaseExp = 1.8
 
-        #Multi-phase superposition functions exponents
+        #Multi-phase superposition exponents
         self.multiphaseSameExp = 1.8
         self.multiphaseMixedExp = 1.4
+
+        #Superposition exponent for total strength
+        self.totalStrengthExp = 1.8
 
     def _getStrengthFunctions(self):
         '''
@@ -101,8 +104,42 @@ class StrengthModel:
         self.ssweights = weights
         self.ssexp = exp
 
-    def setTaylorFactor(self, M):
+    def setTaylorFactor(self, M = 2.24):
+        '''
+        Taylor factor for converting critical resolved shear stress to yield strength
+
+        Default is 2.24
+        '''
         self.M = M
+
+    def setStrengthSuperpositionExponent(self, singlePhaseExp = 1.8, multiPhaseSameExp = 1.8, multiPhaseMixedExp = 1.4, totalExp = 1.8):
+        '''
+        Sets exponent (n) for superposition function when combining strength contributions
+
+        sigma^n = sigma_1^n + sigma_2^n + sigma_3^n + ...
+
+        Parameters
+        ----------
+        singlePhaseExp : float (optional)
+            Exponent for adding strength contributions for a single precipitate phase
+            Default = 1.8
+        multiPhaseSameExp : float (optional)
+            Exponent for adding strength contributions for multiple precipitate phases when the 
+            strengthening mechanisms are the same
+            Default = 1.8
+        multiPhaseMixedExp : float (optional)
+            Exponent for adding strength contributions for multiple precipitate phases when the
+            strengthening mechanisms differ
+            Default = 1.4
+        totalExp : float (optional)
+            Exponent for adding strength mechanisms for total strength
+            This includes base strength, solid solution strengthening and precipitation hardening
+            Default = 1.8
+        '''
+        self.singlePhaseExp = singlePhaseExp
+        self.multiphaseSameExp = multiPhaseSameExp
+        self.multiphaseMixedExp = multiPhaseMixedExp
+        self.totalStrengthExp = totalExp
 
     def setDislocationParameters(self, G, b, nu = 1/3, ri = None, theta = 90, psi = 120):
         '''
@@ -485,21 +522,27 @@ class StrengthModel:
                         strongContributions.append(sfuncs[i](rss, Ls, r0Strong, 'all'))
                     contributionsList.append(ylabel[i])
         weakContributions = np.array(weakContributions)
-        weakContributions[(weakContributions < 0)] = 0
+        weakContributions[(weakContributions < 0) | ~np.isfinite(weakContributions)] = 0
         strongContributions = np.array(strongContributions)
-        strongContributions[(strongContributions < 0)] = 0
-        tauowo = self.orowan(rss, Ls)
-
+        strongContributions[(strongContributions < 0) | ~np.isfinite(strongContributions)] = 0
+        tauowo = np.array(self.orowan(rss, Ls))
+        tauowo[~np.isfinite(tauowo)] = 0
         return weakContributions, strongContributions, tauowo, contributionsList
 
     def combineStrengthContributions(self, weakContributions, strongContributions, orowan, returnComparison = False):
-        tausumweak = np.power(np.sum(np.power(weakContributions, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
-        tausumstrong = np.power(np.sum(np.power(strongContributions, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
+        tausumweak = np.zeros(orowan.shape) if len(weakContributions) == 0 else np.array(np.power(np.sum(np.power(weakContributions, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp))
+        tausumstrong = np.zeros(orowan.shape) if len(strongContributions) == 0 else np.array(np.power(np.sum(np.power(strongContributions, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp))
+        tausumweak[~np.isfinite(tausumweak)] = 0
+        tausumstrong[~np.isfinite(tausumstrong)] = 0
+        orowan[~np.isfinite(orowan)] = 0
         taumin = np.amin(np.array([tausumweak, tausumstrong, orowan]), axis=0)
         if returnComparison:
             return self.M * taumin, (tausumweak > tausumstrong) & (tausumweak > orowan)
         else:
             return self.M * taumin
+
+    def totalStrength(self, sigma0, ssStrength, precStrength):
+        return np.power(np.sum(np.power([sigma0, ssStrength, precStrength], self.totalStrengthExp), axis=0), 1/self.totalStrengthExp)
 
     def getStrengthUnits(self, strengthUnits = 'Pa'):
         yscale = 1
@@ -561,11 +604,9 @@ class StrengthModel:
             row, col = [0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1]
             for i in range(len(row)):
                 ax[row[i], col[i]].set_xlabel(timeLabel)
-                ax[row[i], col[i]].set_xlim([model.time[0]*timeScale, model.time[-1]*timeScale])
                 ax[row[i], col[i]].set_xscale('log')
         else:
             ax.set_xlabel(timeLabel)
-            ax.set_xlim([model.time[0]*timeScale, model.time[-1]*timeScale])
             ax.set_xscale('log')
 
     def plotPrecipitateStrengthOverX(self, ax, x, r, Ls, phase = None, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
@@ -603,15 +644,18 @@ class StrengthModel:
                     ax[row[i], col[i]].set_ylim([-1, 1])
                 ax[row[i], col[i]].set_xlabel('Radius (m)')
                 ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
+                ax[row[i], col[i]].set_xlim([x[0], x[-1]])
 
-            wtot = np.power(np.sum(np.power(weak, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
-            stot = np.power(np.sum(np.power(strong, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp)
+            #If no contributions exists for shearable precipitates, then wtot and stot is 0
+            wtot = np.zeros(len(x)) if len(weak) == 0 else np.array(np.power(np.sum(np.power(weak, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp))
+            stot = np.zeros(len(x)) if len(strong) == 0 else np.array(np.power(np.sum(np.power(strong, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp))
             smin = np.amin([wtot, stot, oro], axis=0)
             ax[2,1].plot(x, self.M * wtot/yscale, x, self.M * stot/yscale, x, self.M * oro/yscale, x, self.M * smin/yscale, *args, **kwargs)
             ax[2,1].set_ylim(bottom=0)
             ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
             ax[2,1].set_xlabel('Radius (m)')
             ax[2,1].legend(['Weak', 'Strong', 'Orowan', 'Minimum'])
+            ax[2,1].set_xlim([x[0], x[-1]])
 
         else:
             weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, Leff, Ls, phase)
@@ -619,7 +663,7 @@ class StrengthModel:
             ax.plot(x, strength / yscale, *args, **kwargs)
             ax.set_ylabel('Yield ' + ylabel)
             ax.set_ylim(bottom=0)
-
+            ax.set_xlim([x[0], x[-1]])
 
     def plotStrength(self, ax, model, plotContributions = False, bounds = None, timeUnits = 's', strengthUnits = 'MPa', *args, **kwargs):
         '''
@@ -641,18 +685,18 @@ class StrengthModel:
         timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
 
-        ssstrength = self.ssStrength(model) if len(self.ssweights) > 0 else np.zeros(len(model.time))
+        ssStrength = self.ssStrength(model) if len(self.ssweights) > 0 else np.zeros(len(model.time))
         sigma0 = self.sigma0*np.ones(len(model.time)) if self.sigma0 is not None else np.zeros(len(model.time))
-        precstrength = self.precStrength(model)
+        precStrength = self.precStrength(model)
 
-        total = np.power(np.power(sigma0, 1.8) + np.power(ssstrength+precstrength, 1.8), 1/1.8)
+        total = self.totalStrength(sigma0, ssStrength, precStrength)
 
         ax.plot(model.time*timeScale, total / yscale, *args, **kwargs)
 
         if plotContributions:
             ax.plot(model.time*timeScale, sigma0 / yscale, *args, **kwargs)
-            ax.plot(model.time*timeScale, ssstrength / yscale, *args, **kwargs)
-            ax.plot(model.time*timeScale, precstrength / yscale, *args, **kwargs)
+            ax.plot(model.time*timeScale, ssStrength / yscale, *args, **kwargs)
+            ax.plot(model.time*timeScale, precStrength / yscale, *args, **kwargs)
             ax.legend(['Total Strength', r'$\sigma_0$', 'SS Strength', 'Precipitate Strength'])
 
         ax.set_xlabel(timeLabel)

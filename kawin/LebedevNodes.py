@@ -254,6 +254,19 @@ q131 = [('A1', 9.735347946e-06), ('A2', 0.00019075812418), ('A3', 0.000190105954
 ]
 
 def loadPoints(order):
+    '''
+    Load lebedov nodes of specific order
+
+    Parameters
+    ----------
+    order : int
+        Can be 53, 83 or 131
+        Determines the order of polynomial at which an exact integral solution can be found
+
+    Returns
+    -------
+    phi coordinates, theta coordinates, weights
+    '''
     if order == 53:
         node = q53
     elif order == 83:

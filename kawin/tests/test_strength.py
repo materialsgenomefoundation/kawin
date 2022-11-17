@@ -151,9 +151,9 @@ def test_strength_output():
     orowan = sm.orowan(rs, Ls)
 
 
-    tauall = sm.getStrengthContributions(rs, Ls, Leff, Ls)
-    taualpha = sm.getStrengthContributions(rs, Ls, Leff, Ls, 'alpha')
-    taubeta = sm.getStrengthContributions(rs, Ls, Leff, Ls, 'beta')
+    tauall = sm.getStrengthContributions(rs, Ls, )
+    taualpha = sm.getStrengthContributions(rs, Ls, 'alpha')
+    taubeta = sm.getStrengthContributions(rs, Ls, 'beta')
 
     assert(np.allclose(tauall[0], [cohWeak, modWeak, ifeWeak], atol=0, rtol=1e-3))
     assert(np.allclose(tauall[1], [cohStrong, modStrong, ifeStrong], atol=0, rtol=1e-3))
@@ -177,7 +177,7 @@ def test_no_strength_contribution():
     Ls = 300e-9 - 2*rs
     Leff = Ls / np.sqrt(np.cos(sm.psi / 2))
 
-    taugamma = sm2.getStrengthContributions(rs, Ls, Leff, Ls, 'gamma')
+    taugamma = sm2.getStrengthContributions(rs, Ls, 'gamma')
     strengthgamma = sm2.combineStrengthContributions(taugamma[0], taugamma[1], taugamma[2])
 
     N = 5
@@ -185,7 +185,7 @@ def test_no_strength_contribution():
     Ls = 300e-9 - 2*rs
     Leff = Ls / np.sqrt(np.cos(sm.psi / 2))
 
-    taugamma2 = sm2.getStrengthContributions(rs, Ls, Leff, Ls, 'gamma')
+    taugamma2 = sm2.getStrengthContributions(rs, Ls, 'gamma')
     strengthgamma2 = sm2.combineStrengthContributions(taugamma[0], taugamma[1], taugamma[2])
 
 

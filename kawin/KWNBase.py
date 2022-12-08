@@ -8,6 +8,7 @@ import copy
 import time
 import csv
 from itertools import zip_longest
+import traceback
 
 class PrecipitateBase:
     '''
@@ -1179,39 +1180,45 @@ class PrecipitateBase:
         i = 1
         stopCondition = False
         while i < self.steps and not stopCondition:
-            self._iterate(i)
+            try:
+                self._iterate(i)
 
-            #Apply stopping condition
-            if self._stoppingConditions is not None:
-                andConditions = True
-                numberOfAndConditions = 0
-                orConditions = False
-                for s in range(len(self._stoppingConditions)):
-                    #Record time if stopping condition is met
-                    conditionResult = self._stoppingConditions[s](self, i)
-                    if conditionResult and self.stopConditionTimes[s] == -1:
-                        self.stopConditionTimes[s] = self.time[i]
+                #Apply stopping condition
+                if self._stoppingConditions is not None:
+                    andConditions = True
+                    numberOfAndConditions = 0
+                    orConditions = False
+                    for s in range(len(self._stoppingConditions)):
+                        #Record time if stopping condition is met
+                        conditionResult = self._stoppingConditions[s](self, i)
+                        if conditionResult and self.stopConditionTimes[s] == -1:
+                            self.stopConditionTimes[s] = self.time[i]
 
-                    #If condition mode is 'or'
-                    if self._stopConditionMode[s]:
-                        orConditions = orConditions or conditionResult
-                    #If condition mode is 'and'
-                    else:
-                        andConditions = andConditions and conditionResult
-                        numberOfAndConditions += 1
+                        #If condition mode is 'or'
+                        if self._stopConditionMode[s]:
+                            orConditions = orConditions or conditionResult
+                        #If condition mode is 'and'
+                        else:
+                            andConditions = andConditions and conditionResult
+                            numberOfAndConditions += 1
 
-                #If there are no 'and' conditions, andConditions will be True
-                #Set to False so andConditions will not stop the model unneccesarily
-                if numberOfAndConditions == 0:
-                    andConditions = False
+                    #If there are no 'and' conditions, andConditions will be True
+                    #Set to False so andConditions will not stop the model unneccesarily
+                    if numberOfAndConditions == 0:
+                        andConditions = False
 
-                stopCondition = andConditions or orConditions
+                    stopCondition = andConditions or orConditions
 
-            #Print current variables
-            if i % vIt == 0 and verbose:
-                self._printOutput(i)
-            
-            i += 1
+                #Print current variables
+                if i % vIt == 0 and verbose:
+                    self._printOutput(i)
+                
+                i += 1
+            except Exception as e:
+                print(traceback.format_exc())
+                print('Exception has occurred: {}'.format(e))
+                print('Stopping Simulation')
+                break
 
         t1 = time.time()
         if verbose:
@@ -1477,7 +1484,7 @@ class PrecipitateBase:
         totalVariables = ['Total Volume Fraction', 'Total Average Radius', 'Total Aspect Ratio', \
                             'Total Nucleation Rate', 'Total Precipitate Density']
         singleVariables = ['Volume Fraction', 'Critical Radius', 'Average Radius', 'Aspect Ratio', \
-                            'Driving Force', 'Nucleation Rate', 'Precipitate Density']
+                            'Driving Force', 'Nucleation Rate', 'Precipitate Density', 'Volume Average Radius']
         eqCompositions = ['Eq Composition Alpha', 'Eq Composition Beta']
         saturations = ['Supersaturation', 'Eq Volume Fraction']
 
@@ -1592,9 +1599,10 @@ class PrecipitateBase:
                             plotVariable[p] *= self.avgAR[p]
                     else:
                         plotVariable[p] *= self._GBareaRemoval(p)
-
             elif variable == 'Volume Average Radius':
-                plotVariable = np.cbrt(self.betaFrac / self.precipitateDensity / (4/3*np.pi))
+                plotVariable = np.zeros(self.betaFrac.shape)
+                indices = self.precipitateDensity > 0
+                plotVariable[indices] = np.cbrt(self.betaFrac[indices] / self.precipitateDensity[indices] / (4/3*np.pi))
             elif variable == 'Aspect Ratio':
                 plotVariable = self.avgAR
             elif variable == 'Driving Force':

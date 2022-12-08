@@ -285,6 +285,58 @@ class PrecipitateModel (PrecipitateBase):
             self.PBM[index] = PopulationBalanceModel(cMin, cMax, bins, minBins, maxBins)
             self.PBM[index].setAdaptiveBinSize(adaptive)
 
+    def setPSDrecording(self, record = True, dtype = np.float32, phase = 'all'):
+        '''
+        Sets recording parameters for PSD of specified phase
+
+        Parameters
+        ----------
+        record : bool (optional)
+            Whether to record PSD, defaults to True
+        dtype : numpy data type (optional)
+            Data type to record PSD in, defaults to np.float32
+        phase : str (optional)
+            Precipitate phase to record for
+            Defaults to 'all', which will apply to all precipitate phases
+        '''
+        if phase is None or phase == 'all':
+            for p in self.phases:
+                index = self.phaseIndex(p)
+                if record:
+                    self.PBM[index].enableRecording(dtype)
+                else:
+                    self.PBM[index].disableRecording(dtype)
+        else:
+            index = self.phaseIndex(phase)
+            if record:
+                self.PBM[index].enableRecording(dtype)
+            else:
+                self.PBM[index].disableRecording(dtype)
+
+    def saveRecordedPSD(self, filename, compressed = True, phase = 'all'):
+        '''
+        Saves recorded PSD in npz format
+
+        Parameters
+        ----------
+        filename : str
+            File name to save to
+            Note: the phase name will be added to the filename if all phases are being saved
+        compressed : bool (optional)
+            Whether to save in compressed npz format
+            Defualts to True
+        phase : str (optional)
+            Phase to save PSD for
+            Defaults to 'all', which will save a file for each phase
+        '''
+        if phase is None or phase == 'all':
+            for p in self.phases:
+                index = self.phaseIndex(p)
+                self.PBM[index].saveRecordedPSD(filename + '_' + p, compressed)
+        else:
+            index = self.phaseIndex(phase)
+            self.PBM[index].saveRecordedPSD(filename, compressed)
+
     def loadParticleSizeDistribution(self, data, phase = None):
         '''
         Loads particle size distribution for specified phase
@@ -517,6 +569,10 @@ class PrecipitateModel (PrecipitateBase):
 
         #Calculate additional PSD function
         self._calculateAdditionalOutputs(i)
+
+        #Record PSD, this will only do stuff if PopulationBalanceModel._record is True
+        for p in range(len(self.phases)):
+            self.PBM[p].record(self.time[i])
 
     def _noCheckDT(self, i):
         '''

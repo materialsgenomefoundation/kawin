@@ -1588,7 +1588,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                     return None, None, None, None, None, None
                 else:
                     print('Warning: matrix phase not detected, using results of previous calculation')
-                    return self._prevDc, self._prevMc, self._prevGba, self._prevBeta, self._prevCa, self._prevCb
+                    return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
 
             cs_matrix, miscMatrix = self._createCompositionSet(eq, state_variables, self.phases[0], phase_amounts, matrix_idx)
 

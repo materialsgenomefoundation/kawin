@@ -103,8 +103,9 @@ class PopulationBalanceModel:
         TODO: Make sure this works when adaptive bins is False
         '''
         if self._record:
-            self._recordedBins = np.pad(self._recordedBins, ((0, 1), (0, self.maxBins+1 - self._recordedBins.shape[1])))
-            self._recordedPSD = np.pad(self._recordedPSD, ((0, 1), (0, self.maxBins - self._recordedPSD.shape[1])))
+            maxBins = self.maxBins if self._adaptiveBinSize else self.bins
+            self._recordedBins = np.pad(self._recordedBins, ((0, 1), (0, maxBins+1 - self._recordedBins.shape[1])))
+            self._recordedPSD = np.pad(self._recordedPSD, ((0, 1), (0, maxBins - self._recordedPSD.shape[1])))
             self._recordedTime = np.pad(self._recordedTime, (0,1))
             self._recordedBins[-1][:self.PSDbounds.shape[0]] = self.PSDbounds
             self._recordedPSD[-1][:self.PSD.shape[0]] = self.PSD
@@ -162,7 +163,6 @@ class PopulationBalanceModel:
         ---------
         time : float
             Time to load PSD from, will load to nearest time available
-            TODO: Interpolate PSD for intermediate times
         '''
         if self._record:
             if time <= self._recordedTime[0]:

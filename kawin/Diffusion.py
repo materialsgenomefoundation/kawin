@@ -35,6 +35,7 @@ class DiffusionModel:
 
         self.z = np.linspace(zlim[0], zlim[1], N)
         self.dz = self.z[1] - self.z[0]
+        self.t = 0
 
         self.reset()
 
@@ -46,6 +47,12 @@ class DiffusionModel:
         self.minComposition = 1e-8
 
         self.maxCompositionChange = 0.002
+
+        self._record = False
+        self._recordedX = None
+        self._recordedP = None
+        self._recordedZ = None
+        self._recordedTime = None
 
     def reset(self):
         '''
@@ -82,7 +89,21 @@ class DiffusionModel:
         T : float
             Temperature in Kelvin
         '''
+        self.Tparam = T
         self.T = T
+        self.Tfunc = lambda z, t: self.Tparam * np.ones(len(z))
+
+    def setTemperatureArray(self, times, temperatures):
+        self.Tparam = (times, temperatures)
+        self.T = temperatures[0]
+        self.Tfunc = lambda z, t: np.interp(t/3600, self.Tparam[0], self.Tparam[1], self.Tparam[1][0], self.Tparam[1][-1]) * np.ones(len(z))
+
+    def setTemperatureFunction(self, func):
+        '''
+        Function should be T = (x, t)
+        '''
+        self.Tparam = func
+        self.Tfunc = lambda z, t: self.Tparam(z, t)
 
     def save(self, filename, compressed = False, toCSV = False):
         '''
@@ -185,7 +206,7 @@ class DiffusionModel:
         '''
         self.hashSensitivity = np.power(10, int(s))
 
-    def _getHash(self, x):
+    def _getHash(self, x, T):
         '''
         Gets hash value for a composition set
 
@@ -194,7 +215,8 @@ class DiffusionModel:
         x : list of floats
             Composition set to create hash
         '''
-        return hash(tuple((x*self.hashSensitivity).astype(np.int32)))
+        return hash(tuple((np.concatenate((x, [T]))*self.hashSensitivity).astype(np.int32)))
+        #return hash(tuple((x*self.hashSensitivity).astype(np.int32)))
         #return int(np.sum(np.power(self.hashSensitivity, 1+np.arange(len(x))) * x))
 
     def useCache(self, use):
@@ -213,6 +235,99 @@ class DiffusionModel:
         Clears hash table
         '''
         self.hashTable = {}
+
+    def enableRecording(self, dtype = np.float32):
+        '''
+        Enables recording of composition and phase
+        
+        Parameters
+        ----------
+        dtype : numpy data type (optional)
+            Data type to record particle size distribution in
+            Defaults to np.float32
+        '''
+        self._record = True
+        self._recordedX = np.zeros((1, len(self.elements), self.N))
+        self._recordedP = np.zeros((1, 1,self.N)) if len(self.phases) == 1 else np.zeros((1, len(self.phases), self.N))
+        self._recordedZ = self.z
+        self._recordedTime = np.zeros(1)
+
+    def disableRecording(self):
+        '''
+        Disables recording
+        '''
+        self._record = False
+
+    def removeRecordedData(self):
+        '''
+        Removes recorded data
+        '''
+        self._recordedX = None
+        self._recordedP = None
+        self._recordedZ = None
+        self._recordedTime = None
+
+    def record(self, time):
+        '''
+        Adds current mesh data to recorded arrays
+        '''
+        if self._record:
+            if time > 0:
+                self._recordedX = np.pad(self._recordedX, ((0, 1), (0, 0), (0, 0)))
+                self._recordedP = np.pad(self._recordedP, ((0, 1), (0, 0), (0, 0)))
+                self._recordedTime = np.pad(self._recordedTime, (0, 1))
+
+            self._recordedX[-1] = self.x
+            self._recordedP[-1] = self.p
+            self._recordedTime[-1] = time
+
+    def saveRecordedMesh(self, filename, compressed = True):
+        '''
+        Saves recorded data into npz format
+
+        Parameters
+        ----------
+        filename : str
+            File name to save to
+        compressed : bool (optional)
+            Whether to save as in compressed format (defaults to True)
+        '''
+        if self._record:
+            if compressed:
+                np.savez_compressed(filename, time = self._recordedTime, x = self._recordedX, p = self._recordedP, z = self._recordedZ)
+            else:
+                np.savez(filename, time = self._recordedTime, x = self._recordedX, p = self._recordedP, z = self._recordedZ)
+
+    def loadRecordedMesh(self, filename):
+        '''
+        Loads recorded mesh
+        '''
+        data = np.load(filename)
+        self._record = True
+        self._recordedTime = data['time']
+        self._recordedX = data['x']
+        self._recordedP = data['p']
+        self._recordedZ = data['z']
+
+    def setMeshtoRecordedTime(self, time):
+        if self._record:
+            if time <= self._recordedTime[0]:
+                print('Input time is lower than smallest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[0]))
+                self.x, self.p = self._recordedX[0], self._recordedP[0]
+            elif time >= self._recordedTime[-1]:
+                print('Input time is larger than longest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[-1]))
+                self.x, self.p = self._recordedX[-1], self._recordedP[-1]
+            else:
+                uind = np.argmax(self._recordedTime > time)
+                lind = uind - 1
+
+                ux, up, utime = self._recordedX[uind], self._recordedP[uind], self._recordedTime[uind]
+                lx, lp, ltime = self._recordedX[lind], self._recordedP[lind], self._recordedTime[lind]
+
+                self.x = (ux - lx) * (time - ltime) / (utime - ltime) + lx
+                self.p = (up - lp) * (time - ltime) / (utime - ltime) + lp
+            
+            self.z = self._recordedZ
 
     def _getElementIndex(self, element = None):
         '''
@@ -397,6 +512,7 @@ class DiffusionModel:
             raise Exception('Some compositions sum up to above 1')
         self.x[self.x > self.minComposition] = self.x[self.x > self.minComposition] - len(self.allElements) * self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
+        self.T = self.Tfunc(self.z, 0)
         self.isSetup = True
 
     def getFluxes(self):
@@ -405,11 +521,22 @@ class DiffusionModel:
         '''
         return [], []
 
-    def updateMesh(self):
+    def updateMesh(self, fluxes, dt):
         '''
-        "Virtual" function to be implemented by child objects
+        Updates mesh using fluxes by time increment dt
+
+        Parameters
+        ----------
+        fluxes : 2D array
+            Fluxes for each element between each node. Size must be (E, N-1)
+                E - number of elements (NOT including reference element)
+                N - number of nodes
+            Boundary conditions will automatically be applied
+        dt : float
+            Time increment
         '''
-        pass
+        for e in range(len(self.elements)):
+            self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz
 
     def update(self):
         '''
@@ -438,11 +565,15 @@ class DiffusionModel:
         t0 = time.time()
         if verbose:
             print('Iteration\tSim Time (h)\tRun time (s)')
+
+        #Record composition and phase fraction at t=0
+        self.record(self.t)
         while self.t < self.tf:
             if verbose and i % vIt == 0:
                 tf = time.time()
                 print(str(i) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, tf-t0))
             self.update()
+            self.record(self.t)
             i += 1
 
         tf = time.time()
@@ -508,11 +639,12 @@ class DiffusionModel:
                 ax.plot(self.z/zScale, self.x[e], label=self.elements[e], *args, **kwargs)
             
         ax.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
-        ax.legend()
+        if plotElement is None:
+            ax.legend()
         ax.set_xlabel('Distance (m)')
         ax.set_ylabel('Composition (at.%)')
 
-    def plotTwoAxis(self, axL, Lelements, Relements, zScale = 1, *args, **kwargs):
+    def plotTwoAxis(self, axL, Lelements, Relements, zScale = 1, axR = None, *args, **kwargs):
         '''
         Plots composition profile with two y-axes
 
@@ -524,6 +656,9 @@ class DiffusionModel:
             Elements to plot on left axis
         Relements : list of str
             Elements to plot on right axis
+        axR : matplotlib Axes object (optional)
+            Right axis to plot on
+            If None, then the right axis will be created
         zScale : float
             Scale factor for z-coordinates
         '''
@@ -537,7 +672,8 @@ class DiffusionModel:
 
         ci = 0
         refE = 1 - np.sum(self.x, axis=0)
-        axR = axL.twinx()
+        if axR is None:
+            axR = axL.twinx()
         for e in range(len(Lelements)):
             if Lelements[e] in self.elements:
                 eIndex = self._getElementIndex(Lelements[e])
@@ -609,6 +745,7 @@ class SinglePhaseModel(DiffusionModel):
             Maximum calculated time interval for numerical stability
         '''
         xMid = (self.x[:,1:] + self.x[:,:-1]) / 2
+        self.T = self.Tfunc((self.z[1:]+self.z[:-1])/2, self.t)
 
         if len(self.elements) == 1:
             d = np.zeros(self.N-1)
@@ -616,12 +753,12 @@ class SinglePhaseModel(DiffusionModel):
             d = np.zeros((self.N-1, len(self.elements), len(self.elements)))
         if self.cache:
             for i in range(self.N-1):
-                hashValue = self._getHash(xMid[:,i])
+                hashValue = self._getHash(xMid[:,i], self.T[i])
                 if hashValue not in self.hashTable:
-                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(xMid[:,i], self.T, phase=self.phases[0])
+                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(xMid[:,i], self.T[i], phase=self.phases[0])
                 d[i] = self.hashTable[hashValue]
         else:
-            d = self.therm.getInterdiffusivity(xMid.T, self.T*np.ones(self.N-1), phase=self.phases[0])
+            d = self.therm.getInterdiffusivity(xMid.T, self.T, phase=self.phases[0])
 
         dxdz = (self.x[:,1:] - self.x[:,:-1]) / self.dz
         fluxes = np.zeros((len(self.elements), self.N+1))
@@ -637,23 +774,6 @@ class SinglePhaseModel(DiffusionModel):
         dt = 0.4 * self.dz**2 / np.amax(np.abs(d))
 
         return fluxes, dt
-
-    def updateMesh(self, fluxes, dt):
-        '''
-        Updates mesh using fluxes by time increment dt
-
-        Parameters
-        ----------
-        fluxes : 2D array
-            Fluxes for each element between each node. Size must be (E, N-1)
-                E - number of elements (NOT including reference element)
-                N - number of nodes
-            Boundary conditions will automatically be applied
-        dt : float
-            Time increment
-        '''
-        for e in range(len(self.elements)):
-            self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz
 
 class HomogenizationModel(DiffusionModel):
     def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha']):
@@ -732,12 +852,12 @@ class HomogenizationModel(DiffusionModel):
         #self.midX = 0.5 * (self.x[:,1:] + self.x[:,:-1])
         self.p = self.updateCompSets(self.x)
 
-    def _newEqCalc(self, x):
+    def _newEqCalc(self, x, T):
         '''
         Calculates equilibrium and returns a CompositionSet
         '''
-        eq = self.therm.getEq(x, self.T, 0, self.phases)
-        state_variables = np.array([0, 1, 101325, self.T], dtype=np.float64)
+        eq = self.therm.getEq(x, T, 0, self.phases)
+        state_variables = np.array([0, 1, 101325, T], dtype=np.float64)
         stable_phases = eq.Phase.values.ravel()
         phase_amounts = eq.NP.values.ravel()
         comp = []
@@ -750,7 +870,7 @@ class HomogenizationModel(DiffusionModel):
         if len(comp) == 0:
             comp = None
 
-        return self.therm.getLocalEq(x, self.T, 0, self.phases, comp)
+        return self.therm.getLocalEq(x, T, 0, self.phases, comp)
 
     def updateCompSets(self, xarray):
         '''
@@ -777,9 +897,9 @@ class HomogenizationModel(DiffusionModel):
         parray = np.zeros((len(self.phases), xarray.shape[1]))
         for i in range(parray.shape[1]):
             if self.cache:
-                hashValue = self._getHash(xarray[:,i])
+                hashValue = self._getHash(xarray[:,i], self.T[i])
                 if hashValue not in self.hashTable:
-                    result, comp = self._newEqCalc(xarray[:,i])
+                    result, comp = self._newEqCalc(xarray[:,i], self.T[i])
                     #result, comp = self.therm.getLocalEq(xarray[:,i], self.T, 0, self.phases, self.compSets[i])
                     self.hashTable[hashValue] = (result, comp, None)
                 else:
@@ -787,9 +907,9 @@ class HomogenizationModel(DiffusionModel):
                 results, self.compSets[i] = copy.copy(result), copy.copy(comp)
             else:
                 if self.compSets[i] is None:
-                    results, self.compSets[i] = self._newEqCalc(xarray[:,i])
+                    results, self.compSets[i] = self._newEqCalc(xarray[:,i], self.T[i])
                 else:
-                    results, self.compSets[i] = self.therm.getLocalEq(xarray[:,i], self.T, 0, self.phases, self.compSets[i])
+                    results, self.compSets[i] = self.therm.getLocalEq(xarray[:,i], self.T[i], 0, self.phases, self.compSets[i])
             self.mu[:,i] = results.chemical_potentials[self.unsortIndices]
             cs_phases = [cs.phase_record.phase_name for cs in self.compSets[i]]
             for p in range(len(cs_phases)):
@@ -808,7 +928,7 @@ class HomogenizationModel(DiffusionModel):
         mob = self.defaultMob * np.ones((len(self.phases), len(self.elements)+1, xarray.shape[1]))
         for i in range(xarray.shape[1]):
             if self.cache:
-                hashValue = self._getHash(xarray[:,i])
+                hashValue = self._getHash(xarray[:,i], self.T[i])
                 _, _, mTemp = self.hashTable[hashValue]
             else:
                 mTemp = None
@@ -922,6 +1042,7 @@ class HomogenizationModel(DiffusionModel):
         '''
         Return fluxes and time interval for the current iteration
         '''
+        self.T = self.Tfunc(self.z, self.t)
         self.p = self.updateCompSets(self.x)
 
         #Get average mobility between nodes
@@ -944,7 +1065,11 @@ class HomogenizationModel(DiffusionModel):
         fluxes = np.zeros((len(self.elements)+1, self.N-1))
         fluxes = -avgMob * dmudz
         nonzeroComp = avgX != 0
-        fluxes[nonzeroComp] += -self.eps * avgMob[nonzeroComp] * 8.314 * self.T * dxdz[nonzeroComp] / avgX[nonzeroComp]
+        Tmid = (self.T[1:] + self.T[:-1]) / 2
+        Tmidfull = Tmid[np.newaxis,:]
+        for i in range(fluxes.shape[0]-1):
+            Tmidfull = np.concatenate((Tmidfull, Tmid[np.newaxis,:]), axis=0)
+        fluxes[nonzeroComp] += -self.eps * avgMob[nonzeroComp] * 8.314 * Tmidfull[nonzeroComp] * dxdz[nonzeroComp] / avgX[nonzeroComp]
 
         #Flux in a volume fixed frame: J_vi = J_i - x_i * sum(J_j)
         vfluxes = np.zeros((len(self.elements), self.N+1))
@@ -962,10 +1087,3 @@ class HomogenizationModel(DiffusionModel):
         dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
 
         return vfluxes, dt
-        
-    def updateMesh(self, fluxes, dt):
-        '''
-        Updates the mesh based off the fluxes and time interval
-        '''
-        for e in range(len(self.elements)):
-            self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz

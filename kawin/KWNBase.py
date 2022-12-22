@@ -866,10 +866,8 @@ class PrecipitateBase:
         self.Tparameters = (times, temperatures)
 
         self.T = np.full(self.steps, temperatures[0])
-        for i in range(1, len(times)):
-            self.T[(self.time < 3600*times[i]) & (self.time >= 3600*times[i-1])] = (temperatures[i] - temperatures[i-1]) / (3600 * (times[i] - times[i-1])) * (self.time[(self.time < 3600*times[i]) & (self.time >= 3600*times[i-1])] - 3600 * times[i-1]) + temperatures[i-1]
-        self.T[self.time >= 3600*times[-1]] = temperatures[-1]
-        
+        self.T = np.interp(self.time/3600, times, temperatures, temperatures[0], temperatures[-1])
+
         if len(np.unique(self.T)) == 1:
             self._incubation = self._incubationIsothermal
         else:

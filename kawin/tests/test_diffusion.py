@@ -26,6 +26,7 @@ def test_CompositionInput():
     singleModelTernary.setCompositionStep(0.2, 1, 0, 'CR')
     singleModelTernary.setCompositionStep(0.8, 0, 0, 'AL')
     singleModelTernary.setThermodynamics(NiCrAlTherm)
+    singleModelTernary.setTemperature(1200+273.15)
     singleModelTernary.setup()
 
     assert(singleModelTernary.x[0,25] + singleModelTernary.x[1,25] < 1)

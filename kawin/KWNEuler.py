@@ -46,6 +46,10 @@ class PrecipitateModel (PrecipitateBase):
         self.additionalFunctionNames = []
         self.additionalOutputs = None
 
+        #Coupling functions - this can be used to integrate a model simutaneously within the KWN model
+        self.couplingFunctions = []
+        self.couplingFunctionNames = []
+
     def _resetArrays(self):
         super()._resetArrays()
         self.PBM = [PopulationBalanceModel() for p in self.phases]
@@ -351,6 +355,37 @@ class PrecipitateModel (PrecipitateBase):
         index = self.phaseIndex(phase)
         self.PBM[index].LoadDistribution(data)
 
+    def addCouplingFunction(self, name, f):
+        '''
+        Adds a coupling function to integrate along the KWN model
+        This is done at the end of the iteration
+
+        Parameter
+        ---------
+        name : str
+            Name of the function
+        f : function
+            Takes in model, dt and iteration, and returns a value
+        '''
+        if name in self.couplingFunctionNames:
+            i = 1
+            name = name + '_{}'.format(i)
+            while name in self.couplingFunctionNames:
+                i += 1
+                name = name[:-2]
+                name = name + '_{}'.format(i)
+            print('Warning: Function \'{}\' has already been set, this function will be stored as \'{}\''.format(name[:-2], name))
+
+        self.couplingFunctions.append(f)
+        self.couplingFunctionNames = np.append(self.couplingFunctionNames, name)
+
+    def _calculateAdditionalCoupling(self, dt, i):
+        '''
+        Calculates additional coupling
+        '''
+        for f in range(len(self.couplingFunctions)):
+            self.couplingFunctions[f](self, dt, i)
+
     def addAdditionalOutput(self, name, f):
         '''
         Creates output based off PSD
@@ -566,6 +601,9 @@ class PrecipitateModel (PrecipitateBase):
                 postDTCheck = self._postTimeIncrementCheck(i)
             else:
                 postDTCheck = True
+
+        #Calculate additional coupling
+        self._calculateAdditionalCoupling(dt, i)
 
         #Calculate additional PSD function
         self._calculateAdditionalOutputs(i)

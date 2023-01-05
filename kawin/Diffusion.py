@@ -308,6 +308,7 @@ class DiffusionModel:
         self._recordedX = data['x']
         self._recordedP = data['p']
         self._recordedZ = data['z']
+        self.isSetup = True
 
     def setMeshtoRecordedTime(self, time):
         if self._record:

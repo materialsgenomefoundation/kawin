@@ -266,7 +266,9 @@ class BinarySurrogate:
         self._createDGSurrogate()
 
     def _createDGSurrogate(self):
-        #Build surrogates
+        '''
+        Build surrogates for driving force
+        '''
         if self.linearDG:
             self.SurrogateDrivingForce = Rbf(self.dGcoords[:,0], self.dGcoords[:,1], self.drivingForce, function=self.DGfunction, epsilon=self.DGepsilon, smooth=self.DGsmooth)
             self.SurrogatePrecComp = Rbf(self.precCompCoords[:,0], self.precCompCoords[:,1], self.precComp, function=self.DGfunction, epsilon=self.DGepsilon, smooth=self.DGsmooth)
@@ -523,7 +525,9 @@ class BinarySurrogate:
         self._createICSurrogate()
 
     def _createICSurrogate(self):
-        #Build surrogates
+        '''
+        Build surrogates for interfacial composition
+        '''
         if self.linearIC:
             self.SurrogateParent = Rbf(self.ICcoords[:,0], self.ICcoords[:,1], self.xParent, function = self.ICfunction, epsilon = self.ICepsilon, smooth=self.ICsmooth)
             self.SurrogatePrec = Rbf(self.ICcoords[:,0], self.ICcoords[:,1], self.xPrec, function = self.ICfunction, epsilon = self.ICepsilon, smooth=self.ICsmooth)  
@@ -692,6 +696,9 @@ class BinarySurrogate:
         self._createDiffSurrogate()
 
     def _createDiffSurrogate(self):
+        '''
+        Builds surrogate for diffusivity
+        '''
         #If only 1 data point, then create constant function
         if len(self.Diff) == 1:
             self.SurrogateDiff = lambda x, T: self.Diff[0]
@@ -1097,7 +1104,9 @@ class MulticomponentSurrogate:
         self._createDGSurrogate()
 
     def _createDGSurrogate(self):
-        #Build surrogates
+        '''
+        Builds surrogate for driving force
+        '''
         if self.linearDG:
             arguments = [self.dGcoords[:,i] for i in range(len(self.dGcoords[0]))]
             self.SurrogateDrivingForce = Rbf(*arguments, self.drivingForce, function=self.DGfunction, epsilon=self.DGepsilon, smooth=self.DGsmooth)
@@ -1299,7 +1308,9 @@ class MulticomponentSurrogate:
         self._createICSurrogate()
 
     def _createICSurrogate(self):
-        #Build surrogates
+        '''
+        Builds surrogate for interfacial composition and curvature
+        '''
         if self.linearIC:
             arguments = [self.ICcoords[:,i] for i in range(len(self.ICcoords[0]))]
             self.SurrogateMc = Rbf(*arguments, self.Mc, function=self.ICfunction, epsilon=self.ICepsilon, smooth=self.ICsmooth)

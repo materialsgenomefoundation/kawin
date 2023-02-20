@@ -284,6 +284,18 @@ class GeneralThermodynamics:
             self.mobility_correction[element] = factor
 
     def _getConditions(self, x, T, gExtra = 0):
+        '''
+        Creates dictionary of conditions from composition, temperature and gExtra
+
+        Parameters
+        ----------
+        x : list
+            Composition (excluding reference element)
+        T : float
+            Temperature
+        gExtra : float
+            Gibbs free energy to add to phase
+        '''
         cond = {v.X(self.elements[i+1]): x[i] for i in range(len(x))}
         cond[v.P] = 101325
         cond[v.T] = T
@@ -292,6 +304,21 @@ class GeneralThermodynamics:
         return cond
 
     def _createCompositionSet(self, eq, state_variables, phase, phase_amounts, idx):
+        '''
+        Creates a pycalphad CompositionSet from equilibrium results
+
+        Parameters
+        ----------
+        eq : pycalphad equilibrium result
+        state_variables : list
+            List of state variables
+        phase : str
+            Phase to create CompositionSet for
+        phase_amounts : list
+            Array of floats for phase fraction of each phase
+        idx : ndarray
+            Index array for the index of phase
+        '''
         miscibility = False
         cs = CompositionSet(self.phase_records[phase])
         #If there's a miscibility gap in the matrix phase, then take the largest value

@@ -51,13 +51,17 @@ class EffectiveDiffusionFunctions:
         return np.interp(supersaturation, self.ohmInterp, self.effDiffInterp)
 
     def lambdaLow(self, supersaturation):
-        # Lambda when Q approaches 0
-        # This is done to prevent precision errors when multiplying exp*(1-erf)
+        '''
+        Lambda when Q approaches 0
+        This is done to prevent precision errors when multiplying exp*(1-erf)
+        '''
         return np.sqrt(supersaturation / 2)
 
     def lambdaHigh(self, supersaturation):
-        # Lambda when Q approaches 1
-        # This is done to prevent precision errors when multiplying exp*(1-erf)
+        '''
+        Lambda when Q approaches 1
+        This is done to prevent precision errors when multiplying exp*(1-erf)
+        '''
         return np.sqrt(3 / (2 * (1 - supersaturation)))
 
     def effectiveDiffusionDistanceApprox(self, supersaturation):

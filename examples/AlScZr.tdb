@@ -6,18 +6,23 @@ $Element     Standard state       mass [g/mol]     H_298      S_298
 ELEMENT  /-   ELECTRON_GAS        0.0             0.0         0.0 !
 ELEMENT  VA   VACUUM              0.0000E+00      0.0000E+00  0.0000E+00 !
 ELEMENT  AL   FCC_A1              2.6982E+01      4.5773E+03  2.8322E+01 !
+ELEMENT  SC   HCP_A3              4.4996E+01      5.2174E+03  3.4644E+01 !
 ELEMENT  ZR   HCP_A3              9.1224E+01      5.5663E+03  3.9181E+01 !
 $
 $
  TYPE_DEFINITION % SEQ *!
 $
+$PHASE AL3SC
+PHASE AL3SC % 2 3 1 !
+CONST AL3SC : AL : SC,ZR : !
+$
 $PHASE AL3ZR
-PHASE AL3ZR % 2 0.75 0.25 !
-CONST AL3ZR : AL : ZR : !
+PHASE AL3ZR % 2 3 1 !
+CONST AL3ZR : AL : SC,ZR : !
 $
 $PHASE FCC_A1
 PHASE FCC_A1 % 2 1 1 !
-CONST FCC_A1 : AL%,ZR : VA : !
+CONST FCC_A1 : AL%,SC,ZR : VA : !
 $
 $
 $
@@ -38,22 +43,38 @@ FUNCTION GHSERZR 130.00 -7827.595+125.64905*T-24.1618*T*LOG(T)
                             -4.37791E-3*T**2+34971*T**(-1);
             2128.00 Y -26085.921+262.724183*T-42.144*T*LOG(T)
                             -1342.895E28*T**(-9); 6000.00 N !
-
+$
+$ Scandium
+FUNCTION GHSERSC 298.15 -8689.547 + 153.48097*T - 28.1882*T*LOG(T)
+                    + 3.21892E-3*T**2 - 1.64531E-6*T**3 + 72177*T**(-1);
+            800.00 Y -7511.295 + 132.759582*T - 24.9132*T*LOG(T)
+                    -0.573295E-3*T**2 - 0.859345E-6*T**3;
+            1608.00 Y 261143.04 - 1817.922454*T + 241.4410508*T*LOG(T)
+                    - 117.529396E-3*T**2 + 8.7398E-6*T**3 - 50607159*T**(-1);
+            2000.00 Y -30515.246 + 286.474338*T - 44.2249*T*LOG(T); 6000.00 N !
 $
 $                                                                       PHASE FCC_A1
 $
 PARAMETER G(FCC_A1,AL:VA;0) 298.15 GHSERAL; 6000.00 N !
+PARAMETER G(FCC_A1,SC:VA;0) 298.15 5000.00+GHSERSC; 6000.00 N !
 PARAMETER G(FCC_A1,ZR:VA;0) 298.15 7600.00-0.9*T+GHSERZR; 6000.00 N !
+PARAMETER G(FCC_A1,AL,SC:VA;0)  298.15 -109500+2.5*T;    6000.00  N !
 PARAMETER G(FCC_A1,AL,ZR:VA;0)  298.15 -152947+21.3*T;    6000.00  N !
 
 $
 $                                                                       PHASE AL3ZR
 $
-PARAMETER G(AL3ZR,AL:ZR;0)  298.15 -47381 - 24.373*T + 3.894*T*LOG(T)
-                              +0.75*GHSERAL+0.25*GHSERZR;  6000.00  N !
-
+PARAMETER G(AL3SC,AL:SC;0)  298.15 -156700 + 7.2*T
+                              +3*GHSERAL+GHSERSC;  6000.00  N !
+PARAMETER G(AL3SC,AL:ZR;0)  298.15 -177627 + 23.25*T
+                              +3*GHSERAL+GHSERZR;  6000.00  N !
+PARAMETER G(AL3SC,AL:SC,ZR;0) 298.15 -84160; 6000.00 N !
 $
-$                                                                       Diffusion parameters
+PARAMETER G(AL3ZR,AL:SC;0)  298.15 -160120+22.34*T
+                              +3*GHSERAL+GHSERSC;  6000.00  N !
+PARAMETER G(AL3ZR,AL:ZR;0)  298.15 -189524-97.492*T+15.576*T*LOG(T)
+                              +3*GHSERAL+GHSERZR;  6000.00  N !
+PARAMETER G(AL3ZR,AL:SC,ZR;0) 298.15 -53040; 6000.00 N !
 $
 PARAMETER DF(FCC_A1&ZR,*:VA;0) 298.15 -2.56655 * 8.314 * T; 6000 N !
 PARAMETER DQ(FCC_A1&ZR,*:VA;0) 298.15 -242000; 6000 N !

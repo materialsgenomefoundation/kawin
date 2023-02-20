@@ -119,26 +119,108 @@ class StrainEnergy:
         self.type = self.CONSTANT
 
     def setElasticTensor(self, tensor):
+        '''
+        Sets elastic tensor of matrix using 2nd rank tensor
+
+        Parameters
+        ----------
+        tensor : 6x6 array
+            2nd rank elastic tensor
+        '''
         self.c = self._setElasticTensor(tensor)
         self._c4 = self._convert2To4rankTensor(self.c)
 
     def setElasticConstants(self, c11, c12, c44):
+        '''
+        Sets elastic tensor of matrix by elastic constants, assuming cubic symmetry
+
+        Parameters
+        ----------
+        c11 : float
+            Modulus for compression
+            c11 = E(1-nu) / (1+nu)(1-2nu)
+        c12 : float
+            Modulus for dilation (accounts for compression and Poisson's ratio)
+            c12 = E nu / (1+nu)(1-2nu)
+        c44 : float
+            Modulus for shear
+            c44 = (c11-c12)/2
+        '''
         self.c = self._setElasticConstants(c11, c12, c44)
         self._c4 = self._convert2To4rankTensor(self.c)
 
     def setModuli(self, E = None, nu = None, G = None, lam = None, K = None, M = None):
+        '''
+        Sets elastic tensor of matrix by 2 moduli
+
+        Parameters (only 2 has to be defined)
+        ----------
+        E : float
+            Elastic modulus
+        nu : float
+            Poisson's ratio
+        G : float
+            Shear modulus
+        lam : float
+            Lame's first parameter
+        K : float
+            Bulk modulus
+        M : float
+            P-wave modulus
+        '''
         self.c = self._setModuli(E, nu, G, lam, K, M)
         self._c4 = self._convert2To4rankTensor(self.c)
 
     def setElasticTensorPrecipitate(self, tensor):
+        '''
+        Sets elastic tensor of precipitate using 2nd rank tensor
+
+        Parameters
+        ----------
+        tensor : 6x6 array
+            2nd rank elastic tensor
+        '''
         self.cPrec = self._setElasticTensor(tensor)
         self._c4Prec = self._convert2To4rankTensor(self.cPrec)
 
     def setElasticConsantsPrecipitate(self, c11, c12, c44):
+        '''
+        Sets elastic tensor of precipitate by elastic constants, assuming cubic symmetry
+
+        Parameters
+        ----------
+        c11 : float
+            Modulus for compression
+            c11 = E(1-nu) / (1+nu)(1-2nu)
+        c12 : float
+            Modulus for dilation (accounts for compression and Poisson's ratio)
+            c12 = E nu / (1+nu)(1-2nu)
+        c44 : float
+            Modulus for shear
+            c44 = (c11-c12)/2
+        '''
         self.cPrec = self._setElasticConstants(c11, c12, c44)
         self._c4Prec = self._convert2To4rankTensor(self.cPrec)
     
     def setModuliPrecipitate(self, E = None, nu = None, G = None, lam = None, K = None, M = None):
+        '''
+        Sets elastic tensor of precipitate by 2 moduli
+
+        Parameters (only 2 has to be defined)
+        ----------
+        E : float
+            Elastic modulus
+        nu : float
+            Poisson's ratio
+        G : float
+            Shear modulus
+        lam : float
+            Lame's first parameter
+        K : float
+            Bulk modulus
+        M : float
+            P-wave modulus
+        '''
         self.cPrec = self._setModuli(E, nu, G, lam, K, M)
         self._c4Prec = self._convert2To4rankTensor(self.cPrec)
 
@@ -428,6 +510,19 @@ class StrainEnergy:
                         [v[3], v[4], v[2]]])
 
     def _convert2rankToVec(self, c):
+        '''
+        Converts 2nd rank tensor to vector
+
+        Parameter
+        ---------
+        c : ndarray
+            3x3 tensor
+
+        Returns
+        -------
+        v : 1darray
+            Strain/stress vector
+        '''
         return np.array([c[0,0], c[1,1], c[2,2], c[1,2], c[0,2], c[0,1]])
 
     def _rotateRank2Tensor(self, rot, tensor):
@@ -569,6 +664,9 @@ class StrainEnergy:
         return 8*d*self.dA
 
     def Dijkl(self):
+        '''
+        Dijkl term for Eshelby's theory
+        '''
         #return -np.product(self.r)/(4*np.pi) * self.sphericalIntegral(self.Dfunc)
         return -np.product(self.r)/(4*np.pi) * self.sphInt()
 
@@ -595,6 +693,9 @@ class StrainEnergy:
         return -0.5 * V * np.sum(stress * strain)
 
     def _strainEnergyEllipsoidWithStress(self):
+        '''
+        Strain energy of ellipsoidal particle with applied stress
+        '''
         V = 4*np.pi/3 * np.product(self.r)
         S = self.Sijmn(self.Dijkl())
         stress = self._multiply(self._c4, self._multiply(S, self.eigstrain) - self.eigstrain)
@@ -602,12 +703,18 @@ class StrainEnergy:
         return self._strainEnergy(stress - stress0, self.eigstrain - self.appstrain, V)
 
     def _strainEnergyEllipsoid(self):
+        '''
+        Strain energy of ellipsoidal particle
+        '''
         V = 4*np.pi/3 * np.product(self.r)
         S = self.Sijmn(self.Dijkl())
         stress = self._multiply(self._c4, self._multiply(S, self.eigstrain) - self.eigstrain)
         return self._strainEnergy(stress, self.eigstrain, V)
 
     def _strainEnergyEllipsoid2(self):
+        '''
+        Alternative method of strain energy on ellipsoidal particle using 2nd rank tensors
+        '''
         V = 4*np.pi/3 * np.product(self.r)
         S = self._convert4To2rankTensor(self.Sijmn(self.Dijkl()))
         eigFlat = self._convert2rankToVec(self.eigstrain)
@@ -615,6 +722,9 @@ class StrainEnergy:
         return -0.5 * V * np.matmul(eigFlat, np.matmul(multTerm, eigFlat))
 
     def _strainEnergyBohm(self):
+        '''
+        Strain energy of particle for when matrix and precipitate phases have different elastic tensors
+        '''
         V = 4*np.pi/3 * np.product(self.r)
         S = self.Sijmn(self.Dijkl())
         #invTerm = np.linalg.tensorinv(self._multiply(self._c4Prec - self._c4, S) + self._c4)
@@ -625,6 +735,9 @@ class StrainEnergy:
         return self._strainEnergy(stressC-stress0, self.eigstrain, V)
 
     def _strainEnergyBohm2(self):
+        '''
+        Strain energy of particle for when matrix and precipitate phases have different elastic tensors using 2nd rank tensors
+        '''
         V = 4*np.pi/3 * np.product(self.r)
         S = self._convert4To2rankTensor(self.Sijmn(self.Dijkl()))
         eigFlat = self._convert2rankToVec(self.eigstrain)
@@ -718,13 +831,16 @@ class StrainEnergy:
 
     @property
     def _xi(self):
+        '''
+        Needed for the Ohm term with cubic crystal symmetry
+        '''
         return (self.c[0,0] - self.c[0,1] - 2*self.c[3,3]) / self.c[3,3]
 
     #Equilibrium aspect ratios
     #Determined by minimum of strain energy + interfacial energy
     def eqAR_byGR(self, Rsph, gamma, shpFactor, a=1.001, b=100):
         '''
-        Golden ratio search
+        Equilibrium aspect ratio using golden ratio search
 
         Parameters
         ----------
@@ -797,7 +913,7 @@ class StrainEnergy:
 
     def eqAR_bySearch(self, Rsph, gamma, shpFactor):
         '''
-        Cached search
+        Equilibrium aspect ratio by cached search
 
         Parameters
         ----------

@@ -51,6 +51,11 @@ class PrecipitateModel (PrecipitateBase):
         self.couplingFunctionNames = []
 
     def _resetArrays(self):
+        '''
+        Resets and initializes arrays for all variables
+
+        In addition to PrecipitateBase, the equilibrium aspect ratio area and population balance models are created here
+        '''
         super()._resetArrays()
         self.PBM = [PopulationBalanceModel() for p in self.phases]
 
@@ -90,13 +95,8 @@ class PrecipitateModel (PrecipitateBase):
         vDict = {v: getattr(self, v) for v in variables}
         if self.additionalOutputs is not None:
             vDict['additionalOutputs'] = self.additionalOutputs
-            vDict['additionalFunctionNames'] = self.additionalFunctionNames
-            #tempFunctions = {f['name']: f['func'] for f in self.additionalFunctions}
-            #for f in self.additionalFunctions:
-            #    f['func'] = None
-            #vDict['additionalFunctions'] = self.additionalFunctions
-            #for f in self.additionalFunctions:
-            #    f['func'] = tempFunctions[f['name']]
+            if not toCSV:
+                vDict['additionalFunctionNames'] = self.additionalFunctionNames
         for p in range(len(self.phases)):
             vDict['PSDdata_'+self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
             vDict['PSDsize_' + self.phases[p]] = self.PBM[p].PSDsize
@@ -129,9 +129,9 @@ class PrecipitateModel (PrecipitateBase):
                             headers.append(v + '_' + self.phases[i] + '_' + self.elements[j])
                 elif v == 'additionalOutputs':
                     for i in range(len(self.phases)):
-                        for j in range(len(self.additionalFunctions)):
+                        for j in range(len(self.additionalFunctionNames)):
                             arrays.append(vDict[v][i,:,j])
-                            headers.append(v + '_' + self.phases[i] + '_' + self.additionalFunctions[j]['name'])
+                            headers.append(v + '_' + self.phases[i] + '_' + self.additionalFunctionNames[j])
                 else:
                     arrays.append(vDict[v])
                     headers.append(v)
@@ -219,8 +219,9 @@ class PrecipitateModel (PrecipitateBase):
                     model.eqAspectRatio[p] = np.array(columns[PSDvars[3]], dtype='float')
                     model.PBM[p].PSDbounds = np.array(columns[PSDvars[4]], dtype='float')
 
-                restOfVariables = ['time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
+                restOfVariables = ['time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta', 'additionalOutputs']
                 restOfColumns = {v: [] for v in restOfVariables}
+                additionalFunctionNames = []
                 for d in columns:
                     if d not in setupVars:
                         if d == 'time':
@@ -235,6 +236,8 @@ class PrecipitateModel (PrecipitateBase):
                             for r in restOfVariables:
                                 if r in d:
                                     selectedVar = r
+                            if selectedVar == 'additionalOutputs':
+                                additionalFunctionNames.append(d[18:])
                             restOfColumns[selectedVar].append(np.array(columns[d], dtype='float'))
                 for d in restOfColumns:
                     restOfColumns[d] = np.array(restOfColumns[d])
@@ -251,9 +254,23 @@ class PrecipitateModel (PrecipitateBase):
                         model.xEqBeta = np.reshape(model.xEqBeta, ((len(model.phases), model.numberOfElements, len(model.time))))
                     model.xEqAlpha = np.transpose(model.xEqAlpha, (0, 2, 1))
                     model.xEqBeta = np.transpose(model.xEqBeta, (0, 2, 1))
+
+                #If additional outputs exists, then reshape array to (phase, iterations, functions)
+                if len(additionalFunctionNames) > 0:
+                    numberOfFunctions = int(len(additionalFunctionNames) / len(model.phases))
+                    model.additionalOutputs = np.reshape(model.additionalOutputs, (len(model.phases), numberOfFunctions, len(model.time)))
+                    model.additionalOutputs = np.transpose(model.additionalOutputs, (0, 2, 1))
+                    model.additionalFunctionNames = []
+                    for i in range(numberOfFunctions):
+                        model.additionalFunctionNames.append(additionalFunctionNames[i][len(model.phases[0])+1:])
+                    model.additionalFunctionNames = np.array(model.additionalFunctionNames)
+
         return model
 
     def _divideTimestep(self, i, dt):
+        '''
+        Divides timestep at iteration i
+        '''
         super()._divideTimestep(i, dt)
 
         if len(self.additionalFunctions) > 0:
@@ -408,7 +425,6 @@ class PrecipitateModel (PrecipitateBase):
             
         self.additionalFunctions.append(f)
         self.additionalFunctionNames = np.append(self.additionalFunctionNames, name)
-        #self.additionalFunctions = np.append(self.additionalFunctions, {'name': name, 'func': f})
 
     def _setupAdditionalOutputs(self):
         '''
@@ -425,7 +441,6 @@ class PrecipitateModel (PrecipitateBase):
         for f in range(len(self.additionalFunctions)):
             for p in range(len(self.phases)):
                 self.additionalOutputs[p, i, f] = self.additionalFunctions[f](self, p, i)
-                #self.additionalOutputs[p, i, f] = self.additionalFunctions[f]['func'](self, p, i)
 
     def getAdditionalOutput(self, name):
         '''
@@ -441,7 +456,7 @@ class PrecipitateModel (PrecipitateBase):
         (p, N) array for the output for each phase
         '''
         if name in self.additionalFunctionNames:
-            index, = np.where(self.additionalFunctionNames ==name)
+            index, = np.where(self.additionalFunctionNames == name)
             return self.additionalOutputs[:, :, index[0]]
 
     def particleRadius(self, phase = None):
@@ -526,6 +541,11 @@ class PrecipitateModel (PrecipitateBase):
                 self.PSDXbeta[p] = np.zeros(self.PBM[p].bins + 1)
             
     def setup(self):
+        '''
+        Sets up additional variables in addition to PrecipitateBase
+
+        Sets up additional outputs, population balance models, equilibrium aspect ratio and equilibrium compositions
+        '''
         super().setup()
 
         self._setupAdditionalOutputs()

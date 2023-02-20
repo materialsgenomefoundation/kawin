@@ -611,7 +611,7 @@ class PopulationBalanceModel:
         if hasattr(scale, '__len__'):
             scale = np.interp(self.PSDsize, self.PSDbounds, scale)
         else:
-            scale = scale * np.ones(self.PSDsize)
+            scale = scale * np.ones(len(self.PSDsize))
 
         if fill:
             axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
@@ -699,7 +699,7 @@ class PopulationBalanceModel:
         if hasattr(scale, '__len__'):
             scale = np.interp(x, self.PSDbounds, scale)
         else:
-            scale = scale * np.ones(x)
+            scale = scale * np.ones(len(x))
         
         if fill:
             axes.fill_between(x * scale, y, np.zeros(len(y)), *args, **kwargs)
@@ -743,7 +743,7 @@ class PopulationBalanceModel:
         if hasattr(scale, '__len__'):
             scale = np.interp(xCoord, self.PSDbounds, scale)
         else:
-            scale = scale * np.ones(xCoord)
+            scale = scale * np.ones(len(xCoord))
 
         if outline != 'no outline':
             axes.plot(xCoord * scale, yCoord, *args, **kwargs)
@@ -775,7 +775,7 @@ class PopulationBalanceModel:
         if hasattr(scale, '__len__'):
             scale = np.interp(self.PSDsize, self.PSDbounds, scale)
         else:
-            scale = scale * np.ones(self.PSDsize)
+            scale = scale * np.ones(len(self.PSDsize))
 
         axes.plot(self.PSDsize * scale, self.CumulativeMoment(order) / self.Moment(order), *args, **kwargs)
         self.setAxes(axes, scale, logX, False) 

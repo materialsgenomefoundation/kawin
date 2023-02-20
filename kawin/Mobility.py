@@ -43,10 +43,24 @@ class MobilityModel(Model):
 
     @property
     def mobility_variables(self):
+        '''
+        List of variables in the mobility functions
+
+        Returns
+        -------
+        dictionary {component name (str) : variables (list)}
+        '''
         return {c: sorted([x for x in self.mobility[c].free_symbols if isinstance(x, v.StateVariable)], key=str) for c in self.mobility}
 
     @property
     def diffusivity_variables(self):
+        '''
+        List of variables in the diffusivity functions
+
+        Returns
+        -------
+        dictionary {component name (str) : variables (list)}
+        '''
         return {c: sorted([x for x in self.diffusivity[c].free_symbols if isinstance(x, v.StateVariable)], key=str) for c in self.diffusivity}
 
     def build_phase(self, dbe):

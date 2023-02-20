@@ -40,7 +40,7 @@ class PrecipitateBase:
         self.steps = int(steps)             #This includes the number of steps added when adaptive time stepping is enabled
         self.t0 = t0
         self.tf = tf
-        self.phases = phases
+        self.phases = np.array(phases)
         self.linearTimeSpacing = linearTimeSpacing
 
         #Change t0 to finite value if logarithmic time spacing
@@ -128,7 +128,7 @@ class PrecipitateBase:
         phase : str (optional)
             Precipitate phase (defaults to None, which will return 0)
         '''
-        return 0 if phase is None else self.phases.index(phase)
+        return 0 if phase is None else np.where(self.phases == phase)[0][0]
         
     def reset(self):
         '''
@@ -148,6 +148,19 @@ class PrecipitateBase:
             self.setNonIsothermalTemperature(self.Tparameters)
         
     def _resetArrays(self):
+        '''
+        Resets and initializes arrays for all variables
+            time
+            matrix composition, equilibrium composition
+            critial radius and nucleation barrier
+            average radius and aspect ratio
+            volume fraction
+            nucleation rate
+            precipitate density
+            driving force
+            beta
+            incubation time
+        '''
         self.steps = self.initialSteps
         self.time = np.linspace(self.t0, self.tf, self.steps) if self.linearTimeSpacing else np.logspace(np.log10(self.t0), np.log10(self.tf), self.steps)
 
@@ -956,20 +969,25 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.interfacialComposition[index] = composition
 
-    def setThermodynamics(self, therm, phase = None, removeCache = False):
+    def setThermodynamics(self, therm, phase = None, removeCache = False, addDiffusivity = True):
         '''
         Parameters
         ----------
         therm : Thermodynamics class
         phase : str (optional)
             Phase to consider (defaults to first precipitate in list)
+        removeCache : bool (optional)
+            Will not cache equilibrium results if True (defaults to False)
+        addDiffusivity : bool (optional)
+            For binary systems, will add diffusivity functions from the database if present
+            Defaults to True
         '''
         index = self.phaseIndex(phase)
         self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache)
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
-            if therm.mobCallables[therm.phases[0]] is not None or therm.diffCallables[therm.phases[0]] is not None:
+            if (therm.mobCallables is not None or therm.diffCallables is not None) and addDiffusivity:
                 self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
             self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = False)
@@ -1319,23 +1337,38 @@ class PrecipitateBase:
         return 0
 
     def _nucleateFreeEnergy(self, Rsph, p, i):
+        '''
+        Free energy change for a nucleate with radius of Rsph
+        '''
         volContribution = 4/3 * np.pi * Rsph**3 * (self.dGs[p,i] + self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(Rsph)))
         areaContribution = 4 * np.pi * self.gamma[p] * Rsph**2 * self.shapeFactors[p].thermoFactor(Rsph)
         return -volContribution + areaContribution
 
     def _Zeldovich(self, p, i):
+        '''
+        Zeldovich factor - probability that cluster at height of nucleation barrier will continue to grow
+        '''
         return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * self.T[i])) / (2 * np.pi * self.avo * self.Rcrit[p,i]**2)
         
     def _BetaBinary1(self, p, i):
+        '''
+        Impingement rate for binary systems using Perez et al
+        '''
         return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * self.xComp[0] * self.Diffusivity(self.xComp[i-1], self.T[i]) / self.aAlpha**4
 
     def _BetaBinary2(self, p, i):
-        #This will follow the same equation as with _BetaMulti; however, some simplications can be made based off the summation contraint
+        '''
+        Impingement rate for binary systems taken from Thermocalc prisma documentation
+        This will follow the same equation as with _BetaMulti; however, some simplications can be made based off the summation contraint
+        '''
         D = self.Diffusivity(self.xComp[i-1], self.T[i])
         Dfactor = (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / (self.xEqAlpha[p,i-1]*D) + (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / ((1 - self.xEqAlpha[p,i-1])*D)
         return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * (1/Dfactor) / self.aAlpha**4
             
     def _BetaMulti(self, p, i):
+        '''
+        Impingement rate for multicomponent systems
+        '''
         if self._betaFuncs[p] is None:
             return self._defaultBeta
         else:
@@ -1387,6 +1420,9 @@ class PrecipitateBase:
         return np.exp(-tau / (self.time[i] - self.time[int(self.incubationOffset[p])]))
 
     def _setNucleateRadius(self, i):
+        '''
+        Adds 1/2 * sqrt(kb T / pi gamma) to critical radius to ensure they grow when growth rates are calculated
+        '''
         for p in range(len(self.phases)):
             #If nucleates form, then calculate radius of precipitate
             #Radius is set slightly larger so precipitate 
@@ -1396,6 +1432,16 @@ class PrecipitateBase:
                 self.Rad[p, i] = 0
 
     def getTimeAxis(self, timeUnits='s', bounds=None):
+        '''
+        Returns scaling factor, label and x-limits depending on units of time
+
+        Parameters
+        ----------
+        timeUnits : str
+            's' / 'sec' / 'seconds' - seconds
+            'min' / 'minutes' - minutes
+            'h' / 'hrs' / 'hours' - hours
+        '''
         timeScale = 1
         timeLabel = 'Time (s)'
         if 'min' in timeUnits:
@@ -1437,7 +1483,7 @@ class PrecipitateBase:
         bounds : tuple (optional)
             Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
         timeUnits : str (optional)
-            Plot time dependent variables per seconds ('s'), minutes ('m') or hours ('h')
+            Plot time dependent variables per seconds ('s'), minutes ('min') or hours ('h')
         radius : str (optional)
             For non-spherical precipitates, plot the Average Radius by the -
                 Equivalent spherical radius ('spherical')

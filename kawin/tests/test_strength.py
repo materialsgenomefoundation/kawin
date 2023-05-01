@@ -1,4 +1,4 @@
-from kawin.Strength import StrengthModel
+from kawin.coupling.Strength import StrengthModel
 import numpy as np
 
 sm = StrengthModel()

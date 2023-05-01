@@ -1,6 +1,7 @@
 from numpy.testing import assert_allclose
 import numpy as np
-from kawin.Diffusion import SinglePhaseModel, HomogenizationModel
+from kawin.diffusion.SinglePhase import SinglePhaseModel
+from kawin.diffusion.Homogenization import HomogenizationModel
 from kawin.Thermodynamics import GeneralThermodynamics
 from kawin.tests.datasets import *
 

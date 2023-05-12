@@ -1,6 +1,6 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.Mobility import mobility_from_composition_set
+from kawin.thermo.Mobility import mobility_from_composition_set
 import copy
 
 class HomogenizationModel(DiffusionModel):

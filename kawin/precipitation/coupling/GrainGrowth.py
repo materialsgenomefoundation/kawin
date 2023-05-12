@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kawin.PopulationBalance import PopulationBalanceModel
+from kawin.precipitation.PopulationBalance import PopulationBalanceModel
 
 class GrainGrowthModel:
     '''

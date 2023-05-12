@@ -1,7 +1,8 @@
 from numpy.testing import assert_allclose
 import numpy as np
-from kawin.ShapeFactors import ShapeFactor
-from kawin.ElasticFactors import StrainEnergy
+
+from kawin.precipitation import ShapeFactor
+from kawin.precipitation import StrainEnergy
 
 Rsingle = 2
 Rarray = np.linspace(1, 2, 10)

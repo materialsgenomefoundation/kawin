@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kawin.EffectiveDiffusion import EffectiveDiffusionFunctions
-from kawin.ShapeFactors import ShapeFactor
-from kawin.ElasticFactors import StrainEnergy
-from kawin.GrainBoundaries import GBFactors
+from kawin.precipitation.non_ideal.EffectiveDiffusion import EffectiveDiffusionFunctions
+from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
+from kawin.precipitation.non_ideal.ElasticFactors import StrainEnergy
+from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
 import copy
 import time
 import csv

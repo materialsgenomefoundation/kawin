@@ -1,7 +1,7 @@
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
-from kawin.LebedevNodes import loadPoints
+from kawin.precipitation.non_ideal.LebedevNodes import loadPoints
 import copy
 
 class StrainEnergy:

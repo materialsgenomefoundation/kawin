@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.testing import assert_allclose
-from kawin.PopulationBalance import PopulationBalanceModel
+from kawin.precipitation import PopulationBalanceModel
 
 #Set parameters for pbm. Default bins are increased here so that added bins should be 50
 bins = 200

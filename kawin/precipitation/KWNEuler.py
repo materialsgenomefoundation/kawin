@@ -1,7 +1,7 @@
 import numpy as np
-from kawin.KWNBase import PrecipitateBase
-from kawin.PopulationBalance import PopulationBalanceModel
-from kawin.GrainBoundaries import GBFactors
+from kawin.precipitation.KWNBase import PrecipitateBase
+from kawin.precipitation.PopulationBalance import PopulationBalanceModel
+from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
 import copy
 import csv
 from itertools import zip_longest

@@ -1,3 +1,0 @@
-Time steps = 5000
-surrogate = 4.715 + 9.746 for training
-no surrogate = 52.838

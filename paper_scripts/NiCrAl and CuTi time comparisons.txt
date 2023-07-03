@@ -1,0 +1,14 @@
+NiCrAl
+50.760 seconds - total
+4.242 seconds - load thermodynamic database
+0.007 seconds - input model parameters
+46.023 seconds - solve model
+0.489 seconds - plot results
+
+Cu-Ti
+87.893 seconds - total
+0.270 seconds - load thermodynamic database
+0.007 seconds - input model parameters
+31.203 seconds - solve spherical model
+55.599 seconds - solve needle model
+0.814 seconds - plot results

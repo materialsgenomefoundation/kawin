@@ -1,0 +1,5 @@
+caching - 202.417
+no caching - 497.219
+
+caching - 39.367
+no caching - 91.013

@@ -1,0 +1,5 @@
+Time steps = 1e3
+0.1nm bins - 132.546
+1nm bins - 26.681
+5nm bins - 44.382
+adaptive bins - 33.995

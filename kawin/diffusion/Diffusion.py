@@ -2,6 +2,7 @@ import numpy as np
 import time
 import csv
 from itertools import zip_longest
+from kawin.solver.Solver import DESolver, SolverType
 
 class DiffusionModel:
     #Boundary conditions
@@ -309,10 +310,10 @@ class DiffusionModel:
 
     def setMeshtoRecordedTime(self, time):
         if self._record:
-            if time <= self._recordedTime[0]:
+            if time < self._recordedTime[0]:
                 print('Input time is lower than smallest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[0]))
                 self.x, self.p = self._recordedX[0], self._recordedP[0]
-            elif time >= self._recordedTime[-1]:
+            elif time > self._recordedTime[-1]:
                 print('Input time is larger than longest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[-1]))
                 self.x, self.p = self._recordedX[-1], self._recordedP[-1]
             else:
@@ -516,8 +517,22 @@ class DiffusionModel:
     def getFluxes(self):
         '''
         "Virtual" function to be implemented by child objects
+
+        Should return (fluxes (list), dt (float))
         '''
-        return [], []
+        raise NotImplementedError()
+    
+    def getDt(self):
+        raise NotImplementedError()
+    
+    def getdXdt(self, t, x):
+        raise NotImplementedError()
+    
+    def preProcess(self):
+        raise NotImplementedError()
+    
+    def postProcess(self, time, x):
+        raise NotImplementedError()
 
     def updateMesh(self, fluxes, dt):
         '''
@@ -551,7 +566,7 @@ class DiffusionModel:
         self.x[self.x < self.minComposition] = self.minComposition
         self.t += dt
 
-    def solve(self, simTime, verbose=False, vIt=10):
+    def solve2(self, simTime, verbose=False, vIt=10):
         '''
         Solves the model by updated the mesh until the final simulation time is met
         '''
@@ -576,6 +591,23 @@ class DiffusionModel:
 
         tf = time.time()
         print(str(i) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, tf-t0))
+
+    def solve(self, simTime, solverType = SolverType.RK4, verbose=False, vIt=10):
+        '''
+        Solves model using the DESolver
+        '''
+        self.setup()
+        self.record(self.t)     #Record at t=0
+        if verbose:
+            print('Iteration\tSim Time (h)\tRun time (s)')
+
+        solver = DESolver(solverType)
+        solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printStatus=self.printStatus, getDt=self.getDt)
+
+        solver.solve(self.getdXdt, self.t, [self.x], simTime, verbose, vIt)
+
+    def printStatus(self, iteration, simTimeElapsed):
+        print(str(iteration) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, simTimeElapsed))
 
     def getX(self, element):
         '''

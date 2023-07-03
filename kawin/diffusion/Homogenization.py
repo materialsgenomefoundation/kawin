@@ -265,27 +265,28 @@ class HomogenizationModel(DiffusionModel):
         Ak = np.sum(Ak, axis=0)
         avgMob = minMob + Ak / (1 - Ak / (3*minMob))
         return avgMob
-
-    def getFluxes(self):
+    
+    def _getFluxes(self, t, x_curr):
         '''
         Return fluxes and time interval for the current iteration
         '''
-        self.T = self.Tfunc(self.z, self.t)
-        self.p = self.updateCompSets(self.x)
+        x = x_curr[0]
+        self.T = self.Tfunc(self.z, t)
+        self.p = self.updateCompSets(x)
 
         #Get average mobility between nodes
-        avgMob = self.mobilityFunction(self.x)
+        avgMob = self.mobilityFunction(x)
         avgMob = 0.5 * (avgMob[:,1:] + avgMob[:,:-1])
 
         #Composition between nodes
-        avgX = 0.5 * (self.x[:,1:] + self.x[:,:-1])
+        avgX = 0.5 * (x[:,1:] + x[:,:-1])
         avgX = np.concatenate(([1-np.sum(avgX, axis=0)], avgX), axis=0)
 
         #Chemical potential gradient
         dmudz = (self.mu[:,1:] - self.mu[:,:-1]) / self.dz
 
         #Composition gradient (we need to calculate gradient for reference element)
-        dxdz = (self.x[:,1:] - self.x[:,:-1]) / self.dz
+        dxdz = (x[:,1:] - x[:,:-1]) / self.dz
         dxdz = np.concatenate(([0-np.sum(dxdz, axis=0)], dxdz), axis=0)
 
         # J = -M * dmu/dz
@@ -315,3 +316,25 @@ class HomogenizationModel(DiffusionModel):
         dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
 
         return vfluxes, dt
+
+    def getFluxes(self):
+        '''
+        Return fluxes and time interval for the current iteration
+        '''
+        return self._getFluxes(self.t, [self.x])
+    
+    def getDt(self):
+        fluxes, dt = self.getFluxes()
+        return dt
+    
+    def getdXdt(self, t, x):
+        fluxes, dt = self._getFluxes(t, x)
+        return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
+    
+    def preProcess(self):
+        return
+    
+    def postProcess(self, time, x):
+        self.t = time
+        self.x = x[0]
+        self.record(self.t)

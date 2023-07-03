@@ -30,6 +30,8 @@ class Iterator:
         '''
         Since can be a list of arrays, we want to convert it to a 1D array to easily to operations
 
+        TODO - this should be compatible with arrays of any dimensions. Currently, this will only work on a list of 1D arrays
+
         Parameters
         ----------
         X : list of arrays

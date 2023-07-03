@@ -1,0 +1,2413 @@
+N	Time (s)	Temperature (K)	AL	CR	
+100	3.3e+01		1415		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.7024e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+200	6.6e+01		1407		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.6811e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+300	9.9e+01		1399		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.6597e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+400	1.3e+02		1392		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.6411e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+500	1.7e+02		1384		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.6197e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+600	2.0e+02		1376		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.5984e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+700	2.3e+02		1369		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.5797e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+800	2.6e+02		1361		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.3252e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+900	3.0e+02		1353		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.3165e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1000	3.3e+02		1345		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.3077e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1100	3.6e+02		1338		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.3001e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1200	4.0e+02		1330		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2913e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1300	4.3e+02		1322		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2826e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1400	4.6e+02		1315		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2749e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1500	5.0e+02		1307		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2662e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1600	5.3e+02		1299		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2575e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1700	5.6e+02		1292		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2498e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1800	5.9e+02		1284		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2411e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+1900	6.3e+02		1276		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2323e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2000	6.6e+02		1268		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2236e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2100	6.9e+02		1261		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2160e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2200	7.3e+02		1253		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2072e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2300	7.6e+02		1245		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.1985e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2400	7.9e+02		1238		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.1908e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2500	8.3e+02		1230		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.1821e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2600	8.6e+02		1222		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.1734e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2700	8.9e+02		1215		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.1657e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2800	9.2e+02		1207		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.1477e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+2900	9.6e+02		1199		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.9978e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3000	9.9e+02		1191		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.9426e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3100	1.0e+03		1184		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.8944e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3200	1.1e+03		1176		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.8393e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3300	1.1e+03		1168		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.7842e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3400	1.1e+03		1161		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.7359e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3500	1.2e+03		1153		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.6808e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3600	1.2e+03		1145		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.6257e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3700	1.2e+03		1138		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-8.3306e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3800	1.3e+03		1130		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-7.9217e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+3900	1.3e+03		1122		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-7.5127e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4000	1.3e+03		1114		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-7.1036e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4100	1.4e+03		1107		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-3.8390e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4200	1.4e+03		1099		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-3.6311e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4300	1.4e+03		1091		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-3.4231e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4400	1.5e+03		1084		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-3.2412e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4500	1.5e+03		1076		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-3.0332e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4600	1.5e+03		1068		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-2.8253e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4700	1.6e+03		1061		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-2.6434e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4800	1.6e+03		1053		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-2.4354e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+4900	1.6e+03		1045		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-2.2275e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+5000	1.7e+03		1037		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-2.0196e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+5100	1.7e+03		1030		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.8376e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+5200	1.7e+03		1022		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.6297e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+5300	1.7e+03		1014		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.4218e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+5400	1.8e+03		1007		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.2398e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+5500	1.8e+03		999		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-1.0319e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+5600	1.8e+03		991		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-7.9926e+01
+
+N	Time (s)	Temperature (K)	AL	CR	
+5700	1.9e+03		984		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-4.3961e+01
+
+N	Time (s)	Temperature (K)	AL	CR	
+5800	1.9e+03		976		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	-2.8461e+00
+
+N	Time (s)	Temperature (K)	AL	CR	
+5900	1.9e+03		973		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.714e+09		0.0000		2.8733e-09	1.1514e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6000	1.9e+03		972		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.560e+10		0.0000		2.7738e-09	1.1908e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6100	1.9e+03		970		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.316e+11		0.0000		2.7464e-09	1.2302e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6200	1.9e+03		970		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.086e+12		0.0000		2.6839e-09	1.2302e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6300	1.9e+03		970		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.199e+13		0.0000		2.5923e-09	1.2696e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6400	1.9e+03		969		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.419e+14		0.0000		2.5811e-09	1.3090e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6500	1.9e+03		969		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.051e+15		0.0000		2.5897e-09	1.3090e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6600	1.9e+03		967		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.588e+15		0.0000		2.5001e-09	1.3484e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6700	2.0e+03		966		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.570e+16		0.0000		2.4242e-09	1.3878e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6800	2.0e+03		966		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.088e+17		0.0000		2.4066e-09	1.3878e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+6900	2.0e+03		965		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.365e+17		0.0000		2.3944e-09	1.4272e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7000	2.0e+03		965		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.010e+18		0.0000		2.3318e-09	1.4666e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7100	2.0e+03		964		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.916e+18		0.0000		2.3204e-09	1.5060e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7200	2.0e+03		964		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.832e+19		0.0001		2.3081e-09	1.5060e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7300	2.0e+03		962		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.632e+19		0.0003		2.2478e-09	1.5453e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7400	2.0e+03		962		7.9999	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.361e+20		0.0006		2.2285e-09	1.5847e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7500	2.0e+03		962		7.9998	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.498e+20		0.0016		2.2248e-09	1.5844e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7600	2.0e+03		961		7.9996	8.0001	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	9.298e+20		0.0040		2.1636e-09	1.6232e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7700	2.0e+03		959		7.9992	8.0001	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.070e+21		0.0087		2.1426e-09	1.6615e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7800	2.0e+03		960		7.9983	8.0003	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.109e+21		0.0172		2.1453e-09	1.6593e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+7900	2.0e+03		958		7.9966	8.0006	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	9.095e+21		0.0354		2.0875e-09	1.6942e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8000	2.0e+03		957		7.9938	8.0011	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.713e+22		0.0649		2.0686e-09	1.7263e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8100	2.0e+03		958		7.9901	8.0017	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.693e+22		0.1034		2.0762e-09	1.7166e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8200	2.0e+03		957		7.9833	8.0029	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.515e+22		0.1741		2.0784e-09	1.7385e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8300	2.0e+03		955		7.9751	8.0042	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.572e+22		0.2591		2.0922e-09	1.7567e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8400	2.0e+03		955		7.9665	8.0056	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.528e+22		0.3494		2.1164e-09	1.7737e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8500	2.0e+03		955		7.9560	8.0074	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.078e+23		0.4590		2.1408e-09	1.7461e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8600	2.0e+03		953		7.9447	8.0092	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.302e+23		0.5782		2.1672e-09	1.7559e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8700	2.0e+03		952		7.9337	8.0109	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.484e+23		0.6938		2.2001e-09	1.7666e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8800	2.0e+03		952		7.9225	8.0128	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.644e+23		0.8121		2.2364e-09	1.7370e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+8900	2.0e+03		951		7.9101	8.0147	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.814e+23		0.9435		2.2700e-09	1.7438e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9000	2.0e+03		950		7.8981	8.0165	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.947e+23		1.0711		2.3078e-09	1.7516e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9100	2.0e+03		950		7.8863	8.0183	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.045e+23		1.1952		2.3501e-09	1.7205e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9200	2.0e+03		950		7.8737	8.0202	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.153e+23		1.3298		2.3887e-09	1.7262e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9300	2.0e+03		949		7.8612	8.0219	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.236e+23		1.4636		2.4305e-09	1.7328e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9400	2.0e+03		947		7.8489	8.0236	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.296e+23		1.5954		2.4748e-09	1.7397e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9500	2.0e+03		947		7.8360	8.0256	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.353e+23		1.7318		2.5188e-09	1.7054e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9600	2.0e+03		946		7.8232	8.0274	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.399e+23		1.8695		2.5630e-09	1.7107e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9700	2.0e+03		945		7.8105	8.0291	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.432e+23		2.0060		2.6086e-09	1.7162e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9800	2.0e+03		946		7.7975	8.0311	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.459e+23		2.1440		2.6542e-09	1.6814e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+9900	2.0e+03		945		7.7844	8.0328	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.484e+23		2.2843		2.6989e-09	1.6859e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10000	2.0e+03		943		7.7714	8.0344	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.501e+23		2.4238		2.7442e-09	1.6905e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10100	2.1e+03		943		7.7582	8.0364	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.512e+23		2.5628		2.7897e-09	1.6551e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10200	2.1e+03		942		7.7451	8.0381	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.524e+23		2.7037		2.8338e-09	1.6593e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10300	2.1e+03		942		7.7322	8.0397	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.532e+23		2.8420		2.8770e-09	1.6637e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10400	2.1e+03		941		7.7193	8.0413	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.538e+23		2.9806		2.9200e-09	1.6687e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10500	2.1e+03		941		7.7059	8.0433	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.542e+23		3.1196		2.9621e-09	1.6329e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10600	2.1e+03		939		7.6930	8.0449	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.546e+23		3.2576		3.0030e-09	1.6375e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10700	2.1e+03		939		7.6803	8.0464	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.548e+23		3.3941		3.0429e-09	1.6425e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10800	2.1e+03		939		7.6672	8.0484	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.550e+23		3.5296		3.0818e-09	1.6072e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+10900	2.1e+03		938		7.6546	8.0499	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.552e+23		3.6643		3.1196e-09	1.6124e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11000	2.1e+03		936		7.6421	8.0513	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.553e+23		3.7971		3.1562e-09	1.6180e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11100	2.1e+03		936		7.6294	8.0533	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.554e+23		3.9282		3.1918e-09	1.5836e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11200	2.1e+03		935		7.6171	8.0546	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.555e+23		4.0585		3.2263e-09	1.5897e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11300	2.1e+03		934		7.6051	8.0560	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.555e+23		4.1867		3.2598e-09	1.5963e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11400	2.1e+03		934		7.5933	8.0572	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.556e+23		4.3115		3.2918e-09	1.6034e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11500	2.1e+03		933		7.5810	8.0591	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.556e+23		4.4365		3.3234e-09	1.5705e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11600	2.1e+03		933		7.5694	8.0603	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.556e+23		4.5595		3.3540e-09	1.5782e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11700	2.1e+03		932		7.5580	8.0615	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.557e+23		4.6804		3.3835e-09	1.5865e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11800	2.1e+03		932		7.5462	8.0633	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.557e+23		4.7998		3.4122e-09	1.5544e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+11900	2.1e+03		931		7.5351	8.0644	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.557e+23		4.9176		3.4402e-09	1.5633e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12000	2.1e+03		929		7.5242	8.0655	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.557e+23		5.0334		3.4673e-09	1.5728e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12100	2.1e+03		929		7.5134	8.0665	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.557e+23		5.1471		3.4935e-09	1.5828e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12200	2.1e+03		928		7.5022	8.0683	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.2594		3.5191e-09	1.5521e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12300	2.1e+03		927		7.4918	8.0692	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.3698		3.5439e-09	1.5629e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12400	2.1e+03		926		7.4815	8.0701	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.4782		3.5679e-09	1.5741e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12500	2.1e+03		927		7.4709	8.0718	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.5838		3.5911e-09	1.5447e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12600	2.1e+03		926		7.4610	8.0726	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.6890		3.6139e-09	1.5571e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12700	2.1e+03		925		7.4512	8.0734	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.7923		3.6361e-09	1.5695e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12800	2.1e+03		925		7.4409	8.0750	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.8938		3.6577e-09	1.5414e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+12900	2.1e+03		923		7.4315	8.0757	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		5.9940		3.6787e-09	1.5546e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13000	2.1e+03		923		7.4222	8.0764	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		6.0924		3.6992e-09	1.5683e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13100	2.1e+03		921		7.4131	8.0771	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		6.1890		3.7191e-09	1.5824e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13200	2.1e+03		921		7.4033	8.0786	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		6.2844		3.7386e-09	1.5557e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13300	2.1e+03		921		7.3945	8.0792	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		6.3782		3.7576e-09	1.5706e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13400	2.2e+03		919		7.3858	8.0797	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.558e+23		6.4702		3.7761e-09	1.5859e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13500	2.2e+03		919		7.3765	8.0812	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		6.5610		3.7942e-09	1.5603e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13600	2.2e+03		919		7.3682	8.0817	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		6.6494		3.8117e-09	1.5762e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13700	2.2e+03		918		7.3599	8.0821	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		6.7372		3.8289e-09	1.5929e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13800	2.2e+03		918		7.3510	8.0835	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		6.8237		3.8457e-09	1.5683e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+13900	2.2e+03		916		7.3430	8.0839	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		6.9089		3.8621e-09	1.5854e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14000	2.2e+03		916		7.3351	8.0843	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		6.9927		3.8782e-09	1.6028e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14100	2.2e+03		915		7.3273	8.0846	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		7.0751		3.8938e-09	1.6208e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14200	2.2e+03		915		7.3189	8.0859	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		7.1564		3.9091e-09	1.5973e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14300	2.2e+03		913		7.3114	8.0862	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.559e+23		7.2363		3.9241e-09	1.6158e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14400	2.2e+03		912		7.3041	8.0864	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.560e+23		7.3150		3.9387e-09	1.6346e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14500	2.2e+03		912		7.2960	8.0876	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.560e+23		7.3925		3.9529e-09	1.6122e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14600	2.2e+03		911		7.2889	8.0878	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.560e+23		7.4688		3.9668e-09	1.6316e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14700	2.2e+03		911		7.2819	8.0880	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.561e+23		7.5431		3.9802e-09	1.6514e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14800	2.2e+03		910		7.2742	8.0892	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.561e+23		7.6172		3.9934e-09	1.6301e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+14900	2.2e+03		910		7.2674	8.0893	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.562e+23		7.6901		4.0062e-09	1.6504e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15000	2.2e+03		909		7.2607	8.0894	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.562e+23		7.7619		4.0186e-09	1.6711e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15100	2.2e+03		908		7.2543	8.0894	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.563e+23		7.8327		4.0307e-09	1.6911e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15200	2.2e+03		908		7.2468	8.0905	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.564e+23		7.9025		4.0422e-09	1.6717e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15300	2.2e+03		906		7.2405	8.0905	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.566e+23		7.9712		4.0533e-09	1.6931e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15400	2.2e+03		906		7.2342	8.0905	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.567e+23		8.0389		4.0640e-09	1.7149e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15500	2.2e+03		906		7.2272	8.0916	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.569e+23		8.1058		4.0739e-09	1.6953e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15600	2.2e+03		904		7.2211	8.0915	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.572e+23		8.1718		4.0830e-09	1.7175e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15700	2.2e+03		903		7.2151	8.0915	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.576e+23		8.2369		4.0916e-09	1.7400e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15800	2.2e+03		904		7.2084	8.0925	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.579e+23		8.3004		4.0995e-09	1.7210e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+15900	2.2e+03		903		7.2025	8.0924	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.585e+23		8.3643		4.1055e-09	1.7439e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16000	2.2e+03		902		7.1967	8.0922	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.591e+23		8.4275		4.1106e-09	1.7669e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16100	2.2e+03		901		7.1904	8.0924	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.598e+23		8.4898		4.1152e-09	1.7910e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16200	2.2e+03		900		7.1843	8.0931	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.609e+23		8.5520		4.1160e-09	1.7716e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16300	2.2e+03		899		7.1786	8.0929	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.622e+23		8.6139		4.1146e-09	1.7949e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16400	2.2e+03		898		7.1730	8.0928	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.636e+23		8.6750		4.1120e-09	1.8184e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16500	2.2e+03		898		7.1664	8.0938	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.655e+23		8.7364		4.1053e-09	1.8000e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16600	2.2e+03		897		7.1606	8.0936	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.681e+23		8.7986		4.0933e-09	1.8231e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16700	2.3e+03		896		7.1549	8.0934	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.709e+23		8.8606		4.0790e-09	1.8462e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16800	2.3e+03		896		7.1481	8.0945	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.741e+23		8.9228		4.0616e-09	1.8273e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+16900	2.3e+03		896		7.1421	8.0943	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.787e+23		8.9871		4.0336e-09	1.8494e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17000	2.3e+03		895		7.1359	8.0943	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.837e+23		9.0524		4.0030e-09	1.8715e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17100	2.3e+03		893		7.1302	8.0939	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.888e+23		9.1169		3.9732e-09	1.8865e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17200	2.3e+03		893		7.1223	8.0953	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.960e+23		9.1850		3.9289e-09	1.8727e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17300	2.3e+03		893		7.1157	8.0952	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.039e+23		9.2530		3.8801e-09	1.8937e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17400	2.3e+03		892		7.1092	8.0952	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.121e+23		9.3211		3.8331e-09	1.9145e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17500	2.3e+03		892		7.1014	8.0964	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.220e+23		9.3909		3.7760e-09	1.8927e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17600	2.3e+03		890		7.0943	8.0965	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.333e+23		9.4630		3.7139e-09	1.9122e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17700	2.3e+03		890		7.0873	8.0965	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.447e+23		9.5345		3.6554e-09	1.9318e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17800	2.3e+03		890		7.0791	8.0978	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.569e+23		9.6069		3.5969e-09	1.9089e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+17900	2.3e+03		888		7.0713	8.0980	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.720e+23		9.6849		3.5282e-09	1.9263e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18000	2.3e+03		888		7.0638	8.0981	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.864e+23		9.7601		3.4677e-09	1.9442e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18100	2.3e+03		887		7.0531	8.1000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.997e+23		9.8326		3.4159e-09	1.9622e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18200	2.3e+03		887		7.0472	8.0997	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.177e+23		9.9147		3.3498e-09	1.9371e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18300	2.3e+03		885		7.0391	8.0999	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.348e+23		9.9942		3.2920e-09	1.9538e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18400	2.3e+03		885		7.0314	8.1000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.507e+23		10.0700		3.2428e-09	1.9716e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18500	2.3e+03		885		7.0221	8.1015	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.691e+23		10.1507		3.1893e-09	1.9454e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18600	2.3e+03		884		7.0136	8.1018	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.886e+23		10.2333		3.1365e-09	1.9608e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18700	2.3e+03		883		7.0055	8.1019	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.068e+23		10.3120		3.0913e-09	1.9774e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18800	2.3e+03		883		6.9965	8.1034	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.248e+23		10.3898		3.0496e-09	1.9520e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+18900	2.3e+03		882		6.9878	8.1037	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.458e+23		10.4733		3.0040e-09	1.9669e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19000	2.3e+03		880		6.9796	8.1039	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.651e+23		10.5526		2.9652e-09	1.9831e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19100	2.3e+03		881		6.9711	8.1053	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.820e+23		10.6252		2.9338e-09	1.9589e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19200	2.3e+03		879		6.9622	8.1056	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.046e+23		10.7103		2.8936e-09	1.9733e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19300	2.3e+03		879		6.9537	8.1058	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.257e+23		10.7916		2.8587e-09	1.9887e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19400	2.3e+03		877		6.9458	8.1059	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.450e+23		10.8681		2.8291e-09	2.0058e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19500	2.3e+03		877		6.9364	8.1074	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.657e+23		10.9471		2.7991e-09	1.9793e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19600	2.3e+03		877		6.9279	8.1076	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.882e+23		11.0282		2.7677e-09	1.9946e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19700	2.3e+03		875		6.9201	8.1077	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.089e+23		11.1032		2.7402e-09	2.0119e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19800	2.3e+03		875		6.9110	8.1092	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.294e+23		11.1795		2.7155e-09	1.9861e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+19900	2.3e+03		874		6.9028	8.1093	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.531e+23		11.2578		2.6864e-09	2.0022e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20000	2.3e+03		873		6.8948	8.1094	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.758e+23		11.3338		2.6603e-09	2.0189e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20100	2.4e+03		873		6.8860	8.1109	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.969e+23		11.4072		2.6382e-09	1.9940e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20200	2.4e+03		873		6.8778	8.1110	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.230e+23		11.4846		2.6098e-09	2.0098e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20300	2.4e+03		872		6.8695	8.1112	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.482e+23		11.5628		2.5850e-09	2.0259e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20400	2.4e+03		871		6.8618	8.1111	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.715e+23		11.6357		2.5631e-09	2.0435e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20500	2.4e+03		871		6.8525	8.1127	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.978e+23		11.7119		2.5389e-09	2.0172e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20600	2.4e+03		870		6.8442	8.1128	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	9.252e+23		11.7896		2.5151e-09	2.0329e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20700	2.4e+03		869		6.8364	8.1128	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	9.509e+23		11.8636		2.4941e-09	2.0500e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20800	2.4e+03		869		6.8274	8.1144	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	9.768e+23		11.9374		2.4741e-09	2.0243e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+20900	2.4e+03		867		6.8189	8.1145	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.005e+24		12.0155		2.4531e-09	2.0398e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21000	2.4e+03		866		6.8109	8.1145	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.032e+24		12.0905		2.4342e-09	2.0563e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21100	2.4e+03		866		6.8022	8.1160	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.057e+24		12.1612		2.4178e-09	2.0315e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21200	2.4e+03		865		6.7935	8.1162	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.088e+24		12.2414		2.3985e-09	2.0460e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21300	2.4e+03		865		6.7853	8.1162	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.116e+24		12.3170		2.3815e-09	2.0619e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21400	2.4e+03		864		6.7777	8.1161	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.142e+24		12.3877		2.3669e-09	2.0800e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21500	2.4e+03		863		6.7680	8.1178	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.172e+24		12.4660		2.3504e-09	2.0521e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21600	2.4e+03		862		6.7596	8.1179	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.201e+24		12.5430		2.3350e-09	2.0677e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21700	2.4e+03		861		6.7518	8.1178	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.229e+24		12.6157		2.3214e-09	2.0846e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21800	2.4e+03		861		6.7427	8.1194	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.256e+24		12.6881		2.3083e-09	2.0587e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+21900	2.4e+03		861		6.7336	8.1195	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.290e+24		12.7709		2.2930e-09	2.0719e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22000	2.4e+03		860		6.7250	8.1196	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.321e+24		12.8486		2.2796e-09	2.0869e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22100	2.4e+03		859		6.7174	8.1194	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.348e+24		12.9202		2.2682e-09	2.1036e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22200	2.4e+03		859		6.7074	8.1212	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.380e+24		12.9983		2.2556e-09	2.0757e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22300	2.4e+03		857		6.6991	8.1212	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.410e+24		13.0737		2.2441e-09	2.0914e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22400	2.4e+03		857		6.6914	8.1211	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.438e+24		13.1440		2.2339e-09	2.1086e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22500	2.4e+03		857		6.6820	8.1227	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.468e+24		13.2181		2.2234e-09	2.0818e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22600	2.4e+03		856		6.6734	8.1227	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.500e+24		13.2955		2.2125e-09	2.0965e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22700	2.4e+03		854		6.6655	8.1226	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.529e+24		13.3677		2.2030e-09	2.1133e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22800	2.4e+03		854		6.6569	8.1241	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.557e+24		13.4354		2.1946e-09	2.0883e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+22900	2.4e+03		854		6.6481	8.1242	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.590e+24		13.5139		2.1845e-09	2.1025e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23000	2.4e+03		852		6.6398	8.1241	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.621e+24		13.5881		2.1755e-09	2.1183e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23100	2.4e+03		852		6.6320	8.1240	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.649e+24		13.6567		2.1677e-09	2.1371e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23200	2.4e+03		851		6.6228	8.1255	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.680e+24		13.7306		2.1592e-09	2.1085e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23300	2.4e+03		851		6.6144	8.1255	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.712e+24		13.8055		2.1508e-09	2.1239e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23400	2.5e+03		849		6.6067	8.1253	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.741e+24		13.8750		2.1435e-09	2.1412e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23500	2.5e+03		850		6.5977	8.1268	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.771e+24		13.9447		2.1363e-09	2.1148e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23600	2.5e+03		849		6.5893	8.1268	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.804e+24		14.0197		2.1283e-09	2.1302e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23700	2.5e+03		848		6.5817	8.1265	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.835e+24		14.0884		2.1207e-09	2.1476e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23800	2.5e+03		848		6.5726	8.1281	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.864e+24		14.1576		2.1141e-09	2.1215e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+23900	2.5e+03		847		6.5645	8.1280	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.899e+24		14.2300		2.1057e-09	2.1373e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24000	2.5e+03		846		6.5569	8.1277	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.932e+24		14.2979		2.0979e-09	2.1549e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24100	2.5e+03		844		6.5501	8.1272	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.962e+24		14.3646		2.0913e-09	2.1708e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24200	2.5e+03		844		6.5408	8.1290	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	1.996e+24		14.4307		2.0831e-09	2.1476e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24300	2.5e+03		844		6.5329	8.1287	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.031e+24		14.5008		2.0751e-09	2.1641e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24400	2.5e+03		843		6.5255	8.1284	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.065e+24		14.5666		2.0676e-09	2.1823e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24500	2.5e+03		842		6.5167	8.1300	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.100e+24		14.6332		2.0597e-09	2.1566e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24600	2.5e+03		842		6.5089	8.1298	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.137e+24		14.7015		2.0517e-09	2.1734e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24700	2.5e+03		841		6.5015	8.1295	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.172e+24		14.7676		2.0443e-09	2.1916e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24800	2.5e+03		841		6.4929	8.1309	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.207e+24		14.8322		2.0373e-09	2.1664e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+24900	2.5e+03		839		6.4847	8.1308	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.246e+24		14.9038		2.0295e-09	2.1821e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25000	2.5e+03		838		6.4769	8.1305	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.283e+24		14.9721		2.0224e-09	2.1990e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25100	2.5e+03		838		6.4687	8.1306	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.318e+24		15.0357		2.0160e-09	2.2206e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25200	2.5e+03		838		6.4599	8.1318	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.358e+24		15.1088		2.0087e-09	2.1890e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25300	2.5e+03		837		6.4517	8.1316	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.398e+24		15.1801		2.0018e-09	2.2046e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25400	2.5e+03		836		6.4441	8.1313	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.434e+24		15.2465		1.9956e-09	2.2221e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25500	2.5e+03		836		6.4349	8.1329	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.472e+24		15.3149		1.9893e-09	2.1950e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25600	2.5e+03		834		6.4267	8.1327	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.512e+24		15.3857		1.9830e-09	2.2106e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25700	2.5e+03		834		6.4192	8.1323	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.548e+24		15.4512		1.9773e-09	2.2280e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25800	2.5e+03		834		6.4105	8.1338	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.584e+24		15.5153		1.9720e-09	2.2027e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+25900	2.5e+03		833		6.4021	8.1336	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.625e+24		15.5873		1.9660e-09	2.2177e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26000	2.5e+03		831		6.3943	8.1333	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.662e+24		15.6543		1.9606e-09	2.2347e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26100	2.5e+03		831		6.3887	8.1321	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.697e+24		15.7157		1.9559e-09	2.2479e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26200	2.5e+03		831		6.3777	8.1345	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.737e+24		15.7868		1.9503e-09	2.2253e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26300	2.5e+03		830		6.3697	8.1342	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.776e+24		15.8556		1.9452e-09	2.2413e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26400	2.5e+03		828		6.3623	8.1337	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.813e+24		15.9197		1.9405e-09	2.2592e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26500	2.5e+03		828		6.3533	8.1353	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.850e+24		15.9850		1.9358e-09	2.2328e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26600	2.5e+03		828		6.3451	8.1350	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.890e+24		16.0551		1.9309e-09	2.2483e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26700	2.6e+03		826		6.3375	8.1346	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.928e+24		16.1206		1.9264e-09	2.2655e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26800	2.6e+03		827		6.3289	8.1361	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	2.963e+24		16.1823		1.9223e-09	2.2400e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+26900	2.6e+03		826		6.3208	8.1357	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.003e+24		16.2510		1.9178e-09	2.2562e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27000	2.6e+03		825		6.3132	8.1353	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.041e+24		16.3168		1.9136e-09	2.2731e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27100	2.6e+03		824		6.3034	8.1362	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.076e+24		16.3784		1.9098e-09	2.2964e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27200	2.6e+03		824		6.2963	8.1364	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.117e+24		16.4487		1.9054e-09	2.2628e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27300	2.6e+03		823		6.2883	8.1361	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.157e+24		16.5166		1.9013e-09	2.2789e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27400	2.6e+03		821		6.2809	8.1356	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.193e+24		16.5793		1.8976e-09	2.2973e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27500	2.6e+03		821		6.2721	8.1371	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.231e+24		16.6432		1.8940e-09	2.2705e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27600	2.6e+03		820		6.2641	8.1367	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.271e+24		16.7108		1.8901e-09	2.2864e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27700	2.6e+03		820		6.2566	8.1362	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.308e+24		16.7744		1.8864e-09	2.3041e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27800	2.6e+03		820		6.2478	8.1377	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.345e+24		16.8372		1.8830e-09	2.2778e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+27900	2.6e+03		819		6.2404	8.1372	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.385e+24		16.8997		1.8789e-09	2.2955e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28000	2.6e+03		818		6.2334	8.1366	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.424e+24		16.9597		1.8748e-09	2.3146e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28100	2.6e+03		817		6.2283	8.1351	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.461e+24		17.0200		1.8713e-09	2.3180e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28200	2.6e+03		817		6.2177	8.1375	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.504e+24		17.0810		1.8665e-09	2.3077e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28300	2.6e+03		815		6.2104	8.1369	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.546e+24		17.1425		1.8623e-09	2.3257e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28400	2.6e+03		815		6.2042	8.1361	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.585e+24		17.1980		1.8581e-09	2.3458e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28500	2.6e+03		815		6.1953	8.1377	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.629e+24		17.2588		1.8534e-09	2.3204e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28600	2.6e+03		813		6.1880	8.1372	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.673e+24		17.3199		1.8488e-09	2.3386e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28700	2.6e+03		813		6.1811	8.1365	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.716e+24		17.3790		1.8445e-09	2.3574e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28800	2.6e+03		813		6.1724	8.1380	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.760e+24		17.4391		1.8401e-09	2.3318e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+28900	2.6e+03		812		6.1646	8.1375	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.807e+24		17.5040		1.8355e-09	2.3481e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29000	2.6e+03		811		6.1572	8.1370	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.852e+24		17.5652		1.8312e-09	2.3658e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29100	2.6e+03		810		6.1440	8.1396	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.894e+24		17.6229		1.8273e-09	2.3839e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29200	2.6e+03		810		6.1410	8.1379	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.942e+24		17.6885		1.8229e-09	2.3570e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29300	2.6e+03		808		6.1336	8.1373	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	3.987e+24		17.7496		1.8190e-09	2.3750e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29400	2.6e+03		808		6.1264	8.1368	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.030e+24		17.8075		1.8153e-09	2.3952e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29500	2.6e+03		808		6.1176	8.1382	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.076e+24		17.8706		1.8113e-09	2.3667e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29600	2.6e+03		807		6.1098	8.1377	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.123e+24		17.9345		1.8074e-09	2.3832e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29700	2.6e+03		805		6.1025	8.1370	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.168e+24		17.9942		1.8038e-09	2.4017e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29800	2.6e+03		805		6.0942	8.1384	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.210e+24		18.0518		1.8004e-09	2.3762e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+29900	2.6e+03		805		6.0863	8.1379	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.258e+24		18.1163		1.7966e-09	2.3924e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30000	2.6e+03		803		6.0790	8.1373	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.302e+24		18.1764		1.7932e-09	2.4104e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30100	2.7e+03		804		6.0710	8.1386	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.343e+24		18.2314		1.7902e-09	2.3859e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30200	2.7e+03		802		6.0633	8.1380	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.390e+24		18.2942		1.7867e-09	2.4029e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30300	2.7e+03		802		6.0558	8.1374	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.436e+24		18.3560		1.7834e-09	2.4199e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30400	2.7e+03		801		6.0492	8.1364	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.479e+24		18.4148		1.7803e-09	2.4366e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30500	2.7e+03		801		6.0395	8.1382	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.526e+24		18.4767		1.7771e-09	2.4109e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30600	2.7e+03		799		6.0319	8.1376	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.572e+24		18.5382		1.7739e-09	2.4281e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30700	2.7e+03		799		6.0250	8.1368	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.615e+24		18.5964		1.7710e-09	2.4463e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30800	2.7e+03		799		6.0162	8.1383	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.659e+24		18.6554		1.7681e-09	2.4203e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+30900	2.7e+03		798		6.0085	8.1377	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.706e+24		18.7179		1.7651e-09	2.4368e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31000	2.7e+03		797		6.0012	8.1370	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.750e+24		18.7774		1.7623e-09	2.4547e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31100	2.7e+03		797		5.9929	8.1384	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.792e+24		18.8332		1.7597e-09	2.4296e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31200	2.7e+03		796		5.9856	8.1377	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.837e+24		18.8927		1.7570e-09	2.4471e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31300	2.7e+03		795		5.9783	8.1370	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.881e+24		18.9514		1.7543e-09	2.4655e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31400	2.7e+03		794		5.9704	8.1367	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.923e+24		19.0077		1.7518e-09	2.4876e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31500	2.7e+03		794		5.9624	8.1376	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	4.969e+24		19.0683		1.7492e-09	2.4572e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31600	2.7e+03		792		5.9553	8.1369	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.013e+24		19.1267		1.7466e-09	2.4753e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31700	2.7e+03		792		5.9485	8.1361	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.056e+24		19.1800		1.7440e-09	2.4963e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31800	2.7e+03		792		5.9400	8.1374	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.100e+24		19.2386		1.7415e-09	2.4689e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+31900	2.7e+03		790		5.9334	8.1366	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.147e+24		19.2924		1.7382e-09	2.4890e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32000	2.7e+03		789		5.9267	8.1357	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.194e+24		19.3468		1.7353e-09	2.5085e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32100	2.7e+03		789		5.9186	8.1358	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.239e+24		19.3976		1.7323e-09	2.5355e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32200	2.7e+03		788		5.9124	8.1362	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.289e+24		19.4518		1.7287e-09	2.5048e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32300	2.7e+03		788		5.9056	8.1354	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.340e+24		19.5058		1.7252e-09	2.5243e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32400	2.7e+03		787		5.8986	8.1348	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.389e+24		19.5585		1.7219e-09	2.5464e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32500	2.7e+03		787		5.8910	8.1358	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.440e+24		19.6126		1.7185e-09	2.5196e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32600	2.7e+03		785		5.8840	8.1350	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.492e+24		19.6677		1.7151e-09	2.5389e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32700	2.7e+03		785		5.8772	8.1342	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.542e+24		19.7216		1.7119e-09	2.5589e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32800	2.7e+03		785		5.8692	8.1355	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.592e+24		19.7749		1.7087e-09	2.5336e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+32900	2.7e+03		783		5.8620	8.1347	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.646e+24		19.8322		1.7054e-09	2.5515e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33000	2.7e+03		783		5.8550	8.1339	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.697e+24		19.8868		1.7023e-09	2.5710e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33100	2.7e+03		782		5.8513	8.1316	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.746e+24		19.9383		1.6994e-09	2.5841e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33200	2.7e+03		782		5.8398	8.1343	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.800e+24		19.9963		1.6962e-09	2.5641e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33300	2.7e+03		781		5.8326	8.1336	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.854e+24		20.0533		1.6931e-09	2.5821e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33400	2.8e+03		780		5.8268	8.1322	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.904e+24		20.1065		1.6903e-09	2.5989e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33500	2.8e+03		779		5.8178	8.1340	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	5.954e+24		20.1594		1.6875e-09	2.5767e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33600	2.8e+03		779		5.8105	8.1331	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.008e+24		20.2164		1.6846e-09	2.5945e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33700	2.8e+03		777		5.8040	8.1321	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.059e+24		20.2707		1.6818e-09	2.6126e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33800	2.8e+03		778		5.7958	8.1335	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.107e+24		20.3218		1.6793e-09	2.5893e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+33900	2.8e+03		777		5.7883	8.1327	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.162e+24		20.3796		1.6764e-09	2.6068e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34000	2.8e+03		776		5.7815	8.1317	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.214e+24		20.4346		1.6738e-09	2.6247e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34100	2.8e+03		775		5.7713	8.1326	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.264e+24		20.4870		1.6713e-09	2.6542e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34200	2.8e+03		775		5.7660	8.1323	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.317e+24		20.5430		1.6686e-09	2.6183e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34300	2.8e+03		774		5.7591	8.1313	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.369e+24		20.5980		1.6661e-09	2.6366e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34400	2.8e+03		772		5.7507	8.1312	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.418e+24		20.6502		1.6637e-09	2.6610e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34500	2.8e+03		773		5.7444	8.1317	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.467e+24		20.7013		1.6614e-09	2.6319e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34600	2.8e+03		772		5.7374	8.1308	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.518e+24		20.7560		1.6590e-09	2.6504e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34700	2.8e+03		771		5.7297	8.1303	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.569e+24		20.8090		1.6567e-09	2.6724e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34800	2.8e+03		771		5.7224	8.1311	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.618e+24		20.8610		1.6545e-09	2.6449e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+34900	2.8e+03		769		5.7157	8.1302	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.669e+24		20.9146		1.6522e-09	2.6636e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35000	2.8e+03		769		5.7083	8.1295	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.718e+24		20.9668		1.6501e-09	2.6851e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35100	2.8e+03		767		5.7063	8.1262	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.767e+24		21.0175		1.6480e-09	2.6927e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35200	2.8e+03		767		5.6942	8.1295	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.817e+24		21.0702		1.6458e-09	2.6780e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35300	2.8e+03		767		5.6873	8.1287	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.867e+24		21.1209		1.6436e-09	2.6995e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35400	2.8e+03		765		5.6840	8.1262	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.914e+24		21.1690		1.6415e-09	2.7134e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35500	2.8e+03		765		5.6738	8.1286	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	6.965e+24		21.2188		1.6392e-09	2.6952e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35600	2.8e+03		765		5.6675	8.1277	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.018e+24		21.2651		1.6365e-09	2.7184e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35700	2.8e+03		764		5.6633	8.1256	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.070e+24		21.3135		1.6340e-09	2.7342e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35800	2.8e+03		764		5.6548	8.1275	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.122e+24		21.3572		1.6312e-09	2.7168e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+35900	2.8e+03		763		5.6482	8.1267	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.179e+24		21.4049		1.6282e-09	2.7395e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36000	2.8e+03		762		5.6440	8.1247	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.235e+24		21.4513		1.6254e-09	2.7569e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36100	2.8e+03		761		5.6321	8.1266	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.290e+24		21.4968		1.6226e-09	2.7942e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36200	2.8e+03		761		5.6287	8.1256	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.348e+24		21.5452		1.6197e-09	2.7598e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36300	2.8e+03		759		5.6242	8.1238	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.404e+24		21.5920		1.6170e-09	2.7774e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36400	2.8e+03		758		5.6139	8.1249	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.458e+24		21.6373		1.6143e-09	2.8119e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36500	2.8e+03		758		5.6091	8.1246	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.516e+24		21.6853		1.6116e-09	2.7802e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36600	2.8e+03		758		5.6043	8.1228	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.575e+24		21.7351		1.6088e-09	2.7959e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36700	2.9e+03		757		5.5940	8.1238	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.633e+24		21.7828		1.6061e-09	2.8276e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36800	2.9e+03		756		5.5888	8.1238	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.688e+24		21.8286		1.6036e-09	2.7988e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+36900	2.9e+03		755		5.5841	8.1217	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.749e+24		21.8794		1.6009e-09	2.8131e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37000	2.9e+03		754		5.5738	8.1227	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.806e+24		21.9274		1.5983e-09	2.8447e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37100	2.9e+03		754		5.5744	8.1182	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.861e+24		21.9729		1.5960e-09	2.8473e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37200	2.9e+03		753		5.5644	8.1205	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.920e+24		22.0216		1.5935e-09	2.8309e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37300	2.9e+03		753		5.5536	8.1216	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	7.979e+24		22.0708		1.5910e-09	2.8623e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37400	2.9e+03		752		5.5532	8.1175	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.037e+24		22.1189		1.5885e-09	2.8676e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37500	2.9e+03		752		5.5441	8.1193	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.096e+24		22.1682		1.5861e-09	2.8454e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37600	2.9e+03		750		5.5326	8.1208	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.155e+24		22.2176		1.5837e-09	2.8783e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37700	2.9e+03		749		5.5318	8.1168	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.212e+24		22.2650		1.5814e-09	2.8851e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37800	2.9e+03		750		5.5245	8.1179	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.267e+24		22.3106		1.5793e-09	2.8612e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+37900	2.9e+03		749		5.5122	8.1198	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.327e+24		22.3601		1.5769e-09	2.8962e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38000	2.9e+03		748		5.5110	8.1160	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.384e+24		22.4080		1.5747e-09	2.9035e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38100	2.9e+03		747		5.5002	8.1173	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.440e+24		22.4541		1.5726e-09	2.9319e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38200	2.9e+03		746		5.4920	8.1187	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.496e+24		22.5009		1.5705e-09	2.9148e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38300	2.9e+03		746		5.4907	8.1150	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.553e+24		22.5480		1.5684e-09	2.9229e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38400	2.9e+03		745		5.4814	8.1155	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.609e+24		22.5944		1.5664e-09	2.9526e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38500	2.9e+03		745		5.4714	8.1178	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.666e+24		22.6419		1.5644e-09	2.9338e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38600	2.9e+03		743		5.4704	8.1139	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.721e+24		22.6878		1.5624e-09	2.9420e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38700	2.9e+03		742		5.4615	8.1144	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.775e+24		22.7307		1.5604e-09	2.9736e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38800	2.9e+03		742		5.4490	8.1181	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.829e+24		22.7759		1.5585e-09	2.9632e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+38900	2.9e+03		742		5.4402	8.1187	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.885e+24		22.8157		1.5562e-09	2.9969e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+39000	2.9e+03		740		5.3778	8.1467	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	8.949e+24		22.8605		1.5535e-09	3.1640e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+39100	2.9e+03		740		4.9148	8.3690	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	9.494e+24		23.0891		1.5216e-09	4.1668e+02
+
+N	Time (s)	Temperature (K)	AL	CR	
+39200	2.9e+03		734		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.2477e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+39300	3.0e+03		727		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.2841e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+39400	3.0e+03		719		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.3257e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+39500	3.0e+03		711		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.3673e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+39600	3.1e+03		704		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.4037e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+39700	3.1e+03		696		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.4454e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+39800	3.1e+03		688		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.4871e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+39900	3.2e+03		680		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.5288e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+40000	3.2e+03		673		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.5653e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+40100	3.2e+03		665		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.6070e+03
+
+N	Time (s)	Temperature (K)	AL	CR	
+40200	3.3e+03		657		8.0000	8.0000	
+
+	Phase	Prec Density (#/m3)	Volume Frac	Avg Radius (m)	Driving Force (J/mol)
+	beta	0.000e+00		0.0000		0.0000e+00	1.6488e+03
+
+Finished in 737.176 seconds.

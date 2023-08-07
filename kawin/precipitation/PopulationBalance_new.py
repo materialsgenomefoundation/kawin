@@ -353,35 +353,6 @@ class PopulationBalanceModel:
         self.PSDbounds = np.linspace(self.min, self.max, self.bins+1)
         self.PSDsize = 0.5 * (self.PSDbounds[:-1] + self.PSDbounds[1:])
 
-    def getDTEuler(self, currDT, growth, maxDissolution, startIndex):
-        '''
-        Calculates time interval for Euler implementation
-            dt < dR / (2 * growth rate)
-        This ensures that at most, only half of particles in one size class can go to another
-
-        Parameters
-        ----------
-        currDT : float
-            Current time interval, will be returned if it's smaller than what's given by the contraint
-        growth : array of floats
-            Growth rate, must have lenth of bins+1 (or length of PSDbounds)
-        maxDissolution : float
-            Maximum volume allowed to dissolve
-        startIndex : int
-            First index to look at for growth rate, all indices below startIndex will be ignored
-        '''
-        dissFrac = maxDissolution * self.ThirdMoment()
-        dissIndex = np.amax([np.argmax(self.CumulativeMoment(3) > dissFrac), startIndex])
-        growthFilter = growth[dissIndex:-1][self.PSD[dissIndex:] > 0]
-        #if len(growthFilter) == 0 or np.amax(growthFilter) < 0:
-        if len(growthFilter) == 0:
-            return currDT
-        else:
-            if np.amax(np.abs(growthFilter)) == 0:
-                return currDT
-            else:
-                return np.amin([currDT, (self.PSDbounds[1] - self.PSDbounds[0]) / (2 * np.amax(np.abs(growthFilter)))])
-
     def adjustSizeClassesEuler(self, checkDissolution = False):
         '''
         Adds a size class if last class in PBM is filled
@@ -429,95 +400,70 @@ class PopulationBalanceModel:
         total = self.Moment(order)
         self.PSD /= total
 
-    def Nucleate(self, amount, radius):
+    def getDissolutionIndex(self, maxDissolution, minIndex = 0):
+        dissFrac = maxDissolution * self.ThirdMoment()
+        dissIndex = np.argmax(self.CumulativeMoment(3) > dissFrac) - 1
+        if dissIndex < 0:
+            dissIndex = 0
+        return np.amax([np.argmax(self.CumulativeMoment(3) > dissFrac), minIndex])
+        
+
+    def getDTEuler(self, currDT, growth, dissolutionIndex):
         '''
-        Adds nucleated particles to PSD given radius and amount of particles
+        Calculates time interval for Euler implementation
+            dt < dR / (2 * growth rate)
+        This ensures that at most, only half of particles in one size class can go to another
+
+        Also finds dt such that the max delta in growth rate is 1/2 dR
 
         Parameters
         ----------
-        amount : float
-            Amount of nucleated particles
-        radius : float
-            Radius of nucleated particles
+        currDT : float
+            Current time interval, will be returned if it's smaller than what's given by the contraint
+        growth : array of floats
+            Growth rate, must have lenth of bins+1 (or length of PSDbounds)
+        maxDissolution : float
+            Maximum volume allowed to dissolve
+        startIndex : int
+            First index to look at for growth rate, all indices below startIndex will be ignored
         '''
-        if amount < 1:
-            return False
-            
-        change = False
+        self.maxRatio = 0.4
+        growthFilter = growth[dissolutionIndex:-1][self.PSD[dissolutionIndex:] > 0]
 
-        #Find size class for nucleated particles
-        nRad = np.argmax(self.PSDbounds > radius) - 1
-
-        #If radius is larger than length scale of PBM, adjust PBM such that radius is towards the beginning
-        if nRad == -1 and radius > 0:
-            #print('adding nucleated bins')
-            self.changeSizeClasses(self.PSDbounds[0], 5 * radius, self.originalBins)
-            nRad = np.argmax(self.PSDbounds > radius)
-            change = True
-        self.PSD[nRad] += amount
-        return change
-        
-    def UpdateEuler(self, dt, flux):
+        if len(growthFilter) == 0:
+            return currDT
+        else:
+            if np.amax(np.abs(growthFilter)) == 0:
+                return currDT
+            else:
+                return self.maxRatio * (self.PSDbounds[1] - self.PSDbounds[0]) / np.amax(np.abs(growthFilter))
+    
+    def getdXdtEuler(self, flux, nucRate, nucRadius, psd, storeFV):
         '''
-        Updates PSD given the flux and any external contributions
-
-        Change in the amount of particles in a given size class = d(G*n)/dx
-        Where G is flux of size class, n is number of particles in size class and dx is range of size class
-        
-        Parameters
-        ----------
-        dt : float
-            Time increment
-        flux : array
-            Growth rate of each particle size class
-            Array size must be (bins + 1) since this operates on bounds of size classes
+        dn_i/dt = d(G*n)/dx + nucRate
         '''
-        netFlux = np.zeros(self.bins + 1)
-
-        #Array of 0 (flux <= 0), 1 (flux > 0)
+        netFlux = np.zeros(self.bins+1)
         fluxSign = np.sign(flux)
         fluxSign[fluxSign == -1] = 0
+        dR = self.PSDbounds[1:] - self.PSDbounds[:-1]
+        netFlux[:-1] += flux[:-1] * psd * (1-fluxSign[:-1]) / dR
+        netFlux[1:] += flux[1:] * psd * fluxSign[1:] / dR
 
-        #If flux is negative (from class n to n-1), then take from size class n
-        #If flux is positive, then take from size class n-1
-        netFlux[:-1] += dt * flux[:-1] * self.PSD * (1-fluxSign[:-1]) / (self.PSDbounds[1:] - self.PSDbounds[:-1])
-        netFlux[1:] += dt * flux[1:] * self.PSD * fluxSign[1:] / (self.PSDbounds[1:] - self.PSDbounds[:-1])
+        dXdt = (netFlux[:-1] - netFlux[1:])
 
-        #Brute force stability so PSD is never negative
-        #If the time step is determined from getDTEuler, this should be unnecessary
-        netFlux[1:-1][netFlux[1:-1] < -self.PSD[1:]] = -self.PSD[1:][netFlux[1:-1] < -self.PSD[1:]]
-        netFlux[1:-1][netFlux[1:-1] > self.PSD[:-1]] = self.PSD[:-1][netFlux[1:-1] > self.PSD[:-1]]
+        if storeFV:
+            self._fv = netFlux
 
-        self._fv = netFlux
-        
-        self.PSD += (netFlux[:-1] - netFlux[1:])
-        
-        #Adjust size classes and return True if the size classes had changed
-        change, newIndices = self.adjustSizeClassesEuler(all(flux<0))
-            
-        #Set negative frequencies to 0
+        #Find size class for nucleated particles
+        nRad = np.argmax(self.PSDbounds > nucRadius) - 1
+        dXdt[nRad] += nucRate
+
+        return dXdt
+    
+    def UpdatePBMEuler(self, time, newN):
+        self.PSD = newN
         self.PSD[self.PSD < 1] = 0
-
-        return change, newIndices
-
-    def UpdateLagrange(self, dt, flux):
-        '''
-        Updates bounds of size classes with given growth rate
-        Fluxes of particles between size classes is d(Gn)/dx,
-        however, keeping the number of particles in each size class the same,
-        the bounds of the size classes can be updated by r_i = v_i * dt
-
-        Parameters
-        ----------
-        dt : float
-            Time increment
-        flux : array
-            Growth rate of each particle size class
-            Array size must be (bins + 1) since this operates on bounds of size classes
-        '''
-        self._prevPSDbounds = copy.copy(self.PSDbounds)
-        self.PSDbounds += flux * dt
-        self.PSDsize = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
+        self.record(time)
 
     def MomentFromN(self, N, order):
         return np.sum(N * self.PSDsize**order)
@@ -552,7 +498,7 @@ class PopulationBalanceModel:
         order : int
             Order of moment
         '''
-        return self.MomentFromN(self.PSD)
+        return self.MomentFromN(self.PSD, order)
 
     def CumulativeMoment(self, order):
         '''

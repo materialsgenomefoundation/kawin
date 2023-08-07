@@ -18,8 +18,10 @@ class DESolver:
     defaultDt : float (optional)
         Default time increment if no function is implement to estimate a good time increment
     '''
-    def __init__(self, iterator = SolverType.RK4, defaultDt = 0.1):
-        self.dt = defaultDt
+    def __init__(self, iterator = SolverType.RK4, defaultDT = 0.1):
+        self.dtmin = 1e-6       #Fraction of simulation time
+        self.dtmax = 1
+        self.dt = defaultDT
         self.getDt = self.defaultDtFunc
         self.preProcess = self.defaultPreProcess
         self.printStatus = self.defaultPrintStatus
@@ -32,17 +34,6 @@ class DESolver:
         else:
             self.iterator = RK4Iterator()
 
-    def setDtFunc(self, func):
-        '''
-        Sets getDt function. This assumes that the class will handled any internal variables necessary
-
-        Parameters
-        ----------
-        func : function returning scalar float
-            Given the current state of the class, return the optimal time increment
-        '''
-        self.getDt = func
-
     def setFunctions(self, preProcess = None, postProcess = None, printStatus = None, getDt = None):
         if preProcess is not None:
             self.preProcess = preProcess
@@ -53,7 +44,7 @@ class DESolver:
         if getDt is not None:
             self.getDt = getDt
 
-    def defaultDtFunc(self):
+    def defaultDtFunc(self, dXdt):
         '''
         Returns the default time increment
         '''
@@ -102,12 +93,11 @@ class DESolver:
                 self.printStatus(i, timeFinish - timeStart)
 
             self.preProcess()
-            dt = self.getDt()
-            if currTime + dt >= tf:
-                dt = tf - currTime
-            X0 = self.iterator.iterate(f, currTime, X0, dt)
+            dtmin = self.dtmin * (tf - t0)
+            dtmax = self.dtmax * (tf - t0)
+            X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax)
             currTime += dt
-            self.postProcess(currTime, X0)
+            _, X0 = self.postProcess(currTime, X0)
 
             i += 1
 

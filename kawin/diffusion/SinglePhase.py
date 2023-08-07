@@ -44,9 +44,9 @@ class SinglePhaseModel(DiffusionModel):
             fluxes[e,0] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else fluxes[e,1]
             fluxes[e,-1] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else fluxes[e,-2]
 
-        dt = 0.4 * self.dz**2 / np.amax(np.abs(d))
+        self._currdt = 0.4 * self.dz**2 / np.amax(np.abs(d))
 
-        return fluxes, dt
+        return fluxes
 
     def getFluxes(self):
         '''
@@ -62,14 +62,15 @@ class SinglePhaseModel(DiffusionModel):
         dt : float
             Maximum calculated time interval for numerical stability
         '''
-        return self._getFluxes(self.t, [self.x])
+        fluxes = self._getFluxes(self.t, [self.x])
+        dt = self._currdt
+        return fluxes, dt
     
-    def getDt(self):
-        fluxes, dt = self.getFluxes()
-        return dt
+    def getDt(self, dXdt):
+        return self._currdt
     
     def getdXdt(self, t, x):
-        fluxes, dt = self._getFluxes(t, x)
+        fluxes = self._getFluxes(t, x)
         return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
     
     def preProcess(self):
@@ -79,3 +80,4 @@ class SinglePhaseModel(DiffusionModel):
         self.t = time
         self.x = x[0]
         self.record(self.t)
+        return self.getCurrentX()

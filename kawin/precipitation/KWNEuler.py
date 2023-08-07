@@ -6,6 +6,7 @@ import copy
 import csv
 from itertools import zip_longest
 import time
+#from kawin.precipitation.Plot import plotModel
 
 class PrecipitateModel (PrecipitateBase):
     '''
@@ -1066,90 +1067,5 @@ class PrecipitateModel (PrecipitateBase):
             Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
         *args, **kwargs - extra arguments for plotting
         '''
-        sizeDistributionVariables = ['Size Distribution', 'Size Distribution Curve', 'Size Distribution KDE', 'Size Distribution Density']
-        compositionVariables = ['Interfacial Composition Alpha', 'Interfacial Composition Beta']
-
-        scale = []
-        for p in range(len(self.phases)):
-            if self.GB[p].nucleationSiteType == self.GB[p].BULK or self.GB[p].nucleationSiteType == self.GB[p].DISLOCATION:
-                if radius == 'spherical':
-                    scale.append(self._GBareaRemoval(p) * np.ones(len(self.PBM[p].PSDbounds)))
-                else:
-                    scale.append(1/self.shapeFactors[p].eqRadiusFactor(self.PBM[p].PSDbounds))
-                    if radius == 'long':
-                        scale.append(self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds) / self.shapeFactors[p].eqRadiusFactor(self.PBM[p].PSDbounds))
-            else:
-                scale.append(self._GBareaRemoval(p) * np.ones(len(self.PBM[p].PSDbounds)))
-
-        if variable in compositionVariables:
-            if variable == 'Interfacial Composition Alpha':
-                yVar = self.PSDXalpha
-                ylabel = 'Composition in Alpha phase'
-            else:
-                yVar = self.PSDXbeta
-                ylabel = 'Composition in Beta Phase'
-
-            if (len(self.phases)) == 1:
-                axes.semilogx(self.PBM[0].PSDbounds, yVar[0], *args, **kwargs)
-            else:
-                for p in range(len(self.phases)):
-                    axes.plot(self.PBM[p].PSDbounds, yVar[p], label=self.phases[p], *args, **kwargs)
-                axes.legend()
-            axes.set_xlim([self.PBM[0].PSDbounds[0], self.PBM[0].PSDbounds[-1]])
-            axes.set_xlabel('Radius (m)')
-            axes.set_ylabel(ylabel)
-
-        elif variable in sizeDistributionVariables:
-            ylabel = 'Frequency (#/$m^3$)'
-            if variable == 'Size Distribution':
-                functionName = 'PlotHistogram'
-            elif variable == 'Size Distribution KDE':
-                functionName = 'PlotKDE'
-            elif variable == 'Size Distribution Density':
-                functionName = 'PlotDistributionDensity'
-                ylabel = 'Distribution Density (#/$m^4$)'
-            else:
-                functionName = 'PlotCurve'
-
-            if len(self.phases) == 1:
-                getattr(self.PBM[0], functionName)(axes, scale=scale[0], *args, **kwargs)
-            else:
-                for p in range(len(self.phases)):
-                    getattr(self.PBM[p], functionName)(axes, label=self.phases[p], scale=scale[p], *args, **kwargs)
-                axes.legend()
-            axes.set_xlabel('Radius (m)')
-            axes.set_ylabel(ylabel)
-            axes.set_xlim([0, np.amax([pb.max for pb in self.PBM])])
-            if variable == 'Size Distribution Density':
-                axes.set_ylim([0, 1.1*np.amax(np.concatenate(([np.amax(pb.PSD/(pb.PSDbounds[1:] - pb.PSDbounds[:-1])) for pb in self.PBM], [1])))])
-            else:
-                axes.set_ylim([0, 1.1*np.amax(np.concatenate(([np.amax(pb.PSD) for pb in self.PBM], [1])))])
-
-        elif variable == 'Cumulative Size Distribution':
-            ylabel = 'CDF'
-            if len(self.phases) == 1:
-                self.PBM[0].PlotCDF(axes, scale=scale[0], *args, **kwargs)
-            else:
-                for p in range(len(self.phases)):
-                    self.PBM[p].PlotCDF(axes, label=self.phases[p], scale=scale[p], *args, **kwargs)
-                axes.legend()
-            axes.set_xlabel('Radius (m)')
-            axes.set_ylabel(ylabel)
-            axes.set_xlim([0, np.amax([pb.max for pb in self.PBM])])
-
-        elif variable == 'Aspect Ratio Distribution':
-            if len(self.phases) == 1:
-                axes.plot(self.PBM[0].PSDbounds * np.interp(self.PBM[p].PSDbounds, self.PBM[0].PSDbounds, scale[0]), self.eqAspectRatio[0], *args, **kwargs)
-            else:
-                for p in range(len(self.phases)):
-                    axes.plot(self.PBM[p].PSDbounds * np.interp(self.PBM[p].PSDbounds, self.PBM[p].PSDbounds, scale[p]), self.eqAspectRatio[p], label=self.phases[p], *args, **kwargs)
-                axes.legend()
-            axes.set_xlim([0, np.amax(self.PBM[p].PSDbounds * np.interp(self.PBM[p].PSDbounds, self.PBM[p].PSDbounds, scale[p]))])
-            axes.set_ylim(bottom=1)
-            axes.set_xlabel('Radius (m)')
-            axes.set_ylabel('Aspect ratio distribution')
-            
-        else:
-            super().plot(axes, variable, bounds, timeUnits, radius, *args, **kwargs)
-
+        plotModel(self, axes, variable, bounds, timeUnits, radius, *args, **kwargs)
         

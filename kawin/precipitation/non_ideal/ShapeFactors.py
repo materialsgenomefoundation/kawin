@@ -64,6 +64,21 @@ class ShapeFactor:
             return self._aspectRatioScalar * np.ones(len(R))
         else:
             return self._aspectRatioScalar
+        
+    def setPrecipitateShape(self, precipitateShape, ar = 1):
+        '''
+        General shape setting function
+
+        Defualts to spherical
+        '''
+        if precipitateShape == ShapeFactor.NEEDLE:
+            self.setNeedleShape(ar)
+        elif precipitateShape == ShapeFactor.PLATE:
+            self.setPlateShape(ar)
+        elif precipitateShape == ShapeFactor.CUBIC:
+            self.setCuboidalShape(ar)
+        else:
+            self.setSpherical(ar)
             
     def setSpherical(self, ar = 1):
         '''

@@ -309,26 +309,25 @@ class HomogenizationModel(DiffusionModel):
             vfluxes[e,0] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else vfluxes[e,1]
             vfluxes[e,-1] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else vfluxes[e,-2]
 
-        #Time increment
-        #This is done by finding the time interval such that the composition
-        # change caused by the fluxes will be lower than self.maxCompositionChange
-        dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
-        dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
-
-        return vfluxes, dt
+        return vfluxes
 
     def getFluxes(self):
         '''
         Return fluxes and time interval for the current iteration
         '''
-        return self._getFluxes(self.t, [self.x])
+        vfluxes = self._getFluxes(self.t, [self.x])
+        dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
+        dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
+        return vfluxes, dt
     
-    def getDt(self):
-        fluxes, dt = self.getFluxes()
-        return dt
+    def getDt(self, dXdt):
+        #Time increment
+        #This is done by finding the time interval such that the composition
+        # change caused by the fluxes will be lower than self.maxCompositionChange
+        return self.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
     
     def getdXdt(self, t, x):
-        fluxes, dt = self._getFluxes(t, x)
+        fluxes = self._getFluxes(t, x)
         return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
     
     def preProcess(self):
@@ -338,3 +337,4 @@ class HomogenizationModel(DiffusionModel):
         self.t = time
         self.x = x[0]
         self.record(self.t)
+        return self.getCurrentX()

@@ -3,8 +3,10 @@ import time
 import csv
 from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
+from kawin.GenericModel import GenericModel
+import kawin.diffusion.Plot as diffPlot
 
-class DiffusionModel:
+class DiffusionModel(GenericModel):
     #Boundary conditions
     FLUX = 0
     COMPOSITION = 1
@@ -66,6 +68,7 @@ class DiffusionModel:
         self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
         self.hashTable = {}
         self.isSetup = False
+        self.t = 0
 
     def setThermodynamics(self, thermodynamics):
         '''
@@ -513,6 +516,7 @@ class DiffusionModel:
         self.x[self.x < self.minComposition] = self.minComposition
         self.T = self.Tfunc(self.z, 0)
         self.isSetup = True
+        self.record(self.t) #Record at t = 0
 
     def getFluxes(self):
         '''
@@ -522,92 +526,14 @@ class DiffusionModel:
         '''
         raise NotImplementedError()
     
-    def getDt(self):
-        raise NotImplementedError()
-    
-    def getdXdt(self, t, x):
-        raise NotImplementedError()
-    
-    def preProcess(self):
-        raise NotImplementedError()
-    
-    def postProcess(self, time, x):
-        raise NotImplementedError()
-
-    def updateMesh(self, fluxes, dt):
-        '''
-        Updates mesh using fluxes by time increment dt
-
-        Parameters
-        ----------
-        fluxes : 2D array
-            Fluxes for each element between each node. Size must be (E, N-1)
-                E - number of elements (NOT including reference element)
-                N - number of nodes
-            Boundary conditions will automatically be applied
-        dt : float
-            Time increment
-        '''
-        for e in range(len(self.elements)):
-            self.x[e] += -(fluxes[e,1:] - fluxes[e,:-1]) * dt / self.dz
-
-    def update(self):
-        '''
-        Updates the mesh by a given dt that is calculated for numerical stability
-        '''
-        #Get fluxes
-        fluxes, dt = self.getFluxes()
-
-        if self.t + dt > self.tf:
-            dt = self.tf - self.t
-
-        #Update mesh
-        self.updateMesh(fluxes, dt)
-        self.x[self.x < self.minComposition] = self.minComposition
-        self.t += dt
-
-    def solve2(self, simTime, verbose=False, vIt=10):
-        '''
-        Solves the model by updated the mesh until the final simulation time is met
-        '''
-        self.setup()
-
-        self.t = 0
-        self.tf = simTime
-        i = 0
-        t0 = time.time()
-        if verbose:
-            print('Iteration\tSim Time (h)\tRun time (s)')
-
-        #Record composition and phase fraction at t=0
-        self.record(self.t)
-        while self.t < self.tf:
-            if verbose and i % vIt == 0:
-                tf = time.time()
-                print(str(i) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, tf-t0))
-            self.update()
-            self.record(self.t)
-            i += 1
-
-        tf = time.time()
-        print(str(i) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, tf-t0))
-
-    def solve(self, simTime, solverType = SolverType.RK4, verbose=False, vIt=10):
-        '''
-        Solves model using the DESolver
-        '''
-        self.setup()
-        self.record(self.t)     #Record at t=0
-        if verbose:
-            print('Iteration\tSim Time (h)\tRun time (s)')
-
-        solver = DESolver(solverType)
-        solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printStatus=self.printStatus, getDt=self.getDt)
-
-        solver.solve(self.getdXdt, self.t, [self.x], simTime, verbose, vIt)
+    def headerStr(self):
+        print('Iteration\tSim Time (h)\tRun time (s)')
 
     def printStatus(self, iteration, simTimeElapsed):
         print(str(iteration) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, simTimeElapsed))
+
+    def getCurrentX(self):
+        return self.t, [self.x]
 
     def getX(self, element):
         '''
@@ -636,7 +562,7 @@ class DiffusionModel:
         p = self._getPhaseIndex(phase)
         return self.p[p]
 
-    def plot(self, ax, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
+    def plot(self, ax = None, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
         '''
         Plots composition profile
 
@@ -651,30 +577,9 @@ class DiffusionModel:
         zScale : float
             Scale factor for z-coordinates
         '''
-        if not self.isSetup:
-            self.setup()
+        diffPlot.plot(self, ax, plotReference, plotElement, zScale, *args, **kwargs)
 
-        if plotElement is not None:
-            if plotElement not in self.elements and plotElement in self.allElements:
-                x = 1 - np.sum(self.x, axis=0)
-            else:
-                e = self._getElementIndex(plotElement)
-                x = self.x[e]
-            ax.plot(self.z/zScale, x, *args, **kwargs)
-        else:
-            if plotReference:
-                refE = 1 - np.sum(self.x, axis=0)
-                ax.plot(self.z/zScale, refE, label=self.allElements[0], *args, **kwargs)
-            for e in range(len(self.elements)):
-                ax.plot(self.z/zScale, self.x[e], label=self.elements[e], *args, **kwargs)
-            
-        ax.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
-        if plotElement is None:
-            ax.legend()
-        ax.set_xlabel('Distance (m)')
-        ax.set_ylabel('Composition (at.%)')
-
-    def plotTwoAxis(self, axL, Lelements, Relements, zScale = 1, axR = None, *args, **kwargs):
+    def plotTwoAxis(self, Lelements, Relements, zScale = 1, axL = None, axR = None, *args, **kwargs):
         '''
         Plots composition profile with two y-axes
 
@@ -692,48 +597,9 @@ class DiffusionModel:
         zScale : float
             Scale factor for z-coordinates
         '''
-        if not self.isSetup:
-            self.setup()
+        diffPlot.plotTwoAxis(self, Lelements, Relements, zScale, axL, axR, *args, **kwargs)
 
-        if type(Lelements) is str:
-            Lelements = [Lelements]
-        if type(Relements) is str:
-            Relements = [Relements]
-
-        ci = 0
-        refE = 1 - np.sum(self.x, axis=0)
-        if axR is None:
-            axR = axL.twinx()
-        for e in range(len(Lelements)):
-            if Lelements[e] in self.elements:
-                eIndex = self._getElementIndex(Lelements[e])
-                axL.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
-                ci = ci+1 if ci <= 9 else 0
-            elif Lelements[e] in self.allElements:
-                axL.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci), *args, **kwargs)
-                ci = ci+1 if ci <= 9 else 0
-        for e in range(len(Relements)):
-            if Relements[e] in self.elements:
-                eIndex = self._getElementIndex(Relements[e])
-                axR.plot(self.z/zScale, self.x[eIndex], label=self.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
-                ci = ci+1 if ci <= 9 else 0
-            elif Relements[e] in self.allElements:
-                axR.plot(self.z/zScale, refE, label=self.allElements[0], color = 'C' + str(ci), *args, **kwargs)
-                ci = ci+1 if ci <= 9 else 0
-
-        
-        axL.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
-        axL.set_xlabel('Distance (m)')
-        axL.set_ylabel('Composition (at.%) ' + str(Lelements))
-        axR.set_ylabel('Composition (at.%) ' + str(Relements))
-        
-        lines, labels = axL.get_legend_handles_labels()
-        lines2, labels2 = axR.get_legend_handles_labels()
-        axR.legend(lines+lines2, labels+labels2, framealpha=1)
-
-        return axL, axR
-
-    def plotPhases(self, ax, plotPhase = None, zScale = 1, *args, **kwargs):
+    def plotPhases(self, ax = None, plotPhase = None, zScale = 1, *args, **kwargs):
         '''
         Plots phase fractions over z
 
@@ -746,18 +612,4 @@ class DiffusionModel:
         zScale : float
             Scale factor for z-coordinates
         '''
-        if not self.isSetup:
-            self.setup()
-
-        if plotPhase is not None:
-            p = self._getPhaseIndex(plotPhase)
-            ax.plot(self.z/zScale, self.p[p], *args, **kwargs)
-        else:
-            for p in range(len(self.phases)):
-                ax.plot(self.z/zScale, self.p[p], label=self.phases[p], *args, **kwargs)
-        ax.set_xlim([self.zlim[0]/zScale, self.zlim[1]/zScale])
-        ax.set_ylim([0, 1])
-        ax.set_xlabel('Distance (m)')
-        ax.set_ylabel('Phase Fraction')
-        ax.legend()
-
+        diffPlot.plotPhases(self, ax, plotPhase, zScale, *args, **kwargs)

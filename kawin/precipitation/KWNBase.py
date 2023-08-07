@@ -9,6 +9,7 @@ import time
 import csv
 from itertools import zip_longest
 import traceback
+#from kawin.precipitation.Plot import plotModel
 
 class PrecipitateBase:
     '''
@@ -517,71 +518,47 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.shapeFactors[index].setSpherical()
 
+    def setPrecipitateShape(self, precipitateShape, phase = None, ratio = 1):
+        '''
+        Sets precipitate shape to user-defined shape
+
+        Parameters
+        ----------
+        precipitateShape : int
+            Precipitate shape (ShapeFactor.SPHERE, NEEDLE, PLATE or CUBIC)
+        phase : str (optional)
+            Phase to consider (defaults to first precipitate in list)
+        ratio : float (optional)
+            Aspect ratio of precipitate (long axis / short axis)
+            If float, must be greater than 1
+            If function, must take in radius as input and output float greater than 1
+        '''
+        index = self.phaseIndex(phase)
+        self.shapeFactors[index].setPrecipitateShape(precipitateShape, ratio)
+
     def setSpherical(self, phase = None):
         '''
         Sets precipitate shape to spherical for defined phase
-
-        Parameters
-        ----------
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
         '''
-        index = self.phaseIndex(phase)
-        self.shapeFactors[index].setSpherical()
+        self.setPrecipitateShape(ShapeFactor.SPHERE, phase)
         
     def setAspectRatioNeedle(self, ratio=1, phase = None):
         '''
-        Consider specified precipitate phase as needle-shaped
-        with specified aspect ratio
-
-        Parameters
-        ----------
-        ratio : float or function
-            Aspect ratio of needle-shaped precipitate
-            If float, must be greater than 1
-            If function, must take in radius as input and output float greater than 1
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
+        Consider specified precipitate phase as needle-shaped with specified aspect ratio
         '''
-        index = self.phaseIndex(phase)
-        self.shapeFactors[index].setNeedleShape(ratio)
+        self.setPrecipitateShape(ShapeFactor.NEEDLE, phase, ratio)
         
     def setAspectRatioPlate(self, ratio=1, phase = None):
         '''
-        Consider specified precipitate phase as plate-shaped
-        with specified aspect ratio
-
-        Parameters
-        ----------
-        ratio : float or function
-            Aspect ratio of needle-shaped precipitate
-            If float, must be greater than 1
-            If function, must take in radius as input and output float greater than 1
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
+        Consider specified precipitate phase as plate-shaped with specified aspect ratio
         '''
-        index = self.phaseIndex(phase)
-        self.shapeFactors[index].setPlateShape(ratio)
+        self.setPrecipitateShape(ShapeFactor.PLATE, phase, ratio)
         
     def setAspectRatioCuboidal(self, ratio=1, phase = None):
         '''
-        Consider specified precipitate phase as cuboidal-shaped
-        with specified aspect ratio
-
-        TODO: add cuboidal factor
-            Currently, I think this considers that the cuboidal factor is 1
-
-        Parameters
-        ----------
-        ratio : float or function
-            Aspect ratio of needle-shaped precipitate
-            If float, must be greater than 1
-            If function, must take in radius as input and output float greater than 1
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
+        Consider specified precipitate phase as cuboidal-shaped with specified aspect ratio
         '''
-        index = self.phaseIndex(phase)
-        self.shapeFactors[index].setCuboidalShape(ratio)
+        self.setPrecipitateShape(ShapeFactor.CUBIC, phase, ratio)
     
     def setVmAlpha(self, Vm, atomsPerCell):
         '''
@@ -1497,199 +1474,4 @@ class PrecipitateBase:
             Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
         *args, **kwargs - extra arguments for plotting
         '''
-        timeScale, timeLabel, bounds = self.getTimeAxis(timeUnits, bounds)
-
-        axes.set_xlabel(timeLabel)
-        axes.set_xlim(bounds)
-
-        labels = {
-            'Volume Fraction': 'Volume Fraction',
-            'Total Volume Fraction': 'Volume Fraction',
-            'Critical Radius': 'Critical Radius (m)',
-            'Average Radius': 'Average Radius (m)',
-            'Volume Average Radius': 'Volume Average Radius (m)',
-            'Total Average Radius': 'Average Radius (m)',
-            'Total Volume Average Radius': 'Volume Average Radius (m)',
-            'Aspect Ratio': 'Mean Aspect Ratio',
-            'Total Aspect Ratio': 'Mean Aspect Ratio',
-            'Driving Force': 'Driving Force (J/m$^3$)',
-            'Nucleation Rate': 'Nucleation Rate (#/m$^3$-s)',
-            'Total Nucleation Rate': 'Nucleation Rate (#/m$^3$-s)',
-            'Precipitate Density': 'Precipitate Density (#/m$^3$)',
-            'Total Precipitate Density': 'Precipitate Density (#/m$^3$)',
-            'Temperature': 'Temperature (K)',
-            'Composition': 'Matrix Composition (at.%)',
-            'Eq Composition Alpha': 'Matrix Composition (at.%)',
-            'Eq Composition Beta': 'Matrix Composition (at.%)',
-            'Supersaturation': 'Supersaturation',
-            'Eq Volume Fraction': 'Volume Fraction'
-        }
-
-        totalVariables = ['Total Volume Fraction', 'Total Average Radius', 'Total Aspect Ratio', \
-                            'Total Nucleation Rate', 'Total Precipitate Density']
-        singleVariables = ['Volume Fraction', 'Critical Radius', 'Average Radius', 'Aspect Ratio', \
-                            'Driving Force', 'Nucleation Rate', 'Precipitate Density', 'Volume Average Radius']
-        eqCompositions = ['Eq Composition Alpha', 'Eq Composition Beta']
-        saturations = ['Supersaturation', 'Eq Volume Fraction']
-
-        if variable == 'Temperature':
-            axes.semilogx(timeScale * self.time, self.T, *args, **kwargs)
-            axes.set_ylabel(labels[variable])
-
-        elif variable == 'Composition':
-            if self.numberOfElements == 1:
-                axes.semilogx(timeScale * self.time, self.xComp, *args, **kwargs)
-                axes.set_ylabel('Matrix Composition (at.% ' + self.elements[0] + ')')
-            else:
-                for i in range(self.numberOfElements):
-                    #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-                    if 'color' in kwargs:
-                        axes.semilogx(timeScale * self.time, self.xComp[:,i], label=self.elements[i], *args, **kwargs)
-                    else:
-                        axes.semilogx(timeScale * self.time, self.xComp[:,i], label=self.elements[i], color='C'+str(i), *args, **kwargs)
-                axes.legend(self.elements)
-                axes.set_ylabel(labels[variable])
-            yRange = [np.amin(self.xComp), np.amax(self.xComp)]
-            axes.set_ylim([yRange[0] - 0.1 * (yRange[1] - yRange[0]), yRange[1] + 0.1 * (yRange[1] - yRange[0])])
-
-        elif variable in eqCompositions:
-            if variable == 'Eq Composition Alpha':
-                plotVariable = self.xEqAlpha
-            elif variable == 'Eq Composition Beta':
-                plotVariable = self.xEqBeta
-
-            if len(self.phases) == 1:
-                if self.numberOfElements == 1:
-                    axes.semilogx(timeScale * self.time, plotVariable[0], *args, **kwargs)
-                    axes.set_ylabel('Matrix Composition (at.% ' + self.elements[0] + ')')
-                else:
-                    for i in range(self.numberOfElements):
-                        #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-                        if 'color' in kwargs:
-                            axes.semilogx(timeScale * self.time, plotVariable[0,:,i], label=self.elements[i]+'_Eq', *args, **kwargs)
-                        else:
-                            axes.semilogx(timeScale * self.time, plotVariable[0,:,i], label=self.elements[i]+'_Eq', color='C'+str(i), *args, **kwargs)
-                    axes.legend()
-                    axes.set_ylabel(labels[variable])
-            else:
-                if self.numberOfElements == 1:
-                    for p in range(len(self.phases)):
-                        #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-                        if 'color' in kwargs:
-                            axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p]+'_Eq', *args, **kwargs)
-                        else:
-                            axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p]+'_Eq', color='C'+str(p), *args, **kwargs)
-                    axes.legend()
-                    axes.set_ylabel('Matrix Composition (at.% ' + self.elements[0] + ')')
-                else:
-                    cIndex = 0
-                    for p in range(len(self.phases)):
-                        for i in range(self.numberOfElements):
-                            #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-                            if 'color' in kwargs:
-                                axes.semilogx(timeScale * self.time, plotVariable[p,:,i], label=self.phases[p]+'_'+self.elements[i]+'_Eq', *args, **kwargs)
-                            else:
-                                axes.semilogx(timeScale * self.time, plotVariable[p,:,i], label=self.phases[p]+'_'+self.elements[i]+'_Eq', color='C'+str(cIndex), *args, **kwargs)
-                            cIndex += 1
-                    axes.legend()
-                    axes.set_ylabel(labels[variable])
-
-        elif variable in saturations:
-            #Since supersaturation is calculated in respect to the tie-line, it is the same for each element
-            #Thus only a single element is needed
-            plotVariable = np.zeros(self.betaFrac.shape)
-            for p in range(len(self.phases)):
-                if self.numberOfElements == 1:
-                    if variable == 'Eq Volume Fraction':
-                        num = self.xComp[0] - self.xEqAlpha[p]
-                    else:
-                        num = self.xComp - self.xEqAlpha[p]
-                    den = self.xEqBeta[p] - self.xEqAlpha[p]
-                else:
-                    if variable == 'Eq Volume Fraction':
-                        num = self.xComp[0,0] - self.xEqAlpha[p,:,0]
-                    else:
-                        num = self.xComp[:,0] - self.xEqAlpha[p,:,0]
-                    den = self.xEqBeta[p,:,0] - self.xEqAlpha[p,:,0]
-                #If precipitate is unstable, both xEqAlpha and xEqBeta are set to 0
-                #For these cases, change the values of numerator and denominator so that supersaturation is 0 instead of undefined
-                num[den == 0] = 0
-                den[den == 0] = 1
-                plotVariable[p] = num / den
-            
-            if len(self.phases) == 1:
-                axes.semilogx(timeScale * self.time, plotVariable[0], *args, **kwargs)
-            else:
-                for p in range(len(self.phases)):
-                    if 'color' in kwargs:
-                        axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], *args, **kwargs)
-                    else:
-                        axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], color='C'+str(p), *args, **kwargs)
-                axes.legend()
-            axes.set_ylabel(labels[variable])
-
-        elif variable in singleVariables:
-            if variable == 'Volume Fraction':
-                plotVariable = self.betaFrac
-            elif variable == 'Critical Radius':
-                plotVariable = self.Rcrit
-            elif variable == 'Average Radius':
-                plotVariable = self.avgR
-                for p in range(len(self.phases)):
-                    if self.GB[p].nucleationSiteType == self.GB[p].BULK or self.GB[p].nucleationSiteType == self.GB[p].DISLOCATION:
-                        if radius != 'spherical':
-                            plotVariable[p] /= self.shapeFactors[p].eqRadiusFactor(self.avgR[p])
-                        if radius == 'long':
-                            plotVariable[p] *= self.avgAR[p]
-                    else:
-                        plotVariable[p] *= self._GBareaRemoval(p)
-            elif variable == 'Volume Average Radius':
-                plotVariable = np.zeros(self.betaFrac.shape)
-                indices = self.precipitateDensity > 0
-                plotVariable[indices] = np.cbrt(self.betaFrac[indices] / self.precipitateDensity[indices] / (4/3*np.pi))
-            elif variable == 'Aspect Ratio':
-                plotVariable = self.avgAR
-            elif variable == 'Driving Force':
-                plotVariable = self.dGs
-            elif variable == 'Nucleation Rate':
-                plotVariable = self.nucRate
-            elif variable == 'Precipitate Density':
-                plotVariable = self.precipitateDensity
-
-            if (len(self.phases)) == 1:
-                axes.semilogx(timeScale * self.time, plotVariable[0], *args, **kwargs)
-            else:
-                for p in range(len(self.phases)):
-                    axes.semilogx(timeScale * self.time, plotVariable[p], label=self.phases[p], color='C'+str(p), *args, **kwargs)
-                axes.legend()
-            axes.set_ylabel(labels[variable])
-            yb = 1 if variable == 'Aspect Ratio' else 0
-            axes.set_ylim([yb, 1.1 * np.amax(plotVariable)])
-
-        elif variable in totalVariables:
-            if variable == 'Total Volume Fraction':
-                plotVariable = np.sum(self.betaFrac, axis=0)
-            elif variable == 'Total Average Radius':
-                totalN = np.sum(self.precipitateDensity, axis=0)
-                totalN[totalN == 0] = 1
-                totalR = np.sum(self.avgR * self.precipitateDensity, axis=0)
-                plotVariable = totalR / totalN
-            elif variable == 'Total Volume Average Radius':
-                totalN = np.sum(self.precipitateDensity, axis=0)
-                totalN[totalN == 0] = 1
-                totalVol = np.sum(self.betaFrac, axis=0)
-                plotVariable = np.cbrt(totalVol / totalN)
-            elif variable == 'Total Aspect Ratio':
-                totalN = np.sum(self.precipitateDensity, axis=0)
-                totalN[totalN == 0] = 1
-                totalAR = np.sum(self.avgAR * self.precipitateDensity, axis=0)
-                plotVariable = totalAR / totalN
-            elif variable == 'Total Nucleation Rate':
-                plotVariable = np.sum(self.nucRate, axis=0)
-            elif variable == 'Total Precipitate Density':
-                plotVariable = np.sum(self.precipitateDensity, axis=0)
-
-            axes.semilogx(timeScale * self.time, plotVariable, *args, **kwargs)
-            axes.set_ylabel(labels[variable])
-            yb = 1 if variable == 'Total Aspect Ratio' else 0
-            axes.set_ylim(bottom=yb)
+        plotModel(self, axes, variable, bounds, timeUnits, radius, *args, **kwargs)

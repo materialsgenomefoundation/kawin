@@ -19,7 +19,7 @@ class DESolver:
         Default time increment if no function is implement to estimate a good time increment
     '''
     def __init__(self, iterator = SolverType.RK4, defaultDT = 0.1):
-        self.dtmin = 1e-6       #Fraction of simulation time
+        self.dtmin = 1e-8       #Fraction of simulation time
         self.dtmax = 1
         self.dt = defaultDT
         self.getDt = self.defaultDtFunc

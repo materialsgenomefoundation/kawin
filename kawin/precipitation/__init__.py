@@ -1,4 +1,4 @@
-from .KWNBase import PrecipitateBase
+from .KWNBase import PrecipitateBase, VolumeParameter
 from .KWNEuler import PrecipitateModel
 from .PopulationBalance import PopulationBalanceModel
 from .non_ideal.ElasticFactors import StrainEnergy

@@ -9,70 +9,43 @@ import time
 import csv
 from itertools import zip_longest
 import traceback
-#from kawin.precipitation.Plot import plotModel
+from kawin.GenericModel import GenericModel
+from enum import Enum
 
-class PrecipitateBase:
+class VolumeParameter(Enum):
+    MOLAR_VOLUME = 0
+    ATOMIC_VOLUME = 1
+    LATTICE_PARAMETER = 2
+
+
+class PrecipitateBase(GenericModel):
     '''
     Base class for precipitation models
-    Note: currently only the Euler implementation is available, but
-        other implementations are planned to be added
-    
+
     Parameters
     ----------
-    t0 : float
-        Initial time in seconds
-    tf : float
-        Final time in seconds
-    steps : int
-        Number of time steps
     phases : list (optional)
         Precipitate phases (array of str)
         If only one phase is considered, the default is ['beta']
-    linearTimeSpacing : bool (optional)
-        Whether to have time increment spaced linearly or logarithimically
-        Defaults to False
     elements : list (optional)
         Solute elements in system
         Note: order of elements must correspond to order of elements set in Thermodynamics module
         If binary system, then defualt is ['solute']
     '''
-    def __init__(self, t0, tf, steps, phases = ['beta'], linearTimeSpacing = False, elements = ['solute']):
-        #Store input parameters
-        self.initialSteps = int(steps)      #Initial number of steps for when model is reset
-        self.steps = int(steps)             #This includes the number of steps added when adaptive time stepping is enabled
-        self.t0 = t0
-        self.tf = tf
-        self.phases = np.array(phases)
-        self.linearTimeSpacing = linearTimeSpacing
-
-        #Change t0 to finite value if logarithmic time spacing
-        #New t0 will be tf / 1e6
-        if self.t0 <= 0 and self.linearTimeSpacing == False:
-            self.t0 = self.tf / 1e6
-            print('Warning: Cannot use 0 as an initial time when using logarithmic time spacing')
-            print('\tSetting t0 to {:.3e}'.format(self.t0))
-        
-        #Time variables
-        self.adaptiveTimeStepping(True)
-
-        #Predefined constraints, these can be set if they make the simulation unstable
-        self._defaultConstraints()
-
-        #Stopping conditions
-        self.clearStoppingConditions()
-            
-        #Composition array
+    def __init__(self, phases = ['beta'], elements = ['solute']):
         self.elements = elements
         self.numberOfElements = len(elements)
-        
-        #All other arrays
+        self.phases = np.array(phases)
+
         self._resetArrays()
-        
+        self.resetConstraints()
+        self._isSetup = False
+
         #Constants
-        self.Rg = 8.314                 #J/mol-K
-        self.avo = 6.022e23             #/mol
-        self.kB = self.Rg / self.avo    #J/K
-        
+        self.Rg = 8.314     #Gas constant - J/mol-K
+        self.avo = 6.022e23 #Avogadro's number (/mol)
+        self.kB = self.Rg / self.avo    #Boltzmann constant (J/K)
+
         #Default variables, these terms won't have to be set before simulation
         self.strainEnergy = [StrainEnergy() for i in self.phases]
         self.calculateAspectRatio = [False for i in self.phases]
@@ -90,7 +63,6 @@ class PrecipitateBase:
         
         #Set other variables to None to throw errors if not set
         self.xInit = None
-        self.T = None
         self.Tparameters = None
 
         self._isNucleationSetup = False
@@ -104,6 +76,7 @@ class PrecipitateBase:
         self.aAlpha = None
         self.VaAlpha = None
         self.VmAlpha = None
+        self.atomsPerCellAlpha = None
         self.atomsPerCellBeta = np.empty(len(self.phases), dtype=np.float32)
         self.VaBeta = np.empty(len(self.phases), dtype=np.float32)
         self.VmBeta = np.empty(len(self.phases), dtype=np.float32)
@@ -120,7 +93,7 @@ class PrecipitateBase:
             self._Beta = self._BetaMulti
             self._betaFuncs = [None for p in phases]
             self._defaultBeta = 20
-        
+
     def phaseIndex(self, phase = None):
         '''
         Returns index of phase in list
@@ -131,7 +104,7 @@ class PrecipitateBase:
             Precipitate phase (defaults to None, which will return 0)
         '''
         return 0 if phase is None else np.where(self.phases == phase)[0][0]
-        
+            
     def reset(self):
         '''
         Resets simulation results
@@ -148,249 +121,120 @@ class PrecipitateBase:
             self.setTemperatureArray(*self.Tparameters)
         elif self.Tparameters is not None:
             self.setNonIsothermalTemperature(self.Tparameters)
-        
+
     def _resetArrays(self):
         '''
         Resets and initializes arrays for all variables
-            time
-            matrix composition, equilibrium composition
-            critial radius and nucleation barrier
-            average radius and aspect ratio
-            volume fraction
-            nucleation rate
-            precipitate density
-            driving force
-            beta
-            incubation time
-        '''
-        self.steps = self.initialSteps
-        self.time = np.linspace(self.t0, self.tf, self.steps) if self.linearTimeSpacing else np.logspace(np.log10(self.t0), np.log10(self.tf), self.steps)
+            time, temperature
+            matrix composition, equilibrium composition (alpha and beta)
+            driving force, impingement factor, nucleation barrier, critical radius, nucleation radius
+            nucleation rate, precipitate density
+            average radius, average aspect ratio, volume fraction
 
-        if self.numberOfElements == 1:
-            self.xComp = np.zeros(self.steps)                                #Current composition of matrix phase
-            self.xEqAlpha = np.zeros((len(self.phases), self.steps))         #Equilibrium composition of matrix phase with respect to each precipitate phase
-            self.xEqBeta = np.zeros((len(self.phases), self.steps))          #Equilibrium composition of precipitate phases
-        else:
-            self.xComp = np.zeros((self.steps, self.numberOfElements))
-            self.xEqAlpha = np.zeros((len(self.phases), self.steps, self.numberOfElements))
-            self.xEqBeta = np.zeros((len(self.phases), self.steps, self.numberOfElements))
-            
-        self.Rcrit = np.zeros((len(self.phases), self.steps))                #Critical radius
-        self.Gcrit = np.zeros((len(self.phases), self.steps))                #Height of nucleation barrier
-        self.Rad = np.zeros((len(self.phases), self.steps))                  #Radius of particles formed at each time step
-        self.avgR = np.zeros((len(self.phases), self.steps))                 #Average radius
-        self.avgAR = np.zeros((len(self.phases), self.steps))                #Mean aspect ratio
-        self.betaFrac = np.zeros((len(self.phases), self.steps))             #Fraction of precipitate
+        Extra variables include incubation offset and incubation sum
+
+        Time dependent variables will be set up as either
+            (iterations)                     time
+            (iterations, elements)           composition
+            (iterations, phases, elements)   eq composition
+            (iterations, phases)             Everything else
+            This is intended for appending arrays to always be on the first axis
+        '''
+        self.n = 0
+
+        #Time
+        self.time = np.zeros(1)
+
+        #Temperature
+        self.temperature = np.zeros(1)
+
+        #Composition
+        self.xComp = np.zeros((1, self.numberOfElements))
+        self.xEqAlpha = np.zeros((1, len(self.phases), self.numberOfElements))
+        self.xEqBeta = np.zeros((1, len(self.phases), self.numberOfElements))
+
+        #Nucleation
+        self.dGs = np.zeros((1, len(self.phases)))                  #Driving force
+        self.betas = np.zeros((1, len(self.phases)))                #Impingement rates (used for non-isothermal)
+        self.incubationOffset = np.zeros(len(self.phases))          #Offset for incubation time (for non-isothermal precipitation)
+        self.Gcrit = np.zeros((1, len(self.phases)))                #Height of nucleation barrier
+        self.Rcrit = np.zeros((1, len(self.phases)))                #Critical radius
+        self.Rad = np.zeros((1, len(self.phases)))                  #Radius of particles formed at each time step
         
-        self.nucRate = np.zeros((len(self.phases), self.steps))              #Nucleation rate
-        self.precipitateDensity = np.zeros((len(self.phases), self.steps))   #Number of nucleates
+        self.nucRate = np.zeros((1, len(self.phases)))              #Nucleation rate
+        self.precipitateDensity = np.zeros((1, len(self.phases)))   #Number of nucleates
         
-        self.dGs = np.zeros((len(self.phases), self.steps))                  #Driving force
-        self.betas = np.zeros((len(self.phases), self.steps))                #Impingement rates (used for non-isothermal)
-        self.incubationOffset = np.zeros(len(self.phases))                   #Offset for incubation time (for non-isothermal precipitation)
-        self.incubationSum = np.zeros(len(self.phases))                      #Sum of incubation time
+        #Average radius and precipitate fraction
+        self.avgR = np.zeros((1, len(self.phases)))                 #Average radius
+        self.avgAR = np.zeros((1, len(self.phases)))                #Mean aspect ratio
+        self.betaFrac = np.zeros((1, len(self.phases)))             #Fraction of precipitate
 
-        self.prevFConc = np.zeros((2, len(self.phases), self.numberOfElements))    #Sum of precipitate composition for mass balance
+        #Fconc - auxiliary array to store total solute composition of precipitates
+        self.fConc = np.zeros((1, len(self.phases), self.numberOfElements))
 
-    def save(self, filename, compressed = False, toCSV = False):
+        self._setEnum()
+        self._packArrays()
+
+    def _setEnum(self):
+        self.TIME = 0
+        self.TEMPERATURE = 1
+        self.COMPOSITION = 2
+        self.EQ_COMP_ALPHA = 3
+        self.EQ_COMP_BETA = 4
+        self.DRIVING_FORCE = 5
+        self.IMPINGEMENT = 6
+        self.G_CRIT = 7
+        self.R_CRIT = 8
+        self.R_NUC = 9
+        self.NUC_RATE = 10
+        self.PREC_DENS = 11
+        self.R_AVG = 12
+        self.AR_AVG = 13
+        self.VOL_FRAC = 14
+        self.FCONC = 15
+        self.NUM_TERMS = 16
+
+    def _packArrays(self):
         '''
-        Save results into a numpy .npz or .csv format
-
-        Parameters
-        ----------
-        filename : str
-        compressed : bool
-            If true, will save compressed .npz format
-        toCSV : bool
-            If true, will save to .csv
+        Create internal list of variables to solve for
+        The "constants" will also act as the index to use when taking variables out of x
         '''
-        variables = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements', \
-            'time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
-        vDict = {v: getattr(self, v) for v in variables}
-        
-        if toCSV:
-            vDict['t0'] = np.array([vDict['t0']])
-            vDict['tf'] = np.array([vDict['tf']])
-            vDict['steps'] = np.array([vDict['steps']])
-            vDict['linearTimeSpacing'] = np.array([vDict['linearTimeSpacing']])
-            if self.numberOfElements == 2:
-                vDict['xComp'] = vDict['xComp'].T
-            arrays = []
-            headers = []
-            for v in vDict:
-                vDict[v] = np.array(vDict[v])
-                if len(vDict[v].shape) == 2:
-                    for i in range(len(vDict[v])):
-                        arrays.append(vDict[v][i])
-                        headers.append(v + str(i))
-                        if v == 'xComp':
-                            headers.append(v + '_' + self.elements[i])
-                        else:
-                            headers.append(v + '_' + self.phases[i])
-                elif v == 'xEqAlpha' or v == 'xEqBeta':
-                    for i in range(len(self.phases)):
-                        for j in range(self.numberOfElements):
-                            arrays.append(vDict[v][i,:,j])
-                            headers.append(v + '_' + self.phases[i] + '_' + self.elements[j])
-                else:
-                    arrays.append(vDict[v])
-                    headers.append(v)
-            rows = zip_longest(*arrays, fillvalue='')
-            if '.csv' not in filename.lower():
-                filename = filename + '.csv'
-            with open(filename, 'w', newline='') as f:
-                csv.writer(f).writerow(headers)
-                csv.writer(f).writerows(rows)
-        else:
-            if compressed:
-                np.savez_compressed(filename, **vDict)
-                #np.savez_compressed(filename, **vDict, allow_pickle=True)
-            else:
-                np.savez(filename, **vDict)
-                #np.savez(filename, **vDict, allow_pickle=True)
+        self.varList = [
+                self.time, self.temperature, self.xComp, self.xEqAlpha, self.xEqBeta,
+                self.dGs, self.betas, self.Gcrit, self.Rcrit, self.Rad,
+                self.nucRate, self.precipitateDensity,
+                self.avgR, self.avgAR, self.betaFrac,
+                self.fConc
+                ]
 
-    def load(filename):
+    def _appendArrays(self, newVals):
         '''
-        Loads data
-
-        Parameters
-        ----------
-        filename : str
-
-        Returns
-        -------
-        PrecipitateBase object
-            Note: this will only contain model outputs which can be used for plotting
+        Appends new values to the variable list
+        NOTE: newVals must correspond to the same order as _packArrays with first axis as 1
+            Ex rCrit is (n, phases) so corresponding new value should be (1, phases)
+        Since np append creates a new variable in memory, we have to reassign each term, then pack them into varList again
+        I suppose we could make a list of str for each variable and call setattr
         '''
-        setupVars = ['t0', 'tf', 'steps', 'phases', 'linearTimeSpacing', 'elements']
-        if '.np' in filename.lower():
-            data = np.load(filename, allow_pickle=True)
-            model = PrecipitateBase(data['t0'], data['tf'], data['steps'], data['phases'], data['linearTimeSpacing'], data['elements'])
-            for d in data:
-                if d not in setupVars:
-                    setattr(model, d, data[d])
-        elif '.csv' in filename.lower():
-            with open(filename, 'r') as csvFile:
-                data = csv.reader(csvFile, delimiter=',')
-                i = 0
-                headers = []
-                columns = {}
-                #Grab all columns
-                for row in data:
-                    if i == 0:
-                        headers = row
-                        columns = {h: [] for h in headers}
-                    else:
-                        for j in range(len(row)):
-                            if row[j] != '':
-                                columns[headers[j]].append(row[j])
-                    i += 1
+        self.time = np.append(self.time, newVals[self.TIME], axis=0)
+        self.temperature = np.append(self.temperature, newVals[self.TEMPERATURE], axis=0)
+        self.xComp = np.append(self.xComp, newVals[self.COMPOSITION], axis=0)
+        self.xEqAlpha = np.append(self.xEqAlpha, newVals[self.EQ_COMP_ALPHA], axis=0)
+        self.xEqBeta = np.append(self.xEqBeta, newVals[self.EQ_COMP_BETA], axis=0)
+        self.dGs = np.append(self.dGs, newVals[self.DRIVING_FORCE], axis=0)
+        self.betas = np.append(self.betas, newVals[self.IMPINGEMENT], axis=0)
+        self.Gcrit = np.append(self.Gcrit, newVals[self.G_CRIT], axis=0)
+        self.Rcrit = np.append(self.Rcrit, newVals[self.R_CRIT], axis=0)
+        self.Rad = np.append(self.Rad, newVals[self.R_NUC], axis=0)
+        self.nucRate = np.append(self.nucRate, newVals[self.NUC_RATE], axis=0)
+        self.precipitateDensity = np.append(self.precipitateDensity, newVals[self.PREC_DENS], axis=0)
+        self.avgR = np.append(self.avgR, newVals[self.R_AVG], axis=0)
+        self.avgAR = np.append(self.avgAR, newVals[self.AR_AVG], axis=0)
+        self.betaFrac = np.append(self.betaFrac, newVals[self.VOL_FRAC], axis=0)
+        self.fConc = np.append(self.fConc, newVals[self.FCONC], axis=0)
+        self._packArrays()
+        self.n += 1
 
-                t0, tf, steps, phases, elements = float(columns['t0'][0]), float(columns['tf'][0]), int(columns['steps'][0]), columns['phases'], columns['elements']
-                linearTimeSpacing = True if columns['linearTimeSpacing'][0] == 'True' else False
-                model = PrecipitateBase(t0, tf, steps, phases, linearTimeSpacing, elements)
-
-                restOfVariables = ['time', 'xComp', 'Rcrit', 'Gcrit', 'Rad', 'avgR', 'avgAR', 'betaFrac', 'nucRate', 'precipitateDensity', 'dGs', 'xEqAlpha', 'xEqBeta']
-                restOfColumns = {v: [] for v in restOfVariables}
-                for d in columns:
-                    if d not in setupVars:
-                        if d == 'time':
-                            restOfColumns[d] = np.array(columns[d], dtype='float')
-                        elif d == 'xComp':
-                            if model.numberOfElements == 1:
-                                restOfColumns[d] = np.array(columns[d], dtype='float')
-                            else:
-                                restOfColumns['xComp'].append(columns[d], dtype='float')
-                        else:
-                            selectedVar = ''
-                            for r in restOfVariables:
-                                if r in d:
-                                    selectedVar = r
-                            restOfColumns[selectedVar].append(np.array(columns[d], dtype='float'))
-                for d in restOfColumns:
-                    restOfColumns[d] = np.array(restOfColumns[d])
-                    setattr(model, d, restOfColumns[d])
-
-                #For multicomponent systems, adjust as necessary such that number of elements will be the last axis
-                if model.numberOfElements > 1:
-                    model.xComp = model.xComp.T
-                    if len(model.phases) == 1:
-                        model.xEqAlpha = np.expand_dims(model.xEqAlpha, 0)
-                        model.xEqBeta = np.expand_dims(model.xEqBeta, 0)
-                    else:
-                        model.xEqAlpha = np.reshape(model.xEqAlpha, ((len(model.phases), model.numberOfElements, len(model.time))))
-                        model.xEqBeta = np.reshape(model.xEqBeta, ((len(model.phases), model.numberOfElements, len(model.time))))
-                    model.xEqAlpha = np.transpose(model.xEqAlpha, (0, 2, 1))
-                    model.xEqBeta = np.transpose(model.xEqBeta, (0, 2, 1))
-        return model
-        
-    def _divideTimestep(self, i, dt):
-        '''
-        Adds a new time step between t_i-1 and t_i, with new time being t_i-1 + dt
-
-        Parameters
-        ----------
-        i : int
-        dt : float
-            Note: this must be smaller than t_i - t_i-1
-        '''
-        self.steps += 1
-
-        if self.numberOfElements == 1:
-            self.xComp = np.append(self.xComp, 0)
-            self.xEqAlpha = np.append(self.xEqAlpha, np.zeros((len(self.phases), 1)), axis=1)
-            self.xEqBeta = np.append(self.xEqBeta, np.zeros((len(self.phases), 1)), axis=1)
-        else:
-            self.xComp = np.append(self.xComp, np.zeros((1, self.numberOfElements)), axis=0)
-            self.xEqAlpha = np.append(self.xEqAlpha, np.zeros((len(self.phases), 1, self.numberOfElements)), axis=1)
-            self.xEqBeta = np.append(self.xEqBeta, np.zeros((len(self.phases), 1, self.numberOfElements)), axis=1)
-
-        #Add new element to each variable
-        self.Rcrit = np.append(self.Rcrit, np.zeros((len(self.phases), 1)), axis=1)
-        self.Gcrit = np.append(self.Gcrit, np.zeros((len(self.phases), 1)), axis=1)
-        self.Rad = np.append(self.Rad, np.zeros((len(self.phases), 1)), axis=1)
-        self.avgR = np.append(self.avgR, np.zeros((len(self.phases), 1)), axis=1)
-        self.avgAR = np.append(self.avgAR, np.zeros((len(self.phases), 1)), axis=1)
-        self.betaFrac = np.append(self.betaFrac, np.zeros((len(self.phases), 1)), axis=1)
-        self.nucRate = np.append(self.nucRate, np.zeros((len(self.phases), 1)), axis=1)
-        self.precipitateDensity = np.append(self.precipitateDensity, np.zeros((len(self.phases), 1)), axis=1)
-        self.dGs = np.append(self.dGs, np.zeros((len(self.phases), 1)), axis=1)
-        self.betas = np.append(self.betas, np.zeros((len(self.phases), 1)), axis=1)
-
-        prevDT = self.time[i] - self.time[i-1]
-        self.time = np.insert(self.time, i, self.time[i-1] + dt)
-
-        ratio = dt / prevDT
-        self.T = np.insert(self.T, i, ratio * self.T[i-1] + (1-ratio) * self.T[i])
-
-    def adaptiveTimeStepping(self, adaptive = True):
-        '''
-        Sets if adaptive time stepping is used
-
-        Parameters
-        ----------
-        adaptive : bool (optional)
-            Defaults to True
-        '''
-        if adaptive:
-            self._timeIncrementCheck = self._checkDT
-            #self._postTimeIncrementCheck = self._postCheckDT
-            self._postTimeIncrementCheck = self._noPostCheckDT
-        else:
-            self._timeIncrementCheck = self._noCheckDT
-            self._postTimeIncrementCheck = self._noPostCheckDT
-
-    def _calculateDT(self, i, fraction):
-        '''
-        Calculates DT as a fraction of the total simulation time
-        '''
-        if self.linearTimeSpacing:
-            dt = fraction*(self.tf - self.t0)
-        else:
-            dt = self.time[i] * (np.exp(fraction*np.log(self.tf / self.t0)) - 1)
-        return dt
-
-    def _defaultConstraints(self):
+    def resetConstraints(self):
         '''
         Default values for contraints
         '''
@@ -400,11 +244,12 @@ class PrecipitateBase:
         self.maxDTFraction = 1e-2
         self.minDTFraction = 1e-5
 
+        #Constraints on maximum time step
         self.checkTemperature = True
         self.maxNonIsothermalDT = 1
 
         self.checkPSD = True
-        self.maxDissolution = 0.01
+        self.maxDissolution = 1e-3
 
         self.checkRcrit = True
         self.maxRcritChange = 0.01
@@ -414,15 +259,13 @@ class PrecipitateBase:
         self.minNucleationRate = 1e-5
 
         self.checkVolumePre = True
-        self.checkVolumePost = False
         self.maxVolumeChange = 0.001
         
-        self.checkComposition = False
         self.checkCompositionPre = False
         self.maxCompositionChange = 0.001
         self.minComposition = 0
 
-        self.minNucleateDensity = 1e-5
+        self.minNucleateDensity = 1e-10
 
     def setConstraints(self, **kwargs):
         '''
@@ -465,7 +308,7 @@ class PrecipitateBase:
         '''
         for key, value in kwargs.items():
             setattr(self, key, value)
-        
+
     def setBetaBinary(self, functionType = 1):
         '''
         Sets function for beta calculation in binary systems
@@ -536,131 +379,27 @@ class PrecipitateBase:
         index = self.phaseIndex(phase)
         self.shapeFactors[index].setPrecipitateShape(precipitateShape, ratio)
 
-    def setSpherical(self, phase = None):
-        '''
-        Sets precipitate shape to spherical for defined phase
-        '''
-        self.setPrecipitateShape(ShapeFactor.SPHERE, phase)
-        
-    def setAspectRatioNeedle(self, ratio=1, phase = None):
-        '''
-        Consider specified precipitate phase as needle-shaped with specified aspect ratio
-        '''
-        self.setPrecipitateShape(ShapeFactor.NEEDLE, phase, ratio)
-        
-    def setAspectRatioPlate(self, ratio=1, phase = None):
-        '''
-        Consider specified precipitate phase as plate-shaped with specified aspect ratio
-        '''
-        self.setPrecipitateShape(ShapeFactor.PLATE, phase, ratio)
-        
-    def setAspectRatioCuboidal(self, ratio=1, phase = None):
-        '''
-        Consider specified precipitate phase as cuboidal-shaped with specified aspect ratio
-        '''
-        self.setPrecipitateShape(ShapeFactor.CUBIC, phase, ratio)
+    def _setVolume(self, value, valueType: VolumeParameter, atomsPerCell):
+        if valueType == VolumeParameter.MOLAR_VOLUME:
+            Vm = value
+            Va = atomsPerCell * Vm / self.avo
+            a = np.cbrt(Va)
+        elif valueType == VolumeParameter.ATOMIC_VOLUME:
+            Va = value
+            Vm = Va * self.avo / atomsPerCell
+            a = np.cbrt(Va)
+        elif valueType == VolumeParameter.LATTICE_PARAMETER:
+            a = value
+            Va = a**3
+            Vm = Va * self.avo / atomsPerCell
+        return Vm, Va, a, atomsPerCell
     
-    def setVmAlpha(self, Vm, atomsPerCell):
-        '''
-        Molar volume for parent phase
-        
-        Parameters
-        ----------
-        Vm : float
-            Molar volume (m3 / mol)
-        atomsPerCell : int
-            Number of atoms in a unit cell
-        '''
-        self.VmAlpha = Vm
-        self.VaAlpha = atomsPerCell * self.VmAlpha / self.avo
-        self.aAlpha = np.cbrt(self.VaAlpha)
-        self.atomsPerCellAlpha = atomsPerCell
-        
-    def setVaAlpha(self, Va, atomsPerCell):
-        '''
-        Unit cell volume for parent phase
-        
-        Parameters
-        ----------
-        Va : float
-            Unit cell volume (m3 / unit cell)
-        atomsPerCell : int
-            Number of atoms in a unit cell
-        '''
-        self.VaAlpha = Va
-        self.VmAlpha = self.VaAlpha * self.avo / atomsPerCell
-        self.aAlpha = np.cbrt(Va)
-        self.atomsPerCellAlpha = atomsPerCell
-        
-    def setUnitCellAlpha(self, a, atomsPerCell):
-        '''
-        Lattice parameter for parent phase (assuming cubic unit cell)
-        
-        Parameters
-        ----------
-        a : float
-            Lattice constant (m)
-        atomsPerCell : int
-            Number of atoms in a unit cell
-        '''
-        self.aAlpha = a
-        self.VaAlpha = a**3
-        self.VmAlpha = self.VaAlpha * self.avo / atomsPerCell
-        self.atomsPerCellAlpha = atomsPerCell
-        
-    def setVmBeta(self, Vm, atomsPerCell, phase = None):
-        '''
-        Molar volume for precipitate phase
-        
-        Parameters
-        ----------
-        Vm : float
-            Molar volume (m3 / mol)
-        atomsPerCell : int
-            Number of atoms in a unit cell
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
-        '''
+    def setVolumeAlpha(self, value, valueType: VolumeParameter, atomsPerCell):
+        self.VmAlpha, self.VaAlpha, self.aAlpha, self.atomsPerCellAlpha = self._setVolume(value, valueType, atomsPerCell)
+
+    def setVolumeBeta(self, value, valueType: VolumeParameter, atomsPerCell, phase = None):
         index = self.phaseIndex(phase)
-        self.VmBeta[index] = Vm
-        self.VaBeta[index] = atomsPerCell * self.VmBeta[index] / self.avo
-        self.atomsPerCellBeta[index] = atomsPerCell
-        
-    def setVaBeta(self, Va, atomsPerCell, phase = None):
-        '''
-        Unit cell volume for precipitate phase
-        
-        Parameters
-        ----------
-        Va : float
-            Unit cell volume (m3 / unit cell)
-        atomsPerCell : int
-            Number of atoms in a unit cell
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
-        '''
-        index = self.phaseIndex(phase)
-        self.VaBeta[index] = Va
-        self.VmBeta[index] = self.VaBeta[index] * self.avo / atomsPerCell
-        self.atomsPerCellBeta[index] = atomsPerCell
-        
-    def setUnitCellBeta(self, a, atomsPerCell, phase = None):
-        '''
-        Lattice parameter for precipitate phase (assuming cubic unit cell)
-        
-        Parameters
-        ----------
-        a : float
-            Latice parameter (m)
-        atomsPerCell : int
-            Number of atoms in a unit cell
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
-        '''
-        index = self.phaseIndex(phase)
-        self.VaBeta[index] = a**3
-        self.VmBeta[index] = self.VaBeta[index] * self.avo / atomsPerCell
-        self.atomsPerCellBeta[index] = atomsPerCell
+        self.VmBeta[index], self.VaBeta[index], _, self.atomsPerCellBeta[index] = self._setVolume(value, valueType, atomsPerCell)
 
     def setNucleationDensity(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
         '''
@@ -806,63 +545,31 @@ class PrecipitateBase:
         '''
         index = self.phaseIndex(phase)
         self.theta[index] = theta
-        
+
     def setTemperature(self, temperature):
-        '''
-        Sets isothermal temperature
-        
-        Parameters
-        ----------
-        temperature : float
-            Temperature in Kelvin
-        ''' 
-        #Store parameter in case model is reset
         self.Tparameters = temperature
-
-        self.T = np.full(self.steps, temperature, dtype=np.float32)
-        self._incubation = self._incubationIsothermal
-        
-    def setNonIsothermalTemperature(self, temperatureFunction):
-        '''
-        Sets temperature as a function of time
-        
-        Parameters
-        ----------
-        temperatureFunction : function 
-            Takes in time and returns temperature in K
-        '''
-        #Store parameter in case model is reset
-        self.Tparameters = temperatureFunction
-
-        self.T = np.array([temperatureFunction(t) for t in self.time])
-        
-        if len(np.unique(self.T)) == 1:
-            self._incubation = self._incubationIsothermal
-        else:
-            self._incubation = self._incubationNonIsothermal
-        
-    def setTemperatureArray(self, times, temperatures):
-        '''
-        Sets temperature as a function of time interpolating between the inputted times and temperatures
-        
-        Parameters
-        ----------
-        times : list
-            Time in hours for when the corresponding temperature is reached
-        temperatures : list
-            Temperatures in K to be reached at corresponding times
-        '''
-        #Store parameter in case model is reset
-        self.Tparameters = (times, temperatures)
-
-        self.T = np.full(self.steps, temperatures[0])
-        self.T = np.interp(self.time/3600, times, temperatures, temperatures[0], temperatures[-1])
-
-        if len(np.unique(self.T)) == 1:
+        self.temperature[0] = self.getTemperature(0)
+        if np.isscalar(temperature):
             self._incubation = self._incubationIsothermal
         else:
             self._incubation = self._incubationNonIsothermal
 
+    def getTemperature(self, t):
+        if np.isscalar(self.Tparameters):
+            return self.Tparameters
+        elif len(self.Tparameters) == 2:
+            if t/3600 < self.Tparameters[0][0]:
+                return self.Tparameters[1][0]
+            for i in range(len(self.Tparameters[0])-1):
+                if t/3600 >= self.Tparameters[0][i] and t/3600 < self.Tparameters[0][i+1]:
+                    t0, tf, T0, Tf = self.Tparameters[0][i], self.Tparameters[0][i+1], self.Tparameters[1][i], self.Tparameters[1][i+1]
+                    return (Tf - T0) / (tf - t0) * (t/3600 - t0) + T0
+            return self.Tparameters[1][-1]
+        elif self.Tparameters is not None:
+            return self.Tparameters(t)
+        else:
+            return None
+        
     def setStrainEnergy(self, strainEnergy, phase = None, calculateAspectRatio = False):
         '''
         Sets strain energy class to precipitate
@@ -883,7 +590,7 @@ class PrecipitateBase:
                     self.strainEnergy[i].setCuboidal()
                 else:
                     self.strainEnergy[i].setEllipsoidal()
-            
+
     def setDiffusivity(self, diffusivity):
         '''
         Parameters
@@ -913,37 +620,6 @@ class PrecipitateBase:
         else:
             index = self.phaseIndex(phase)
             self.infinitePrecipitateDiffusion[index] = infinite
-        
-    def setDrivingForce(self, drivingForce, phase = None):
-        '''
-        Parameters
-        ----------
-        drivingForce : function
-            Taking in composition (at. fraction) and temperature (K) and return driving force (J/mol)
-                f(x, T) = dg, where x is float for binary and array for multicomponent
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
-        '''
-        index = self.phaseIndex(phase)
-        self.dG[index] = drivingForce
-        
-    def setInterfacialComposition(self, composition, phase = None):
-        '''
-        Parameters
-        ----------
-        composition : function
-            Takes in temperature (K) and excess free energy (J/mol) and 
-            returns a tuple of (matrix composition, precipitate composition)
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
-
-        The excess free energy term will be taken as the interfacial curvature and elastic energy contributions.
-        This will be a positive value, so the function should ensure that the excess free energy to reduce the driving force
-        
-        If equilibrium cannot be solved, then the function should return (None, None) or (-1, -1)
-        '''
-        index = self.phaseIndex(phase)
-        self.interfacialComposition[index] = composition
 
     def setThermodynamics(self, therm, phase = None, removeCache = False, addDiffusivity = True):
         '''
@@ -1011,10 +687,7 @@ class PrecipitateBase:
             If True (default), will assume effective diffusion distance is particle radius
             If False, will calculate correction factor from Chen, Jeppson and Agren (2008)
         '''
-        if neglect:
-            self.effDiffDistance = self.effDiffFuncs.noDiffusionDistance
-        else:
-            self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
+        self.effDiffDistance = self.effDiffFuncs.noDiffusionDistance if neglect else self.effDiffFuncs.effectiveDiffusionDistance
 
     def addStoppingCondition(self, variable, condition, value, phase = None, element = None, mode = 'or'):
         '''
@@ -1100,25 +773,14 @@ class PrecipitateBase:
         self.stopConditionTimes = None
         self._stopConditionMode = None
 
-    def printModelParameters(self):
-        '''
-        Prints the model parameters
-        '''
-        print('Temperature (K):               {:.3f}'.format(self.T[0]))
-        print('Initial Composition (at%):     {:.3f}'.format(100*self.xInit))
-        print('Molar Volume (m3):             {:.3e}'.format(self.VmAlpha))
-
-        for p in range(len(self.phases)):
-            print('Phase: {}'.format(self.phases[p]))
-            print('\tMolar Volume (m3):             {:.3e}'.format(self.VmBeta[p]))
-            print('\tInterfacial Energy (J/m2):     {:.3f}'.format(self.gamma[p]))
-            print('\tMinimum Radius (m):            {:.3e}'.format(self.Rmin[p]))
-
     def setup(self):
         '''
         Sets up hidden parameters before solving
         Here it's just the nucleation density and the grain boundary nucleation factors
         '''
+        if self._isSetup:
+            return
+        
         if not self._isNucleationSetup:
             #Set nucleation density assuming grain size of 100 um and dislocation density of 5e12 m/m3 (Thermocalc default)
             print('Nucleation density not set.\nSetting nucleation density assuming grain size of {:.0f} um and dislocation density of {:.0e} #/m2'.format(100, 5e12))
@@ -1128,17 +790,19 @@ class PrecipitateBase:
         self._getNucleationDensity()
         self._setGBfactors()
         self._setupStrainEnergyFactors()
+        self._isSetup = True
 
-    def _printOutput(self, i):
+    def printStatus(self, iteration, simTimeElapsed):
         '''
-        Prints various terms at step i
+        Prints various terms at latest step
         '''
+        i = len(self.time)-1
         if self.numberOfElements == 1:
             print('N\tTime (s)\tTemperature (K)\tMatrix Comp')
-            print('{:.0f}\t{:.1e}\t\t{:.0f}\t\t{:.4f}\n'.format(i, self.time[i], self.T[i], 100*self.xComp[i]))
+            print('{:.0f}\t{:.1e}\t\t{:.0f}\t\t{:.4f}\n'.format(i, self.time[i], self.temperature[i], 100*self.xComp[i,0]))
         else:
             compStr = 'N\tTime (s)\tTemperature (K)\t'
-            compValStr = '{:.0f}\t{:.1e}\t\t{:.0f}\t\t'.format(i, self.time[i], self.T[i])
+            compValStr = '{:.0f}\t{:.1e}\t\t{:.0f}\t\t'.format(i, self.time[i], self.temperature[i])
             for a in range(self.numberOfElements):
                 compStr += self.elements[a] + '\t'
                 compValStr += '{:.4f}\t'.format(100*self.xComp[i,a])
@@ -1147,240 +811,193 @@ class PrecipitateBase:
             print(compValStr)
         print('\tPhase\tPrec Density (#/m3)\tVolume Frac\tAvg Radius (m)\tDriving Force (J/mol)')
         for p in range(len(self.phases)):
-            print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.precipitateDensity[p,i], 100*self.betaFrac[p,i], self.avgR[p,i], self.dGs[p,i]*self.VmBeta[p]))
+            print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.precipitateDensity[i,p], 100*self.betaFrac[i,p], self.avgR[i,p], self.dGs[i,p]*self.VmBeta[p]))
         print('')
-                
-    def solve(self, verbose = False, vIt = 1000):
+
+    def getCurrentX(self):
+        return self.time[self.n], [self.PBM[p].PSD for p in range(len(self.phases))]
+
+    def preProcess(self):
         '''
-        Solves the KWN model between initial and final time
-        
-        Note: _calculateNucleationRate, _calculatePSD and _printOutput will need to be implemented in the child classes
+        Store array for non-derivative terms (which is everything except for the PBM models)
 
-        Parameters
-        ----------
-        verbose : bool (optional)
-            Whether to print current simulation terms every couple iterations
-            Defaults to False
-        vIt : int (optional)
-            If verbose is True, vIt is how many iterations will pass before printing an output
-            Defaults to 1000
+        We use these terms for the first step of the iterators (for Euler, this is all the steps)
+            For RK4, these terms will be recalculated in dXdt
         '''
-        self.setup()
-
-        t0 = time.time()
-        
-        #While loop since number of steps may change with adaptive time stepping
-        i = 1
-        stopCondition = False
-        while i < self.steps and not stopCondition:
-            try:
-                self._iterate(i)
-
-                #Apply stopping condition
-                if self._stoppingConditions is not None:
-                    andConditions = True
-                    numberOfAndConditions = 0
-                    orConditions = False
-                    for s in range(len(self._stoppingConditions)):
-                        #Record time if stopping condition is met
-                        conditionResult = self._stoppingConditions[s](self, i)
-                        if conditionResult and self.stopConditionTimes[s] == -1:
-                            self.stopConditionTimes[s] = self.time[i]
-
-                        #If condition mode is 'or'
-                        if self._stopConditionMode[s]:
-                            orConditions = orConditions or conditionResult
-                        #If condition mode is 'and'
-                        else:
-                            andConditions = andConditions and conditionResult
-                            numberOfAndConditions += 1
-
-                    #If there are no 'and' conditions, andConditions will be True
-                    #Set to False so andConditions will not stop the model unneccesarily
-                    if numberOfAndConditions == 0:
-                        andConditions = False
-
-                    stopCondition = andConditions or orConditions
-
-                #Print current variables
-                if i % vIt == 0 and verbose:
-                    self._printOutput(i)
-                
-                i += 1
-            except Exception as e:
-                print(traceback.format_exc())
-                print('Exception has occurred: {}'.format(e))
-                print('Stopping Simulation')
-                break
-
-        t1 = time.time()
-        if verbose:
-            print('Finished in {:.3f} seconds.'.format(t1 - t0))
-
-    def _iterate(self, i):
+        self._currY = None
+        self._firstIt = True
+        return
+    
+    def _calculateDependentTerms(self, t, x):
         '''
-        Blank iteration function to be implemented in other classes
+        Gets all dependent terms (everything but PBM variables) that are needed to find dXdt
+
+        For the first iteration, self._currX will be None from the preProcess function, in this case, we want
+            to just grab the latest values
         '''
-        pass
-
-    def _nucleationRate(self, p, i):
-        '''
-        Calculates nucleation rate at current timestep (normalized to number of nucleation sites)
-        This step is general to all systems except for how self._Beta is defined
-        
-        Parameters
-        ----------
-        p : int
-            Phase index (int)
-        i : int
-            Current iteration
-        dt : float
-            Current time increment
-        '''
-        #Most equations in literature take the driving force to be positive
-        #Although this really only changes the calculation of Rcrit since Z and beta is dG^2
-        self.dGs[p, i], _ = self.dG[p](self.xComp[i-1], self.T[i])
-        self.dGs[p, i] /= self.VmBeta[p]
-
-        #Add strain energy for spherical shape, use previous critical radius
-        #This should still be correct even if the interfacial energy dominates at small radii since the aspect ratio may be near 1
-        self.dGs[p, i] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.Rcrit[p, i-1]))
-
-        if self.dGs[p, i] < 0:
-            return self._noDrivingForce(p, i)
-
-        #Only do this if there is some parent phase left (brute force solution for to avoid numerical errors)
-        if self.betaFrac[p, i-1] < 1:
-
-            #Calculate critical radius
-            #For bulk or dislocation nucleation sites, use previous critical radius to get aspect ratio
-            if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
-                self.Rcrit[p, i] = 2 * self.shapeFactors[p].thermoFactor(self.Rcrit[p, i-1]) * self.gamma[p] / self.dGs[p, i]
-                #self.Rcrit[p, i] = 2 * self.gamma[p] / self.dGs[p, i]
-                if self.Rcrit[p, i] < self.Rmin[p]:
-                    self.Rcrit[p, i] = self.Rmin[p]
-                
-                self.Gcrit[p, i] = (4 * np.pi / 3) * self.gamma[p] * self.Rcrit[p, i]**2
-
-            #If nucleation is on a grain boundary, then use the critical radius as defined by the grain boundary type    
-            else:
-                self.Rcrit[p, i] = self.GB[p].Rcrit(self.dGs[p, i])
-                if self.Rcrit[p, i] < self.Rmin[p]:
-                    self.Rcrit[p, i] = self.Rmin[p]
-                    
-                self.Gcrit[p, i] = self.GB[p].Gcrit(self.dGs[p, i], self.Rcrit[p, i])
-
-            #Calculate nucleation rate
-            Z = self._Zeldovich(p, i)
-            self.betas[p,i] = self._Beta(p, i)
-            if self.betas[p,i] == 0:
-                return self._noDrivingForce(p, i)
-
-            #Incubation time, either isothermal or nonisothermal
-            self.incubationSum[p] = self._incubation(Z, p, i)
-            if self.incubationSum[p] > 1:
-                self.incubationSum[p] = 1
-
-            return Z * self.betas[p,i] * np.exp(-self.Gcrit[p, i] / (self.kB * self.T[i])) * self.incubationSum[p]
-
+        self._processX(x)
+        if self._currY is None:
+            #print('start iteration')
+            self._currY = [np.array([self.varList[i][self.n]]) for i in range(self.NUM_TERMS)]
         else:
-            return self._noDrivingForce(p, i)
+            self._currY[self.TIME] = np.array([t])
+            self._currY[self.TEMPERATURE] = np.array([self.getTemperature(t)])
+            self._calcMassBalance(t, x)
+            self._calcDrivingForce(t, x)
+            self._growthRate()
+            self._calcNucleationRate(t, x)
+            self._setNucleateRadius(t)      #Must be done afterwards since derived classes can change nucRate
+        #print(self._currY)
+
+    def getdXdt(self, t, x):
+        self._calculateDependentTerms(t, x)
+        dXdt = self._getdXdt(t, x)
+        if self._firstIt:
+            self._firstIt = False
+        return dXdt
+
+    def postProcess(self, t, x):
+        self._calculateDependentTerms(t, x)
+        self._appendArrays(self._currY)
+
+        #Update particle size distribution (this includes adding bins, resizing bins, etc)
+        #Should be agnostic of eulerian or lagrangian implementations
+        self._updateParticleSizeDistribution(t, x)
+
+        return self.getCurrentX()
+    
+    def _processX(self, x):
+        return NotImplementedError()
+    
+    def _calcMassBalance(self, t, x):
+        return NotImplementedError()
+    
+    def _getdXdt(self, t, x):
+        return NotImplementedError()
+    
+    def _updateParticleSizeDistribution(self, t, x):
+        return NotImplementedError()
+    
+    def _calcDrivingForce(self, t, x):
+        dGs = np.zeros((1,len(self.phases)))
+        Rcrit = np.zeros((1,len(self.phases)))
+        Gcrit = np.zeros((1,len(self.phases)))
+        if self.numberOfElements == 1:
+            xComp = self._currY[self.COMPOSITION][0,0]
+        else:
+            xComp = self._currY[self.COMPOSITION][0]
+        T = self._currY[self.TEMPERATURE][0]
+        for p in range(len(self.phases)):
+            dGs[0,p], _ = self.dG[p](xComp, T)
+            dGs[0,p] /= self.VmBeta[p]
+            dGs[0,p] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.Rcrit[self.n, p]))
+            if self.betaFrac[self.n, p] < 1 and dGs[0,p] >= 0:
+                #Calculate critical radius
+                #For bulk or dislocation nucleation sites, use previous critical radius to get aspect ratio
+                if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
+                    Rcrit[0,p] = np.amax((2 * self.shapeFactors[p].thermoFactor(self.Rcrit[self.n, p]) * self.gamma[p] / dGs[0,p], self.Rmin[p]))
+                    Gcrit[0,p] = (4 * np.pi / 3) * self.gamma[p] * Rcrit[0,p]**2
+
+                #If nucleation is on a grain boundary, then use the critical radius as defined by the grain boundary type    
+                else:
+                    Rcrit[0,p] = np.amax((self.GB[p].Rcrit(dGs[0,p]), self.Rmin[p]))
+                    Gcrit[0,p] = self.GB[p].Gcrit(dGs[0,p], Rcrit[0,p])
+
+        self._currY[self.DRIVING_FORCE] = dGs
+        self._currY[self.R_CRIT] = Rcrit
+        self._currY[self.G_CRIT] = Gcrit
+
+    def _calcNucleationRate(self, t, x):
+        gCrit = self._currY[self.G_CRIT][0]
+        T = self._currY[self.TEMPERATURE][0]
+        betas = np.zeros((1,len(self.phases)))
+        nucRate = np.zeros((1,len(self.phases)))
+        for p in range(len(self.phases)):
+            Z = self._Zeldovich(p)
+            betas[0,p] = self._Beta(p)
+            if betas[0,p] == 0:
+                continue
             
-    def _noCheckDT(self, i):
-        '''
-        Default for no adaptive time stepping
-        '''
-        pass
+            #Incubation time, either isothermal or nonisothermal
+            incubation = self._incubation(t, p, Z, betas[0])
+            if incubation > 1:
+                incubation = 1
 
-    def _noPostCheckDT(self, i):
-        '''
-        Default for no adaptive time stepping
-        '''
-        pass
+            nucRate[0,p] = Z * betas[0,p] * np.exp(-gCrit[p] / (self.kB * T)) * incubation
 
-    def _checkDT(self, i):
-        '''
-        Default time increment function if implement (which is no implementation)
-        '''
-        pass
+        self._currY[self.IMPINGEMENT] = betas
+        self._currY[self.NUC_RATE] = nucRate
 
-    def _postCheckDT(self, i):
-        '''
-        Default time increment function if implement (which is no implementation)
-        '''
-        pass
-
-    def _noDrivingForce(self, p, i):
-        '''
-        Set everything to 0 if there is no driving force for precipitation
-        '''
-        self.Rcrit[p, i] = 0
-        self.incubationOffset[p] = np.amax([i-1, 0])
-        return 0
-
-    def _nucleateFreeEnergy(self, Rsph, p, i):
-        '''
-        Free energy change for a nucleate with radius of Rsph
-        '''
-        volContribution = 4/3 * np.pi * Rsph**3 * (self.dGs[p,i] + self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(Rsph)))
-        areaContribution = 4 * np.pi * self.gamma[p] * Rsph**2 * self.shapeFactors[p].thermoFactor(Rsph)
-        return -volContribution + areaContribution
-
-    def _Zeldovich(self, p, i):
+    def _Zeldovich(self, p):
         '''
         Zeldovich factor - probability that cluster at height of nucleation barrier will continue to grow
         '''
-        return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * self.T[i])) / (2 * np.pi * self.avo * self.Rcrit[p,i]**2)
+        rCrit = self._currY[self.R_CRIT][0]
+        T = self._currY[self.TEMPERATURE][0]
+        return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * T)) / (2 * np.pi * self.avo * rCrit[p]**2)
         
-    def _BetaBinary1(self, p, i):
+    def _BetaBinary1(self, p):
         '''
         Impingement rate for binary systems using Perez et al
         '''
-        return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * self.xComp[0] * self.Diffusivity(self.xComp[i-1], self.T[i]) / self.aAlpha**4
+        rCrit = self._currY[self.R_CRIT][0]
+        xComp = self._currY[self.COMPOSITION][0][0]
+        T = self._currY[self.TEMPERATURE][0]
+        return self.GB[p].areaFactor * rCrit[p]**2 * self.xComp[0] * self.Diffusivity(xComp, T) / self.aAlpha**4
 
-    def _BetaBinary2(self, p, i):
+    def _BetaBinary2(self, p):
         '''
         Impingement rate for binary systems taken from Thermocalc prisma documentation
         This will follow the same equation as with _BetaMulti; however, some simplications can be made based off the summation contraint
         '''
-        D = self.Diffusivity(self.xComp[i-1], self.T[i])
-        Dfactor = (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / (self.xEqAlpha[p,i-1]*D) + (self.xEqBeta[p,i-1] - self.xEqAlpha[p,i-1])**2 / ((1 - self.xEqAlpha[p,i-1])*D)
-        return self.GB[p].areaFactor * self.Rcrit[p,i]**2 * (1/Dfactor) / self.aAlpha**4
+        xComp = self._currY[self.COMPOSITION][0][0]
+        xEqAlpha = self._currY[self.EQ_COMP_ALPHA][0]
+        xEqBeta = self._currY[self.EQ_COMP_BETA][0]
+        rCrit = self._currY[self.R_CRIT][0]
+        T = self._currY[self.TEMPERATURE][0]
+        D = self.Diffusivity(xComp, T)
+        Dfactor = (xEqBeta[p] - xEqAlpha[p])**2 / (xEqAlpha[p]*D) + (xEqBeta[p] - xEqAlpha[p])**2 / ((1 - xEqAlpha[p])*D)
+        return self.GB[p].areaFactor * rCrit[p]**2 * (1/Dfactor) / self.aAlpha**4
             
-    def _BetaMulti(self, p, i):
+    def _BetaMulti(self, p):
         '''
         Impingement rate for multicomponent systems
         '''
         if self._betaFuncs[p] is None:
             return self._defaultBeta
         else:
-            beta = self._betaFuncs[p](self.xComp[i-1], self.T[i-1])
+            xComp = self._currY[self.COMPOSITION][0]
+            T = self._currY[self.TEMPERATURE][0]
+            beta = self._betaFuncs[p](xComp, T)
             if beta is None:
-                return self.betas[p,i-1]
+                return self.betas[p]
             else:
-                return (self.GB[p].areaFactor * self.Rcrit[p, i]**2 / self.aAlpha**4) * beta
+                rCrit = self._currY[self.R_CRIT][0]
+                return (self.GB[p].areaFactor * rCrit[p]**2 / self.aAlpha**4) * beta
 
-    def _incubationIsothermal(self, Z, p, i):
+    def _incubationIsothermal(self, t, p, Z, betas):
         '''
         Incubation time for isothermal conditions
         '''
-        tau = 1 / (self.theta[p] * (self.betas[p,i] * Z**2))
-        return np.exp(-tau / self.time[i])
+        tau = 1 / (self.theta[p] * (betas[p] * Z**2))
+        return np.exp(-tau / t)
         
-    def _incubationNonIsothermal(self, Z, p, i):
+    def _incubationNonIsothermal(self, t, p, Z, betas):
         '''
         Incubation time for non-isothermal conditions
         This must match isothermal conditions if the temperature is constant
 
         Solve for integral(beta(t-t0)) from 0 to tau = 1/theta*Z(tau)^2
         '''
-        LHS = 1 / (self.theta[p] * Z**2 * (self.T[i] / self.T[int(self.incubationOffset[p]):]))
+        T = self._currY[self.TEMPERATURE][0]
+        startIndex = int(self.incubationOffset[p])
+        LHS = 1 / (self.theta[p] * Z**2 * (T / self.temperature[startIndex:self.n+1]))
 
-        RHS = np.cumsum(self.betas[p,int(self.incubationOffset[p])+1:i] * (self.time[int(self.incubationOffset[p])+1:i] - self.time[int(self.incubationOffset[p]):i-1]))
+        RHS = np.cumsum(self.betas[startIndex+1:self.n+1,p] * (self.time[startIndex+1:self.n+1] - self.time[startIndex:self.n]))
         if len(RHS) == 0:
-            RHS = self.betas[p,i] * (self.time[int(self.incubationOffset[p]):] - self.time[int(self.incubationOffset[p])])
+            RHS = self.betas[self.n,p] * (self.time[startIndex:] - self.time[startIndex])
         else:
-            RHS = np.concatenate((RHS, RHS[-1] + self.betas[p,i] * (self.time[i-1:] - self.time[int(self.incubationOffset[p])])))
+            RHS = np.concatenate((RHS, [RHS[-1] + betas[p] * (t - self.time[startIndex])]))
 
         #Test for intersection
         diff = RHS - LHS
@@ -1395,83 +1012,28 @@ class PrecipitateBase:
             #Extrapolate integral of RHS from last point to intersect LHS
             #integral(beta(t-t0)) from t0 to ti + beta_i * (tau - (ti - t0)) = 1 / theta * Z(tau+t0)^2
             else:
-                tau = LHS[-1] / self.betas[p,i] - RHS[-1] / self.betas[p,i] + (self.time[i] - self.time[int(self.incubationOffset[p])])
+                tau = LHS[-1] / betas[p] - RHS[-1] / betas[p] + (t - self.time[startIndex])
         else:
-            tau = self.time[int(self.incubationOffset[p]):-1][signChange][0] - self.time[int(self.incubationOffset[p])]
+            tau = self.time[startIndex:-1][signChange][0] - self.time[startIndex]
 
-        return np.exp(-tau / (self.time[i] - self.time[int(self.incubationOffset[p])]))
-
-    def _setNucleateRadius(self, i):
+        return np.exp(-tau / (t - self.time[startIndex]))
+    
+    def _setNucleateRadius(self, t):
         '''
         Adds 1/2 * sqrt(kb T / pi gamma) to critical radius to ensure they grow when growth rates are calculated
         '''
+        nucRate = self._currY[self.NUC_RATE][0]
+        T = self._currY[self.TEMPERATURE][0]
+        dt = t - self.time[self.n]
+        Rcrit = self._currY[self.R_CRIT][0]
+        Rad = np.zeros((1,len(self.phases)))
         for p in range(len(self.phases)):
             #If nucleates form, then calculate radius of precipitate
-            #Radius is set slightly larger so precipitate 
-            if self.nucRate[p,i]*(self.time[i]-self.time[i-1]) >= self.minNucleateDensity and self.Rcrit[p, i] >= self.Rmin[p]:
-                self.Rad[p, i] = self.Rcrit[p, i] + 0.5 * np.sqrt(self.kB * self.T[i] / (np.pi * self.gamma[p]))
+            #Radius is set slightly larger so precipitate
+            dt = 0.01 if self.n == 0 else self.time[self.n] - self.time[self.n-1]
+            if nucRate[p]*dt >= self.minNucleateDensity and Rcrit[p] >= self.Rmin[p]:
+                Rad[0,p] = Rcrit[p] + 0.5 * np.sqrt(self.kB * T / (np.pi * self.gamma[p]))
             else:
-                self.Rad[p, i] = 0
+                Rad[0,p] = 0
 
-    def getTimeAxis(self, timeUnits='s', bounds=None):
-        '''
-        Returns scaling factor, label and x-limits depending on units of time
-
-        Parameters
-        ----------
-        timeUnits : str
-            's' / 'sec' / 'seconds' - seconds
-            'min' / 'minutes' - minutes
-            'h' / 'hrs' / 'hours' - hours
-        '''
-        timeScale = 1
-        timeLabel = 'Time (s)'
-        if 'min' in timeUnits:
-            timeScale = 1/60
-            timeLabel = 'Time (min)'
-        if 'h' in timeUnits:
-            timeScale = 1/3600
-            timeLabel = 'Time (hrs)'
-
-        if bounds is None:
-            if self.t0 == 0:
-                bounds = [timeScale * 1e-5 * self.tf, timeScale * self.tf]
-            else:
-                bounds = [timeScale * self.t0, timeScale * self.tf]
-
-        return timeScale, timeLabel, bounds
-        
-    
-    def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
-        '''
-        Plots model outputs
-        
-        Parameters
-        ----------
-        axes : Axis
-        variable : str
-            Specified variable to plot
-            Options are 'Volume Fraction', 'Total Volume Fraction', 'Critical Radius',
-                'Average Radius', 'Volume Average Radius', 'Total Average Radius', 
-                'Total Volume Average Radius', 'Aspect Ratio', 'Total Aspect Ratio'
-                'Driving Force', 'Nucleation Rate', 'Total Nucleation Rate',
-                'Precipitate Density', 'Total Precipitate Density', 
-                'Temperature' and 'Composition'
-
-                Note: for multi-phase simulations, adding the word 'Total' will
-                    sum the variable for all phases. Without the word 'Total', the variable
-                    for each phase will be plotted separately
-                    
-        bounds : tuple (optional)
-            Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
-        timeUnits : str (optional)
-            Plot time dependent variables per seconds ('s'), minutes ('min') or hours ('h')
-        radius : str (optional)
-            For non-spherical precipitates, plot the Average Radius by the -
-                Equivalent spherical radius ('spherical')
-                Short axis ('short')
-                Long axis ('long')
-            Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
-        *args, **kwargs - extra arguments for plotting
-        '''
-        plotModel(self, axes, variable, bounds, timeUnits, radius, *args, **kwargs)
+        self._currY[self.R_NUC] = Rad

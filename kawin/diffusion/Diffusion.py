@@ -577,7 +577,7 @@ class DiffusionModel(GenericModel):
         zScale : float
             Scale factor for z-coordinates
         '''
-        diffPlot.plot(self, ax, plotReference, plotElement, zScale, *args, **kwargs)
+        return diffPlot.plot(self, ax, plotReference, plotElement, zScale, *args, **kwargs)
 
     def plotTwoAxis(self, Lelements, Relements, zScale = 1, axL = None, axR = None, *args, **kwargs):
         '''
@@ -597,7 +597,7 @@ class DiffusionModel(GenericModel):
         zScale : float
             Scale factor for z-coordinates
         '''
-        diffPlot.plotTwoAxis(self, Lelements, Relements, zScale, axL, axR, *args, **kwargs)
+        return diffPlot.plotTwoAxis(self, Lelements, Relements, zScale, axL, axR, *args, **kwargs)
 
     def plotPhases(self, ax = None, plotPhase = None, zScale = 1, *args, **kwargs):
         '''
@@ -612,4 +612,4 @@ class DiffusionModel(GenericModel):
         zScale : float
             Scale factor for z-coordinates
         '''
-        diffPlot.plotPhases(self, ax, plotPhase, zScale, *args, **kwargs)
+        return diffPlot.plotPhases(self, ax, plotPhase, zScale, *args, **kwargs)

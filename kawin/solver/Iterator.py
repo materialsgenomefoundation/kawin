@@ -61,6 +61,6 @@ class Iterator:
                 n += 1
             else:
                 arrLen = np.product(X_new[i].shape)
-                X_new[i] = np.reshape(X_flat[n:arrLen], X_new[i].shape)
+                X_new[i] = np.reshape(X_flat[n:n+arrLen], X_new[i].shape)
                 n += arrLen
         return X_new

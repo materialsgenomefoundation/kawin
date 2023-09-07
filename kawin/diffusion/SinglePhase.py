@@ -68,16 +68,3 @@ class SinglePhaseModel(DiffusionModel):
     
     def getDt(self, dXdt):
         return self._currdt
-    
-    def getdXdt(self, t, x):
-        fluxes = self._getFluxes(t, x)
-        return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
-    
-    def preProcess(self):
-        return
-    
-    def postProcess(self, time, x):
-        self.t = time
-        self.x = x[0]
-        self.record(self.t)
-        return self.getCurrentX()

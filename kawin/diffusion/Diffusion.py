@@ -11,7 +11,7 @@ class DiffusionModel(GenericModel):
     FLUX = 0
     COMPOSITION = 1
 
-    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha']):
+    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], record = True):
         '''
         Class for defining a 1-dimensional mesh
 
@@ -48,7 +48,7 @@ class DiffusionModel(GenericModel):
 
         self.maxCompositionChange = 0.002
 
-        self._record = False
+        self._record = record
         self._recordedX = None
         self._recordedP = None
         self._recordedZ = None
@@ -106,90 +106,28 @@ class DiffusionModel(GenericModel):
         self.Tparam = func
         self.Tfunc = lambda z, t: self.Tparam(z, t)
 
-    def save(self, filename, compressed = False, toCSV = False):
-        '''
-        Saves mesh, composition and phases
-
-        Parameters
-        ----------
-        filename : str
-            File to save to
-        compressed : bool
-            Whether to compress data if saving to numpy binary format (toCSV = False)
-        toCSV : bool
-            Whether to output data to a .CSV file format
-        '''
-        if toCSV:
-            headers = ['Distance(m)']
-            arrays = [self.z]
-            for i in range(len(self.allElements)):
-                headers.append('x(' + self.allElements[i] + ')')
-                if i == 0:
-                    arrays.append(1 - np.sum(self.x, axis=0))
-                else:
-                    arrays.append(self.x[i-1,:])
-            for i in range(len(self.phases)):
-                headers.append('f(' + self.phases[i] + ')')
-                arrays.append(self.p[i,:])
-            rows = zip_longest(*arrays, fillvalue='')
-            if '.csv' not in filename.lower():
-                filename = filename + '.csv'
-            with open(filename, 'w', newline='') as f:
-                csv.writer(f).writerow(headers)
-                csv.writer(f).writerows(rows)
-        else:
-            variables = ['zlim', 'N', 'allElements', 'phases', 'z', 'x', 'p']
-            vDict = {v: getattr(self, v) for v in variables}
-            if compressed:
-                np.savez_compressed(filename, **vDict, allow_pickle=True)
-            else:
-                np.savez(filename, **vDict, allow_pickle=True)
+    def _getVarDict(self):
+        saveDict = {
+            'elements': 'elements',
+            'phases': 'phases',
+            'z': 'z',
+            'zLim': 'zLim',
+            'N': 'N',
+            'finalTime': 't',
+            'finalX': 'x',
+            'finalP': 'p',
+            'recordX': '_recordedX',
+            'recordP': '_recordedP',
+            'recordZ': '_recordedZ',
+            'recordTime': '_recordedTime',
+        }
 
     def load(filename):
-        '''
-        Loads a previously saved model
-
-        filename : str
-            File name to load model from, must include file extension
-        '''
-        if '.np' in filename.lower():
-            data = np.load(filename, allow_pickle=True)
-            model = DiffusionModel(data['zlim'], data['N'], data['allElements'], data['phases'])
-            model.z = data['z']
-            model.x = data['x']
-            model.p = data['p']
-        else:
-            with open(filename, 'r') as csvFile:
-                data = csv.reader(csvFile, delimiter=',')
-                i = 0
-                headers = []
-                columns = {}
-                for row in data:
-                    if i == 0:
-                        headers = row
-                        columns = {h: [] for h in headers}
-                    else:
-                        for j in range(len(row)):
-                            if row[j] != '':
-                                columns[headers[j]].append(float(row[j]))
-                    i += 1
-            
-            elements, phases = [], []
-            x, p = [], []
-            for h in headers:
-                if 'Distance' in h:
-                    z = columns[h]
-                elif 'x' in h:
-                    elements.append(h[2:-1])
-                    x.append(columns[h])
-                elif 'f' in h:
-                    phases.append(h[2:-1])
-                    p.append(columns[h])
-            model = DiffusionModel([z[0], z[-1]], len(z), elements, phases)
-            model.z = np.array(z)
-            model.x = np.array(x)[1:,:]
-            model.p = np.array(p)
-        return model   
+        data = np.load(filename)
+        model = DiffusionModel(data['zLim'], data['N'], data['elements'], data['phases'])
+        model._loadData(data)
+        model.isSetup = True
+        return model
 
     def setHashSensitivity(self, s):
         '''
@@ -281,35 +219,6 @@ class DiffusionModel(GenericModel):
             self._recordedX[-1] = self.x
             self._recordedP[-1] = self.p
             self._recordedTime[-1] = time
-
-    def saveRecordedMesh(self, filename, compressed = True):
-        '''
-        Saves recorded data into npz format
-
-        Parameters
-        ----------
-        filename : str
-            File name to save to
-        compressed : bool (optional)
-            Whether to save as in compressed format (defaults to True)
-        '''
-        if self._record:
-            if compressed:
-                np.savez_compressed(filename, time = self._recordedTime, x = self._recordedX, p = self._recordedP, z = self._recordedZ)
-            else:
-                np.savez(filename, time = self._recordedTime, x = self._recordedX, p = self._recordedP, z = self._recordedZ)
-
-    def loadRecordedMesh(self, filename):
-        '''
-        Loads recorded mesh
-        '''
-        data = np.load(filename)
-        self._record = True
-        self._recordedTime = data['time']
-        self._recordedX = data['x']
-        self._recordedP = data['p']
-        self._recordedZ = data['z']
-        self.isSetup = True
 
     def setMeshtoRecordedTime(self, time):
         if self._record:
@@ -518,7 +427,7 @@ class DiffusionModel(GenericModel):
         self.isSetup = True
         self.record(self.t) #Record at t = 0
 
-    def getFluxes(self):
+    def _getFluxes(self):
         '''
         "Virtual" function to be implemented by child objects
 
@@ -534,6 +443,19 @@ class DiffusionModel(GenericModel):
 
     def getCurrentX(self):
         return self.t, [self.x]
+    
+    def getdXdt(self, t, x):
+        fluxes = self._getFluxes(t, x)
+        return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
+    
+    def preProcess(self):
+        return
+    
+    def postProcess(self, time, x):
+        self.t = time
+        self.x = x[0]
+        self.record(self.t)
+        return self.getCurrentX()[1], False
 
     def getX(self, element):
         '''

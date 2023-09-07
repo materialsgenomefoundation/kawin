@@ -87,7 +87,8 @@ class DESolver:
         currTime = t0
         i = 0
         timeStart = time.time()
-        while currTime < tf:
+        stop = False
+        while currTime < tf and not stop:
             if verbose and i % vIt == 0:
                 timeFinish = time.time()
                 self.printStatus(i, timeFinish - timeStart)
@@ -97,10 +98,13 @@ class DESolver:
             dtmax = self.dtmax * (tf - t0)
             X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax)
             currTime += dt
-            _, X0 = self.postProcess(currTime, X0)
+            X0, stop = self.postProcess(currTime, X0)
 
             i += 1
 
         if verbose:
+            if stop:
+                print('Stopping condition met. Ending simulation early.')
+                
             timeFinish = time.time()
             self.printStatus(i, timeFinish - timeStart)

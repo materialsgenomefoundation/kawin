@@ -4,8 +4,8 @@ from kawin.thermo.Mobility import mobility_from_composition_set
 import copy
 
 class HomogenizationModel(DiffusionModel):
-    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha']):
-        super().__init__(zlim, N, elements, phases)
+    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], record = True):
+        super().__init__(zlim, N, elements, phases, record)
 
         self.mobilityFunction = self.wienerUpper
         self.defaultMob = 0
@@ -325,16 +325,3 @@ class HomogenizationModel(DiffusionModel):
         #This is done by finding the time interval such that the composition
         # change caused by the fluxes will be lower than self.maxCompositionChange
         return self.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
-    
-    def getdXdt(self, t, x):
-        fluxes = self._getFluxes(t, x)
-        return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
-    
-    def preProcess(self):
-        return
-    
-    def postProcess(self, time, x):
-        self.t = time
-        self.x = x[0]
-        self.record(self.t)
-        return self.getCurrentX()

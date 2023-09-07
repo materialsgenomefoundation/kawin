@@ -1,8 +1,39 @@
 from kawin.solver.Solver import SolverType, DESolver
+import numpy as np
 
 class GenericModel:
     def __init__(self):
         self.verbose = False
+
+    def _getVarDict(self):
+        return {}
+    
+    def _addExtraSaveVariables(self, saveDict):
+        return
+
+    def _loadModel(self, data):
+        return
+    
+    def _loadExtraVariables(self, data):
+        return
+    
+    def save(self, filename, compressed = True):
+        varDict = self._getVarDict()
+        saveDict = {}
+        for var in varDict:
+            saveDict[var] = getattr(self, varDict[var])
+        self._addExtraSaveVariables(saveDict)
+        print(saveDict.keys())
+        if compressed:
+            np.savez_compressed(filename, **saveDict)
+        else:
+            np.savez(filename, **saveDict)
+
+    def _loadData(self, data):
+        varDict = self._getVarDict()
+        for var in varDict:
+            setattr(self, varDict[var], data[var])
+        self._loadExtraVariables(data)
 
     def setup(self):
         pass

@@ -94,6 +94,12 @@ class PrecipitateBase(GenericModel):
             self._betaFuncs = [None for p in phases]
             self._defaultBeta = 20
 
+        #Stopping conditions
+        self.clearStoppingConditions()
+
+        #Coupling models
+        self.clearCouplingModels()
+
     def phaseIndex(self, phase = None):
         '''
         Returns index of phase in list
@@ -207,6 +213,36 @@ class PrecipitateBase(GenericModel):
                 self.fConc
                 ]
 
+    def _getVarDict(self):
+        saveDict = {
+            'elements': 'elements',
+            'phases': 'phases',
+            'time': 'time',
+            'temperature': 'temperature',
+            'composition': 'xComp',
+            'xEqAlpha': 'xEqAlpha',
+            'xEqBeta': 'xEqBeta',
+            'drivingForce': 'dGs',
+            'impingement': 'betas',
+            'Gcrit': 'Gcrit',
+            'Rcrit': 'Rcrit',
+            'nucRadius': 'Rad',
+            'nucRate': 'nucRate',
+            'precipitateDensity': 'precipitateDensity',
+            'avgRadius': 'avgR',
+            'avgAspectRatio': 'avgAR',
+            'volFrac': 'betaFrac',
+            'fConc': 'fConc',
+        }
+        return saveDict
+    
+    def load(filename):
+        data = np.load(filename)
+        model = PrecipitateBase(data['phases'], data['elements'])
+        model._loadData(data)
+        model._loadExtraVariables(data)
+        return model
+    
     def _appendArrays(self, newVals):
         '''
         Appends new values to the variable list
@@ -266,6 +302,7 @@ class PrecipitateBase(GenericModel):
         self.minComposition = 0
 
         self.minNucleateDensity = 1e-10
+        self.dtScale = 1e-4
 
     def setConstraints(self, **kwargs):
         '''
@@ -689,89 +726,36 @@ class PrecipitateBase(GenericModel):
         '''
         self.effDiffDistance = self.effDiffFuncs.noDiffusionDistance if neglect else self.effDiffFuncs.effectiveDiffusionDistance
 
-    def addStoppingCondition(self, variable, condition, value, phase = None, element = None, mode = 'or'):
+    def addStoppingCondition(self, condition, mode = 'or'):
         '''
         Adds condition to stop simulation when condition is met
 
         Parameters
         ----------
-        variable : str
-            Variable to set condition for, options are 
-                'Volume Fraction'
-                'Average Radius'
-                'Driving Force'
-                'Nucleation Rate'
-                'Precipitate Density'
-        condition : str
-            Operator for condition, options are
-                'greater than' or '>'
-                'less than' or '<'
-        value : float
-            Value for condition
-        phase : str (optional)
-            Phase to consider (defaults to first precipitate in list)
-        element : str (optional)
-            For 'Composition', element to consider for condition (defaults to first element in list)
-        mode : str (optional)
-            How the condition will be handled
-                'or' (default) - at least one condition in this mode needs to be met before stopping
-                'and' - all conditions in this mode need to be met before stopping
-                    This will also record the times each condition is met
-
-        Example
-        model.addStoppingCondition('Volume Fraction', '>', 0.002, 'beta')
-            will add a condition to stop simulation when the volume fraction of the 'beta'
-            phase becomes greater than 0.002
+        condition: PrecipitateStoppingCondition
+        mode: str
+            'or' or 'and
+            Conditions with 'or' will stop the simulation when at least one condition is met
+            Conditions with 'and' will stop the simulation when all conditions are met
         '''
-        index = self.phaseIndex(phase)
-
-        if self._stoppingConditions is None:
-            self._stoppingConditions = []
-            self.stopConditionTimes = []
-            self._stopConditionMode = []
-
-        standardLabels = {
-            'Volume Fraction': 'betaFrac',
-            'Average Radius': 'avgR',
-            'Driving Force': 'dGs',
-            'Nucleation Rate': 'nucRate',
-            'Precipitate Density': 'precipitateDensity',
-        }
-        otherLabels = ['Composition']
-
-        if variable in standardLabels:
-            if 'greater' in condition or '>' in condition:
-                cond = lambda self, i, p = index, var=standardLabels[variable] : getattr(self, var)[p,i] > value
-            elif 'less' in condition or '<' in condition:
-                cond = lambda self, i, p = index, var=standardLabels[variable] : getattr(self, var)[p,i] < value
-        else:
-            if variable == 'Composition':
-                eIndex = 0 if element is None else self.elements.index(element)
-                if 'greater' in condition or '>' in condition:
-                    if self.numberOfElements > 1:
-                        cond = lambda self, i, e = eIndex, var='xComp' : getattr(self, var)[i, e] > value
-                    else:
-                        cond = lambda self, i, var='xComp' : getattr(self, var)[i] > value
-                elif 'less' in condition or '<' in condition:
-                    if self.numberOfElements > 1:
-                        cond = lambda self, i, e = eIndex, var='xComp' : getattr(self, var)[i, e] < value
-                    else:
-                        cond = lambda self, i, var='xComp' : getattr(self, var)[i] < value
-
-        self._stoppingConditions.append(cond)
-        self.stopConditionTimes.append(-1)
-        if mode == 'and':
-            self._stopConditionMode.append(False)
-        else:
+        self._stoppingConditions.append(condition)
+        if mode == 'or':
             self._stopConditionMode.append(True)
-
+        else:
+            self._stopConditionMode.append(False)
+        
     def clearStoppingConditions(self):
         '''
         Clears all stopping conditions
         '''
-        self._stoppingConditions = None
-        self.stopConditionTimes = None
-        self._stopConditionMode = None
+        self._stoppingConditions = []
+        self._stopConditionMode = []
+
+    def addCouplingModel(self, model):
+        self.couplingModels.append(model)
+
+    def clearCouplingModels(self):
+        self.couplingModels = []
 
     def setup(self):
         '''
@@ -864,7 +848,29 @@ class PrecipitateBase(GenericModel):
         #Should be agnostic of eulerian or lagrangian implementations
         self._updateParticleSizeDistribution(t, x)
 
-        return self.getCurrentX()
+        #Update coupled models
+        for cm in self.couplingModels:
+            cm.updateCoupledModel(self)
+
+        #Check stopping conditions
+        orCondition = False
+        andCondition = True
+        numAndCondition = 0
+        for i in range(len(self._stoppingConditions)):
+            self._stoppingConditions[i].testCondition(self)
+            if self._stopConditionMode[i]:
+                orCondition = orCondition or self._stoppingConditions[i].isSatisfied()
+            else:
+                andCondition = andCondition and self._stoppingConditions[i].isSatisfied()
+                numAndCondition += 1
+
+        #If no and conditions, then andCondition will still be True, so set to False
+        if numAndCondition == 0:
+            andCondition = False
+
+        stop = orCondition or andCondition
+
+        return self.getCurrentX()[1], stop
     
     def _processX(self, x):
         return NotImplementedError()

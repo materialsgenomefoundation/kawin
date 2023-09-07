@@ -1,4 +1,5 @@
 import numpy as np
+from kawin.precipitation.Plot import getTimeAxis
 
 class StrengthModel:
     '''
@@ -64,6 +65,11 @@ class StrengthModel:
 
         #Superposition exponent for total strength
         self.totalStrengthExp = 1.8
+
+        #Strength terms
+        self.rss = None
+        self.ls = None
+        self.solidStrength = None
 
     def _getStrengthFunctions(self):
         '''
@@ -434,7 +440,7 @@ class StrengthModel:
         '''
         return self.J * self.G * self.b / (2 * np.pi * np.sqrt(1 - self.nu) * Ls) * np.log(2 * r / self.ri)
 
-    def ssStrength(self, model):
+    def ssStrength(self, model, n):
         '''
         Solid solution strength model
         \sigma_ss = \sum{k_i * c_i^n}
@@ -449,12 +455,14 @@ class StrengthModel:
         strength : array of floats
             Solid solution strength contribution over time
         '''
-        if len(model.xComp.shape) == 1:
-            return self.ssweights[model.elements[0]] * model.xComp**self.ssexp
-        else:
-            return np.sum([self.ssweights[model.elements[i]]*model.xComp[:,i]**self.ssexp for i in range(len(model.elements))], axis=0)
+        val = 0
+        for i in range(len(model.elements)):
+            if model.elements[i] in self.ssweights:
+                val += self.ssweights[model.elements[i]]*model.xComp[n,i]**self.ssexp
+        return val
+        #return np.sum([self.ssweights[model.elements[i]]*model.xComp[n,i]**self.ssexp for i in range(len(model.elements))], axis=0)
 
-    def rssterm(self, model, p, i):
+    def rssterm(self, model, p):
         '''
         Mean projected radius of particles
 
@@ -476,7 +484,7 @@ class StrengthModel:
             rss = np.sqrt(2/3) * r2 / r1
         return rss
 
-    def Lsterm(self, model, p, i):
+    def Lsterm(self, model, p):
         '''
         Mean surface to surface distance between particles
 
@@ -524,6 +532,17 @@ class StrengthModel:
         rss = model.getAdditionalOutput(self.rssName)[index]
         Ls = model.getAdditionalOutput(self.LsName)[index]
         return rss, Ls
+    
+    def updateCoupledModel(self, model):
+        if self.rss is None:
+            self.rss = np.zeros((1, len(model.phases)))
+            self.ls = np.zeros((1, len(model.phases)))
+            self.solidStrength = np.zeros(1)
+            self.solidStrength[0] = self.ssStrength(model, 0)
+
+        self.rss = np.append(self.rss, [[self.rssterm(model, p) for p in range(len(model.phases))]], axis=0)
+        self.ls = np.append(self.ls, [[self.Lsterm(model, p) for p in range(len(model.phases))]], axis=0)
+        self.solidStrength = np.append(self.solidStrength, [self.ssStrength(model, model.n)], axis=0)
 
     def precStrength(self, model):
         '''
@@ -533,13 +552,15 @@ class StrengthModel:
         ----------
         model : PrecipitateModel
         '''
-        rss = model.getAdditionalOutput(self.rssName)
-        Ls = model.getAdditionalOutput(self.LsName)
+        #rss = model.getAdditionalOutput(self.rssName)
+        #Ls = model.getAdditionalOutput(self.LsName)
+        rss = self.rss
+        Ls = self.ls
 
         ps = []
-        totalCompare = np.zeros(len(rss[0]))
+        totalCompare = np.zeros(len(rss[:,0]))
         for i in range(len(model.phases)):
-            weakContributions, strongContributions, orowan, _ = self.getStrengthContributions(rss[i], Ls[i], model.phases[i])
+            weakContributions, strongContributions, orowan, _ = self.getStrengthContributions(rss[:,i], Ls[:,i], model.phases[i])
             strength, compare = self.combineStrengthContributions(weakContributions, strongContributions, orowan, returnComparison=True)
             compare[~np.isfinite(strength)] = 0
             strength[~np.isfinite(strength)] = 0
@@ -686,9 +707,11 @@ class StrengthModel:
         plotContributions : bool
             Whether to plot all contributions
         '''
-        r, Ls = self.getParticleSpacing(model, phase)
+        #r, Ls = self.getParticleSpacing(model, phase)
+        r = self.rss
+        Ls = self.ls
 
-        timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
+        timeScale, timeLabel, bounds = getTimeAxis(model, timeUnits, bounds)
 
         self.plotPrecipitateStrengthOverX(ax, model.time*timeScale, r, Ls, phase, strengthUnits, plotContributions, *args, **kwargs)
         if plotContributions:
@@ -696,9 +719,11 @@ class StrengthModel:
             for i in range(len(row)):
                 ax[row[i], col[i]].set_xlabel(timeLabel)
                 ax[row[i], col[i]].set_xscale('log')
+                ax[row[i], col[i]].set_xlim(bounds)
         else:
             ax.set_xlabel(timeLabel)
             ax.set_xscale('log')
+            ax.set_xlim(bounds)
 
     def plotPrecipitateStrengthOverX(self, ax, x, r, Ls, phase = None, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
         '''
@@ -772,11 +797,12 @@ class StrengthModel:
         strengthUnits : str
             Units for strength, options are 'Pa', 'kPa', 'MPa' or 'GPa'
         '''
-        timeScale, timeLabel, bounds = model.getTimeAxis(timeUnits, bounds)
+        timeScale, timeLabel, bounds = getTimeAxis(model, timeUnits, bounds)
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
 
         sigma0 = self.sigma0 * np.ones(len(model.time))
-        ssStrength = self.ssStrength(model) if len(self.ssweights) > 0 else np.zeros(len(model.time))
+        #ssStrength = self.ssStrength(model) if len(self.ssweights) > 0 else np.zeros(len(model.time))
+        ssStrength = self.solidStrength
         precStrength = self.precStrength(model)
 
         total = self.totalStrength(ssStrength, precStrength)

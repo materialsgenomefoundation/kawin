@@ -120,6 +120,8 @@ class PrecipitateBase(GenericModel):
         self.xComp[0] = self.xInit
         self.dTemp = 0
 
+        self._isSetup = False
+
         #Reset temperature array
         if np.isscalar(self.Tparameters):
             self.setTemperature(self.Tparameters)
@@ -127,6 +129,10 @@ class PrecipitateBase(GenericModel):
             self.setTemperatureArray(*self.Tparameters)
         elif self.Tparameters is not None:
             self.setNonIsothermalTemperature(self.Tparameters)
+
+        #Reset stopping conditions
+        for sc in self._stoppingConditions:
+            sc.reset()
 
     def _resetArrays(self):
         '''

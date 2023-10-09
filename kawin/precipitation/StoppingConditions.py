@@ -13,6 +13,18 @@ class Inequality (Enum):
     LESSER_THAN = 1
 
 class PrecipitationStoppingCondition:
+    '''
+    Parameters
+    ----------
+    condition : Inequality enum
+        GREATER_THAN -> result > value
+        LESS_THAN -> result < value
+    value : double
+    phase : str
+    element : el
+
+    
+    '''
     def __init__(self, condition, value, phase = None, element = None):
         self._condition = condition
         self._value = value
@@ -21,6 +33,10 @@ class PrecipitationStoppingCondition:
         self._phase = phase
         self._element = element
         self._modelVar = None
+
+    def reset(self):
+        self._isSatisfied = False
+        self._satisfiedTime = -1
 
     def _poll(self, model, n):
         p = model.phaseIndex(self._phase)

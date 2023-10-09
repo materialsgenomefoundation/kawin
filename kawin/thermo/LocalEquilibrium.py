@@ -28,7 +28,10 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
     '''
     # Broadcasting conditions not supported
     cur_conds = {str(k): float(v) for k, v in conds.items()}
-    state_variables = np.array([cur_conds['GE'], cur_conds['N'], cur_conds['P'], cur_conds['T']], dtype=np.float64)
+    if 'GE' in cur_conds:
+        state_variables = np.array([cur_conds['GE'], cur_conds['N'], cur_conds['P'], cur_conds['T']], dtype=np.float64)
+    else:
+        state_variables = np.array([0, cur_conds['N'], cur_conds['P'], cur_conds['T']], dtype=np.float64)
     if composition_sets is None:
         # Note: filter_phases() not called, so all specified phases must be valid
         composition_sets = []

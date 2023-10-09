@@ -203,8 +203,10 @@ class GeneralThermodynamics:
             self._drivingForce = self._getDrivingForceSampling
         elif drivingForceMethod == 'curvature':
             self._drivingForce = self._getDrivingForceCurvature
+        elif drivingForceMethod == 'tangent':
+            self._drivingForce = self._getDrivingForceTangent
         else:
-            raise Exception('Driving force method must be either \'approximate\', \'sampling\' or \'curvature\'')
+            raise Exception('Driving force method must be either \'approximate\', \'sampling\', \'tangent\' or \'curvature\'')
 
     def setDFSamplingDensity(self, density):
         '''
@@ -679,7 +681,8 @@ class GeneralThermodynamics:
         if returnComp:
             g = np.amax(diff)
 
-            if g < 0:
+            #if g < 0:
+            if False:
                 return g, None
             else:
                 #Get all compositions for each point and grab the composition corresponding to max driving force
@@ -978,3 +981,148 @@ class GeneralThermodynamics:
             #If driving force is negative, then use sampling method ---------------------------------------------------------------------------------
             return self._getDrivingForceSampling(x, T, precPhase, returnComp)
 
+    def _getDrivingForceTangent(self, x, T, precPhase = None, returnComp = False, training = False):
+        '''
+        Gets driving force from parallel tangent calculation
+
+        Steps
+        1. Compute equilibrium to get composition sets (or used previous cached CS)
+        2. Compute equilibrium of matrix phase at matrix composition
+        3. Remove composition and extra free energy from conditions
+        4. Add chemical potential for each component to conditions
+        5. Compute equilibrium of precipitate phase with new conditions
+
+        This will work for positive and negative driving forces
+
+        Parameters
+        ----------
+        x : float or array
+            Composition of minor element in bulk matrix phase
+            Use float for binary systems
+            Use array for multicomponent systems
+        T : float
+            Temperature in K
+        precPhase : str (optional)
+            Precipitate phase to consider (default is first precipitate phase in list)
+        returnComp : bool (optional)
+            Whether to return composition of precipitate (defaults to False)
+
+        Returns
+        -------
+        (driving force, precipitate composition)
+        Driving force is positive if precipitate can form
+        Precipitate composition will be None if driving force is negative or returnComp is False
+        '''
+        if precPhase is None:
+            precPhase = self.phases[1]
+
+        if not hasattr(x, '__len__'):
+            x = [x]
+        cond = self._getConditions(x, T, 0)
+        self._prevX = x
+
+        #TODO: this should be in a separate function that approximate, curvature and tangent methods can use
+        #Create cache of composition set if not done so already or if training a surrogate
+        #Training points for surrogates may be far apart, so starting from a previous
+        #   composition set could give a bad starting position for the minimizer
+        if self._compset_cache_df.get(precPhase, None) is None or training:
+            #Calculate equilibrium ----------------------------------------------------------------------------------------------------------------------
+            eq = self.getEq(x, T, 0, precPhase)
+            #Cast values in state_variables to double for updating composition sets
+            state_variables = np.array([cond[v.GE], cond[v.N], cond[v.P], cond[v.T]], dtype=np.float64)
+            stable_phases = eq.Phase.values.ravel()
+            phase_amounts = eq.NP.values.ravel()
+            matrix_idx = np.where(stable_phases == self.phases[0])[0]
+            precip_idx = np.where(stable_phases == precPhase)[0]
+            chemical_potentials = eq.MU.values.ravel()
+            x_precip = eq.isel(vertex=precip_idx).X.values.ravel()
+            x_matrix = eq.isel(vertex=matrix_idx).X.values.ravel()
+
+            #If matrix phase is not stable, then use sampling method
+            #   This may occur during surrogate training of interfacial composition,
+            #   where we're trying to calculate the driving force at the precipitate composition
+            #   In this case, the conditions will be at th precipitate composition which can result in
+            #   only that phase being stable
+            if len(matrix_idx) == 0:
+                return self._getDrivingForceSampling(x, T, precPhase, returnComp)
+
+            #Test that precipitate phase is stable and that we're not training a surrogate
+            #If not, then there's no composition set to cache
+            if len(precip_idx) > 0:
+                cs_matrix, miscMatrix = self._createCompositionSet(eq, state_variables, self.phases[0], phase_amounts, matrix_idx)
+                cs_precip, miscPrec = self._createCompositionSet(eq, state_variables, precPhase, phase_amounts, precip_idx)
+                x_matrix = np.array(cs_matrix.X)
+                x_precip = np.array(cs_precip.X)
+                
+                composition_sets = [cs_matrix, cs_precip]
+                self._compset_cache_df[precPhase] = composition_sets
+
+                if miscMatrix or miscPrec:
+                    result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
+                                                         self.models, self.phase_records,
+                                                         composition_sets=self._compset_cache_df[precPhase])
+                    self._compset_cache_df[precPhase] = composition_sets
+                    chemical_potentials = result.chemical_potentials
+                    cs_precip = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase][0]
+                    x_precip = np.array(cs_precip.X)
+
+                    cs_matrix = [cs for cs in composition_sets if cs.phase_record.phase_name == self.phases[0]][0]
+                    x_matrix = np.array(cs_matrix.X)
+
+            ph = np.unique(stable_phases[stable_phases != ''])
+            ele = eq.component.values.ravel()
+            if len(ph) != 2 or self.phases[0] not in ph or precPhase not in ph:
+                return self._getDrivingForceSampling(x, T, precPhase, returnComp, training)
+        else:
+            composition_sets = self._compset_cache_df[precPhase]
+            ph = [cs.phase_record.phase_name for cs in composition_sets if cs.NP > 0]
+            cs_precip = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase][0]
+            x_precip = np.array(cs_precip.X)
+
+            cs_matrix = [cs for cs in composition_sets if cs.phase_record.phase_name == self.phases[0]][0]
+            x_matrix = np.array(cs_matrix.X)
+
+            ele = list(cs_precip.phase_record.nonvacant_elements)
+
+        
+
+        if not hasattr(x, '__len__'):
+            x = [x]
+
+        self._parentEq, self._matrix_cs = local_equilibrium(self.db, self.elements, [self.phases[0]], cond,
+                                                    self.models, self.phase_records, composition_sets=self._matrix_cs)
+        
+        #Check that equilibrium has converged
+        #If not, then return None, None since driving force can't be obtained
+        if any(np.isnan(self._parentEq.chemical_potentials)):
+            return None, None
+        
+        if training:
+            self._matrix_cs = None
+        
+        for e in self.elements:
+            if v.X(e) in cond:
+                cond.pop(v.X(e))
+        if v.GE in cond:
+            cond.pop(v.GE)
+
+        sortedEl = sorted(list(set(self.elements) - set(['VA'])))
+        for i in range(len(sortedEl)):
+            cond[v.MU(sortedEl[i])] = self._parentEq.chemical_potentials[i]
+
+        _precEq, _prec_cs = local_equilibrium(self.db, self.elements, [precPhase], cond,
+                                                self.models, self.phase_records, composition_sets=[cs_precip])
+        
+        #Check that equilibrium has converged
+        #If not, then return None, None since driving force can't be obtained
+        if any(np.isnan(_precEq.chemical_potentials)):
+            return None, None
+        
+        dg = _precEq.x[0]
+        xb = np.array(_prec_cs[0].X)
+
+        sortIndices = np.argsort(self.elements[:-1])
+        unsortIndices = np.argsort(sortIndices)
+        xb = xb[unsortIndices]
+
+        return dg, xb[1:]

@@ -48,11 +48,14 @@ class DiffusionModel(GenericModel):
 
         self.maxCompositionChange = 0.002
 
-        self._record = record
-        self._recordedX = None
-        self._recordedP = None
-        self._recordedZ = None
-        self._recordedTime = None
+        if record:
+            self.enableRecording()
+        else:
+            self.disableRecording()
+            self._recordedX = None
+            self._recordedP = None
+            self._recordedZ = None
+            self._recordedTime = None
 
     def reset(self):
         '''

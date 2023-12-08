@@ -18,12 +18,13 @@ class DESolver:
     defaultDt : float (optional)
         Default time increment if no function is implement to estimate a good time increment
     '''
-    def __init__(self, iterator = SolverType.RK4, defaultDT = 0.1):
-        self.dtmin = 1e-8       #Fraction of simulation time
-        self.dtmax = 1
+    def __init__(self, iterator = SolverType.RK4, defaultDT = 0.1, minDtFrac = 1e-8, maxDtFrac = 1):
+        self.dtmin = minDtFrac       #Min and max dt fraction of simulation time
+        self.dtmax = maxDtFrac
         self.dt = defaultDT
         self.getDt = self.defaultDtFunc
         self.preProcess = self.defaultPreProcess
+        self.printHeader = self.defaultPrintHeader
         self.printStatus = self.defaultPrintStatus
         self.postProcess = self.defaultPostProcess
         self.setIterator(iterator)
@@ -34,11 +35,13 @@ class DESolver:
         else:
             self.iterator = RK4Iterator()
 
-    def setFunctions(self, preProcess = None, postProcess = None, printStatus = None, getDt = None):
+    def setFunctions(self, preProcess = None, postProcess = None, printHeader = None, printStatus = None, getDt = None):
         if preProcess is not None:
             self.preProcess = preProcess
         if postProcess is not None:
             self.postProcess = postProcess
+        if printHeader is not None:
+            self.printHeader = printHeader
         if printStatus is not None:
             self.printStatus = printStatus
         if getDt is not None:
@@ -62,13 +65,19 @@ class DESolver:
         '''
         return
     
+    def defaultPrintHeader(self):
+        return
+    
     def defaultPrintStatus(self, iteration, simTimeElapsed):
         '''
         Default print function for when n iterations passed and verbose is true
         '''
         return
     
-    def solve(self, f, t0, X0, tf, verbose = False, vIt = 10):
+    def correctdXdtNotImplemented(self, dt, x, dXdt):
+        pass
+    
+    def solve(self, f, t0, X0, tf, verbose = False, vIt = 10, correctdXdtFunc = None):
         '''
         Solves dX/dt over a time increment
         This will be the main function that a model will use
@@ -84,6 +93,12 @@ class DESolver:
         tf : float
             Final time
         '''
+        if verbose:
+            self.printHeader()
+
+        if correctdXdtFunc is None:
+            correctdXdtFunc = self.correctdXdtNotImplemented
+
         currTime = t0
         i = 0
         timeStart = time.time()
@@ -96,7 +111,7 @@ class DESolver:
             self.preProcess()
             dtmin = self.dtmin * (tf - t0)
             dtmax = self.dtmax * (tf - t0)
-            X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax)
+            X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax, correctdXdtFunc)
             currTime += dt
             X0, stop = self.postProcess(currTime, X0)
 

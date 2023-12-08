@@ -8,6 +8,18 @@ def hessian(chemical_potentials, composition_set):
     '''
     Returns the hessian of the objective function for a single phase
 
+    For the Lagrangian function
+        L = N * G + sum(mu_A * (N_A - N * dM_A/dy_i)) + sum(lambda_s * (1 - sum(y_i)))
+    We have 5 derivatives
+    d2L/dyi2 = N * d2G/dyi2
+    d2L/dyidlambda_s = -1 if y_i in s else 0
+    d2L/dyidN = dG/dy - sum(mu_A * dM_A/dy_i)
+    d2L/dyidmu_A = -N dM_A/dy_i
+    d2L/dmu_AdN = -M_A
+
+    Everything is per mole of formula unit, so N has to be corrected for phases where the 
+    total moles of atoms could be off from 1
+
     Parameters
     ----------
     chemical_potentials : 1-D ndarray
@@ -20,11 +32,23 @@ def hessian(chemical_potentials, composition_set):
         site fractions, phase amount, lagrangian multipliers, chemical potential
     '''
     elements = list(composition_set.phase_record.nonvacant_elements)
-    x = np.array(composition_set.X)
     mu = np.asarray(chemical_potentials)
+
+    #dM_A / dy_i
     dxdy = np.zeros((len(elements), len(composition_set.dof)))
+    #M_A
+    moleA = np.zeros((len(elements),1))
     for comp_idx in range(len(elements)):
         composition_set.phase_record.formulamole_grad(dxdy[comp_idx, :], composition_set.dof, comp_idx)
+        composition_set.phase_record.formulamole_obj(moleA[comp_idx,:], composition_set.dof, comp_idx)
+
+    #Moles of phase per formula unit
+    #We assume 1 mole of phase, but this is per mole of atoms
+    #This is generally okay, but for interstitials or vacancies in the main sublattice
+    #We need to use moles of formula units when constructing the hessian
+    formulaPhAmt = 1 / np.sum(moleA)
+
+    #dG/dy_i and d2G/dy2
     dg = np.zeros(len(composition_set.dof))
     composition_set.phase_record.formulagrad(dg, composition_set.dof)
     d2g = np.zeros((len(composition_set.dof), len(composition_set.dof)))
@@ -36,26 +60,30 @@ def hessian(chemical_potentials, composition_set):
     #Create hessian matrix
     hess = np.zeros((phase_dof + num_internal_cons + len(elements) + 1,
                      phase_dof + num_internal_cons + len(elements) + 1))
-    # wrt phase dof
+    # wrt phase dof - d2L / dyi dyj
     hess[:phase_dof, :phase_dof] = d2g[composition_set.phase_record.num_statevars:,
-                                       composition_set.phase_record.num_statevars:]
-    cons_jac_tmp = np.zeros((num_internal_cons, len(composition_set.dof)))
-    composition_set.phase_record.internal_cons_jac(cons_jac_tmp, composition_set.dof)
-
-    # wrt phase amount
+                                       composition_set.phase_record.num_statevars:] * formulaPhAmt
+    
+    # wrt phase amount - d2L / dyi dN
     for i in range(phase_dof):
         hess[i, phase_dof] = dg[num_statevars + i] - np.sum(mu * dxdy[:, num_statevars+i])
         hess[phase_dof, i] = hess[i, phase_dof]
 
+    # d2L / dyi dlambda
+    cons_jac_tmp = np.zeros((num_internal_cons, len(composition_set.dof)))
+    composition_set.phase_record.internal_cons_jac(cons_jac_tmp, composition_set.dof)
     hess[:phase_dof, phase_dof+1:phase_dof+1+num_internal_cons] = -cons_jac_tmp[:, num_statevars:].T
     hess[phase_dof+1:phase_dof+1+num_internal_cons, :phase_dof] = hess[:phase_dof, phase_dof+1:phase_dof+1+num_internal_cons].T
-    index = phase_dof + num_internal_cons + 1
-    hess[:phase_dof, index:] = -1 * dxdy[:, num_statevars:].T
-    hess[index:, :phase_dof] = -1 * dxdy[:, num_statevars:]
 
+    # d2L / dyi dmuA
+    index = phase_dof + num_internal_cons + 1
+    hess[:phase_dof, index:] = -1 * dxdy[:, num_statevars:].T * formulaPhAmt
+    hess[index:, :phase_dof] = -1 * dxdy[:, num_statevars:] * formulaPhAmt
+
+    # d2L / dmuA dN
     for A in range(len(elements)):
-        hess[phase_dof, index + A] = -x[A]
-        hess[index + A, phase_dof] = -x[A]
+        hess[phase_dof, index + A] = -moleA[A,0]
+        hess[index + A, phase_dof] = -moleA[A,0]
     return hess
 
 

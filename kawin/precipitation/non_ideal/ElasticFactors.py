@@ -667,8 +667,8 @@ class StrainEnergy:
         '''
         Dijkl term for Eshelby's theory
         '''
-        #return -np.product(self.r)/(4*np.pi) * self.sphericalIntegral(self.Dfunc)
-        return -np.product(self.r)/(4*np.pi) * self.sphInt()
+        #return -np.prod(self.r)/(4*np.pi) * self.sphericalIntegral(self.Dfunc)
+        return -np.prod(self.r)/(4*np.pi) * self.sphInt()
 
     def Sijmn(self, D):
         '''
@@ -696,7 +696,7 @@ class StrainEnergy:
         '''
         Strain energy of ellipsoidal particle with applied stress
         '''
-        V = 4*np.pi/3 * np.product(self.r)
+        V = 4*np.pi/3 * np.prod(self.r)
         S = self.Sijmn(self.Dijkl())
         stress = self._multiply(self._c4, self._multiply(S, self.eigstrain) - self.eigstrain)
         stress0 = self._multiply(self._c4, self._multiply(S, self.appstrain) - self.appstrain)
@@ -706,7 +706,7 @@ class StrainEnergy:
         '''
         Strain energy of ellipsoidal particle
         '''
-        V = 4*np.pi/3 * np.product(self.r)
+        V = 4*np.pi/3 * np.prod(self.r)
         S = self.Sijmn(self.Dijkl())
         stress = self._multiply(self._c4, self._multiply(S, self.eigstrain) - self.eigstrain)
         return self._strainEnergy(stress, self.eigstrain, V)
@@ -715,7 +715,7 @@ class StrainEnergy:
         '''
         Alternative method of strain energy on ellipsoidal particle using 2nd rank tensors
         '''
-        V = 4*np.pi/3 * np.product(self.r)
+        V = 4*np.pi/3 * np.prod(self.r)
         S = self._convert4To2rankTensor(self.Sijmn(self.Dijkl()))
         eigFlat = self._convert2rankToVec(self.eigstrain)
         multTerm = np.matmul(self.c, S - np.eye(6))
@@ -725,7 +725,7 @@ class StrainEnergy:
         '''
         Strain energy of particle for when matrix and precipitate phases have different elastic tensors
         '''
-        V = 4*np.pi/3 * np.product(self.r)
+        V = 4*np.pi/3 * np.prod(self.r)
         S = self.Sijmn(self.Dijkl())
         #invTerm = np.linalg.tensorinv(self._multiply(self._c4Prec - self._c4, S) + self._c4)
         invTerm = self._invert4rankTensor(self._multiply(self._c4Prec - self._c4, S) + self._c4)
@@ -738,7 +738,7 @@ class StrainEnergy:
         '''
         Strain energy of particle for when matrix and precipitate phases have different elastic tensors using 2nd rank tensors
         '''
-        V = 4*np.pi/3 * np.product(self.r)
+        V = 4*np.pi/3 * np.prod(self.r)
         S = self._convert4To2rankTensor(self.Sijmn(self.Dijkl()))
         eigFlat = self._convert2rankToVec(self.eigstrain)
         invTerm = np.linalg.inv(np.matmul(self.cPrec - self.c, S) + self.c)
@@ -751,7 +751,7 @@ class StrainEnergy:
         '''
         Khachaturyan's approximation for strain energy of spherical and cuboidal precipitates
         '''
-        V = 4*np.pi/3 * np.product(self.r)
+        V = 4*np.pi/3 * np.prod(self.r)
         A1 = 2 * (self.c[0,0] - self.c[0,1]) / self.c[0,0]
         A1 -= 12 * (self.c[0,0] + 2 * self.c[0,1]) * (self.c[0,0] - self.c[0,1] - 2 * self.c[3,3]) / (self.c[0,0] * (self.c[0,0] + self.c[0,1] + 2*self.c[3,3])) * I1
         A2 = -54 * (self.c[0,0] + 2 * self.c[0,1]) * (self.c[0,0] - self.c[0,1] - 2 * self.c[3,3])**2 / (self.c[0,0] * (self.c[0,0] + self.c[0,1] + 2 * self.c[3,3]) * (self.c[0,0] + 2 * self.c[0,1] + 4 * self.c[3,3])) * I2
@@ -779,7 +779,7 @@ class StrainEnergy:
         return (sC - sS) * (eta - 1) / (np.sqrt(2) - 1) + sS
 
     def _strainEnergyConstant(self):
-        return 4 * np.pi / 3 * np.product(self.r) * self._gElasticConstant
+        return 4 * np.pi / 3 * np.prod(self.r) * self._gElasticConstant
 
     def _strainEnergySingle(self, rsingle):
         '''

@@ -71,6 +71,24 @@ class StrengthModel:
         self.ls = None
         self.solidStrength = None
 
+    def save(self, filename, compressed = True):
+        '''
+        Saves strength model data
+
+        Note, this only saves solid solution strength, the rss and ls terms
+        Parameters should be free so user can load model and evaluate different parameters
+        '''
+        if compressed:
+            np.savez_compressed(filename, ssStrength=self.solidStrength, rss = self.rss, ls = self.ls)
+        else:
+            np.savez(filename, ssStrength=self.solidStrength, rss = self.rss, ls = self.ls)
+
+    def load(self, filename):
+        data = np.load(filename)
+        self.solidStrength = data['ssStrength']
+        self.rss = data['rss']
+        self.ls = data['ls']
+
     def _getStrengthFunctions(self):
         '''
         Internal function that creates arrays for dislocation cutting mechanisms
@@ -460,7 +478,6 @@ class StrengthModel:
             if model.elements[i] in self.ssweights:
                 val += self.ssweights[model.elements[i]]*model.xComp[n,i]**self.ssexp
         return val
-        #return np.sum([self.ssweights[model.elements[i]]*model.xComp[n,i]**self.ssexp for i in range(len(model.elements))], axis=0)
 
     def rssterm(self, model, p):
         '''
@@ -506,32 +523,6 @@ class StrengthModel:
             rss = np.sqrt(2/3) * r2 / r1
             Ls = np.sqrt(np.log(3) / (2*np.pi*r1) + (2*rss)**2) - 2*rss
         return Ls
-
-    def insertStrength(self, model):
-        '''
-        Inserts Fterm into the KWNmodel to be solved for
-
-        Parameters
-        ----------
-        model : KWNEuler object
-        '''
-        model.addAdditionalOutput(self.rssName, self.rssterm)
-        model.addAdditionalOutput(self.LsName, self.Lsterm)
-
-    def getParticleSpacing(self, model, phase = None):
-        '''
-        Grabs mean projected radius and surface to surface distance from a PrecipitateModel
-
-        Parameters
-        ----------
-        model : PrecipitateModel
-        phase : str (optional)
-            Phase name, will default to first phase in the model
-        '''
-        index = model.phaseIndex(phase)
-        rss = model.getAdditionalOutput(self.rssName)[index]
-        Ls = model.getAdditionalOutput(self.LsName)[index]
-        return rss, Ls
     
     def updateCoupledModel(self, model):
         if self.rss is None:
@@ -707,13 +698,9 @@ class StrengthModel:
         plotContributions : bool
             Whether to plot all contributions
         '''
-        #r, Ls = self.getParticleSpacing(model, phase)
-        r = self.rss
-        Ls = self.ls
-
         timeScale, timeLabel, bounds = getTimeAxis(model, timeUnits, bounds)
 
-        self.plotPrecipitateStrengthOverX(ax, model.time*timeScale, r, Ls, phase, strengthUnits, plotContributions, *args, **kwargs)
+        self.plotPrecipitateStrengthOverX(ax, model.time*timeScale, self.rss, self.ls, phase, strengthUnits, plotContributions, *args, **kwargs)
         if plotContributions:
             row, col = [0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1]
             for i in range(len(row)):
@@ -728,6 +715,9 @@ class StrengthModel:
     def plotPrecipitateStrengthOverX(self, ax, x, r, Ls, phase = None, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
         '''
         Plots precipitate strength contribution as a function of x
+
+        TODO: make this a bit more generalized where you can set the contribution you want to plot
+            This should also remove the restriction that axes subplot must be 3x2
 
         Parameters
         ----------
@@ -773,7 +763,7 @@ class StrengthModel:
             ax[2,1].set_xlim([x[0], x[-1]])
 
         else:
-            weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, Leff, Ls, phase)
+            weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, phase)
             strength = self.combineStrengthContributions(weak, strong, oro)
             ax.plot(x, strength / yscale, *args, **kwargs)
             ax.set_ylabel('Yield ' + ylabel)

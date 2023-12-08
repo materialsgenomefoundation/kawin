@@ -187,6 +187,9 @@ class PrecipitateBase(GenericModel):
         self._setEnum()
         self._packArrays()
 
+        #Temporary storage variables
+        self._precBetaTemp = [None for _ in range(len(self.phases))]    #Composition of nucleate (found from driving force)
+
     def _setEnum(self):
         self.TIME = 0
         self.TEMPERATURE = 1
@@ -678,14 +681,14 @@ class PrecipitateBase(GenericModel):
             Defaults to True
         '''
         index = self.phaseIndex(phase)
-        self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache)
+        self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache, returnComp = True)
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
             if (therm.mobCallables is not None or therm.diffCallables is not None) and addDiffusivity:
                 self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
-            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = False)
+            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache, searchDir = None: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = False, searchDir = searchDir)
             self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = False)
 
     def setSurrogate(self, surr, phase = None):
@@ -758,6 +761,16 @@ class PrecipitateBase(GenericModel):
         self._stopConditionMode = []
 
     def addCouplingModel(self, model):
+        '''
+        Adds a coupling model to the KWN model
+
+        These will be updated after each iteration with the new values of the model
+
+        Parameters
+        ----------
+        model : object
+            Must have a function called updateCoupledModel that takes in a KWNBase or KWNEuler object
+        '''
         self.couplingModels.append(model)
 
     def clearCouplingModels(self):
@@ -785,14 +798,19 @@ class PrecipitateBase(GenericModel):
     def printStatus(self, iteration, simTimeElapsed):
         '''
         Prints various terms at latest step
+
+        Will print:
+            Model time, simulation time, temperature, matrix composition
+            For each phase
+                Phase name, precipitate density, volume fraction, avg radius and driving force
         '''
         i = len(self.time)-1
         if self.numberOfElements == 1:
-            print('N\tTime (s)\tTemperature (K)\tMatrix Comp')
-            print('{:.0f}\t{:.1e}\t\t{:.0f}\t\t{:.4f}\n'.format(i, self.time[i], self.temperature[i], 100*self.xComp[i,0]))
+            print('N\tTime (s)\tSim Time (s)\tTemperature (K)\tMatrix Comp')
+            print('{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t{:.4f}\n'.format(i, self.time[i], simTimeElapsed, self.temperature[i], 100*self.xComp[i,0]))
         else:
-            compStr = 'N\tTime (s)\tTemperature (K)\t'
-            compValStr = '{:.0f}\t{:.1e}\t\t{:.0f}\t\t'.format(i, self.time[i], self.temperature[i])
+            compStr = 'N\tTime (s)\tSim Time (s)\tTemperature (K)\t'
+            compValStr = '{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t'.format(i, self.time[i], simTimeElapsed, self.temperature[i])
             for a in range(self.numberOfElements):
                 compStr += self.elements[a] + '\t'
                 compValStr += '{:.4f}\t'.format(100*self.xComp[i,a])
@@ -805,6 +823,10 @@ class PrecipitateBase(GenericModel):
         print('')
 
     def getCurrentX(self):
+        '''
+        Returns current value of time and X
+        In this case, X is the particle size distribution for each phase
+        '''
         return self.time[self.n], [self.PBM[p].PSD for p in range(len(self.phases))]
 
     def preProcess(self):
@@ -813,6 +835,8 @@ class PrecipitateBase(GenericModel):
 
         We use these terms for the first step of the iterators (for Euler, this is all the steps)
             For RK4, these terms will be recalculated in dXdt
+
+        TODO: _firstIt appears to be unused
         '''
         self._currY = None
         self._firstIt = True
@@ -840,6 +864,9 @@ class PrecipitateBase(GenericModel):
         #print(self._currY)
 
     def getdXdt(self, t, x):
+        '''
+        Gets dXdt (aka dn_i/dt) as a list for each phase
+        '''
         self._calculateDependentTerms(t, x)
         dXdt = self._getdXdt(t, x)
         if self._firstIt:
@@ -847,6 +874,13 @@ class PrecipitateBase(GenericModel):
         return dXdt
 
     def postProcess(self, t, x):
+        '''
+        1) Updates internal arrays with new values of t and x
+        2) Updates particle size distribution
+        3) Updates coupled models
+        4) Check stopping conditions
+        5) Return new values and whether to stop the model
+        '''
         self._calculateDependentTerms(t, x)
         self._appendArrays(self._currY)
 
@@ -891,6 +925,21 @@ class PrecipitateBase(GenericModel):
         return NotImplementedError()
     
     def _calcDrivingForce(self, t, x):
+        '''
+        Driving force is defined in terms of J/m3
+
+        Calculation is dG_ch / V_m - dG_el
+            dG_ch - chemical driving force
+            V_m - molar volume
+            dG_el - elastic strain energy (always reduces driving force)
+                I guess there could be a case where it increases the driving force if
+                the matrix is prestrained and the precipitate releases stress, but this should
+                be handled in the ElasticFactors module
+
+        If driving force is positive (precipitation is favorable)
+            Calculate Rcrit and Gcrit based off the nucleation site type
+        '''
+        #Get variables
         dGs = np.zeros((1,len(self.phases)))
         Rcrit = np.zeros((1,len(self.phases)))
         Gcrit = np.zeros((1,len(self.phases)))
@@ -899,8 +948,9 @@ class PrecipitateBase(GenericModel):
         else:
             xComp = self._currY[self.COMPOSITION][0]
         T = self._currY[self.TEMPERATURE][0]
+
         for p in range(len(self.phases)):
-            dGs[0,p], _ = self.dG[p](xComp, T)
+            dGs[0,p], self._precBetaTemp[p] = self.dG[p](xComp, T)
             dGs[0,p] /= self.VmBeta[p]
             dGs[0,p] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.Rcrit[self.n, p]))
             if self.betaFrac[self.n, p] < 1 and dGs[0,p] >= 0:
@@ -920,8 +970,12 @@ class PrecipitateBase(GenericModel):
         self._currY[self.G_CRIT] = Gcrit
 
     def _calcNucleationRate(self, t, x):
+        '''
+        nucleation rate is defined as dn_nuc/dt = N_0 Z beta exp(-G/kBt) * exp(-tau/t)
+        '''
         gCrit = self._currY[self.G_CRIT][0]
         T = self._currY[self.TEMPERATURE][0]
+
         betas = np.zeros((1,len(self.phases)))
         nucRate = np.zeros((1,len(self.phases)))
         for p in range(len(self.phases)):
@@ -946,6 +1000,8 @@ class PrecipitateBase(GenericModel):
         '''
         rCrit = self._currY[self.R_CRIT][0]
         T = self._currY[self.TEMPERATURE][0]
+        if rCrit[p] == 0:
+            return 0
         return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * T)) / (2 * np.pi * self.avo * rCrit[p]**2)
         
     def _BetaBinary1(self, p):

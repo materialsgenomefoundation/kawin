@@ -438,7 +438,7 @@ class DiffusionModel(GenericModel):
         '''
         raise NotImplementedError()
     
-    def headerStr(self):
+    def printHeader(self):
         print('Iteration\tSim Time (h)\tRun time (s)')
 
     def printStatus(self, iteration, simTimeElapsed):

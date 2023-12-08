@@ -23,9 +23,11 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
     drivingForceMethod : str (optional)
         Method used to calculate driving force
         Options are 'approximate' (default), 'sampling' and 'curvature' (not recommended)
+    parameters : list [str] or dict {str : float}
+        List of parameters to keep symbolic in the thermodynamic or mobility models
     '''
-    def __init__(self, database, elements, phases, drivingForceMethod = 'approximate'):
-        super().__init__(database, elements, phases, drivingForceMethod)
+    def __init__(self, database, elements, phases, drivingForceMethod = 'tangent', parameters = None):
+        super().__init__(database, elements, phases, drivingForceMethod, parameters)
 
         #Previous variables for curvature terms
         #Near saturation, pycalphad may detect only a single phase (if sampling density is too low)
@@ -163,14 +165,6 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         if precPhase is None:
             precPhase = self.phases[1]
 
-        #Check if input equilibrium has converged
-        if np.any(np.isnan(chemical_potentials)):
-            if training:
-                return None, None, None, None, None, None
-            else:
-                print('Warning: equilibrum was not able to be solved for, using results of previous calculation')
-                return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
-
         ele = list(composition_sets[0].phase_record.nonvacant_elements)
         refIndex = ele.index(self.elements[0])
 
@@ -185,15 +179,15 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             if self.mobCallables[self.phases[0]] is None:
                 Dnkj, dMudxParent, invMob = inverseMobility_from_diffusivity(chemical_potentials, matrix_cs,
                                                                              self.elements[0], self.diffCallables[self.phases[0]],
-                                                                             diffusivity_correction=self.mobility_correction)
+                                                                             diffusivity_correction=self.mobility_correction, parameters=self._parameters)
 
                 #NOTE: This is note tested yet
-                Dtrace = tracer_diffusivity_from_diff(matrix_cs, self.diffCallables[self.phases[0]], diffusivity_correction=self.mobility_correction)
+                Dtrace = tracer_diffusivity_from_diff(matrix_cs, self.diffCallables[self.phases[0]], diffusivity_correction=self.mobility_correction, parameters=self._parameters)
             else:
                 Dnkj, dMudxParent, invMob = inverseMobility(chemical_potentials, matrix_cs, self.elements[0],
                                                             self.mobCallables[self.phases[0]],
-                                                            mobility_correction=self.mobility_correction)
-                Dtrace = tracer_diffusivity(matrix_cs, self.mobCallables[self.phases[0]], mobility_correction=self.mobility_correction)
+                                                            mobility_correction=self.mobility_correction, parameters=self._parameters)
+                Dtrace = tracer_diffusivity(matrix_cs, self.mobCallables[self.phases[0]], mobility_correction=self.mobility_correction, parameters=self._parameters)
 
             xMFull = np.array(matrix_cs.X)
             xM = np.delete(xMFull, refIndex)
@@ -235,17 +229,17 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
         else:
             if training:
-                return None, None, None, None, None, None
+                return None
             else:
                 #print('Warning: only a single phase detected in equilibrium, using results of previous calculation')
                 #return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
 
                 #If two-phase equilibrium is not found, then the temperature may have changed to where the precipitate is unstable
                 #Return None in this case
-                return None, None, None, self._prevBeta[precPhase], None, None
+                return None
 
 
-    def curvatureFactor(self, x, T, precPhase = None, training = False):
+    def curvatureFactor(self, x, T, precPhase = None, training = False, searchDir = None):
         '''
         Curvature factor (from Phillipes and Voorhees - 2013) from composition and temperature
         This is the same as curvatureFactorEq, but will calculate equilibrium from x and T first
@@ -258,6 +252,8 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Temperature
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
+        searchDir : None or array
+            If two-phase equilibrium is not present, then move x towards this composition to find two-phase equilibria
 
         Returns
         -------
@@ -282,45 +278,11 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         #Perform equilibrium from scratch if cache not set or when training surrogate
         if self._compset_cache.get(precPhase, None) is None or training:
-            eq = self.getEq(x, T, 0, precPhase)
-            state_variables = np.array([cond[v.GE], cond[v.N], cond[v.P], cond[v.T]], dtype=np.float64)
-            stable_phases = eq.Phase.values.ravel()
-            phase_amounts = eq.NP.values.ravel()
-            matrix_idx = np.where(stable_phases == self.phases[0])[0]
-            precip_idx = np.where(stable_phases == precPhase)[0]
-
-            #If matrix phase is not stable (why?), then return previous values
-            #Curvature can't be calculated if matrix phase isn't present
-            if len(matrix_idx) == 0:
-                if training:
-                    return None, None, None, None, None, None
-                else:
-                    print('Warning: matrix phase not detected, using results of previous calculation')
-                    return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
-
-            cs_matrix, miscMatrix = self._createCompositionSet(eq, state_variables, self.phases[0], phase_amounts, matrix_idx)
-
-            chemical_potentials = eq.MU.values.ravel()
-
-            #If precipitate phase is not stable, then only store matrix phase in composition sets
-            #Checks for single phase regions are done in _curvatureFactorFromEq,
-            # so this will allow to fail there
-            if len(precip_idx) == 0:
-                composition_sets = [cs_matrix]
-                self._compset_cache[precPhase] = None
-            else:
-                cs_precip, miscPrec = self._createCompositionSet(eq, state_variables, precPhase, phase_amounts, precip_idx)
-
-                composition_sets = [cs_matrix, cs_precip]
-                self._compset_cache[precPhase] = composition_sets
-
-                if miscMatrix or miscPrec:
-                    result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
-                                                            self.models, self.phase_records,
-                                                            composition_sets=self._compset_cache[precPhase])
-                    self._compset_cache[precPhase] = composition_sets
-                    chemical_potentials = result.chemical_potentials
-
+            cs_results = self._getCompositionSetsForCurvature(x, T, precPhase)
+            if cs_results is None:
+                return None
+            
+            chemical_potentials, composition_sets = cs_results
         else:
             result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
                                                          self.models, self.phase_records,
@@ -328,10 +290,43 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             self._compset_cache[precPhase] = composition_sets
             chemical_potentials = result.chemical_potentials
 
-        result = self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)
-        return result
+        #Check if input equilibrium has converged
+        if np.any(np.isnan(chemical_potentials)):
+            if training:
+                return None
+            else:
+                print('Warning: equilibrum was not able to be solved for, using results of previous calculation')
+                return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
 
-    def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, precPhase = None, training = False):
+        ph = [cs.phase_record.phase_name for cs in composition_sets]
+        if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
+            return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)
+        elif searchDir is not None:
+            currX = np.array(x)
+            searchDir = np.array(searchDir)
+            currX = 0.5 * currX + 0.5 * searchDir
+            foundTwoPhases = False
+            while not foundTwoPhases:
+                cs_results = self._getCompositionSetsForCurvature(currX, T, precPhase)
+                if cs_results is None:
+                    return None
+                chemical_potentials, composition_sets = cs_results
+                ph = [cs.phase_record.phase_name for cs in composition_sets]
+                if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
+                    foundTwoPhases = True
+                elif len(ph) == 1 and self.phases[0] in ph:
+                    #Only matrix is stable, move closer to searchDir
+                    currX = 0.5*currX + 0.5*searchDir
+                elif len(ph) == 1 and precPhase in ph:
+                    #Only precipitate is stable, move closer to original x
+                    currX = 0.5*currX + 0.5*np.array(x)
+            
+            chemical_potentials, composition_sets = cs_results
+            return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)
+        else:
+            return None
+
+    def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, precPhase = None, training = False, searchDir = None):
         '''
         Returns growth rate and interfacial compostion given Gibbs-Thomson contribution
 
@@ -349,6 +344,8 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Gibbs-Thomson contribution (must be same shape as R)
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
+        searchDir : None or array
+            If two-phase equilibrium is not present, then move x towards this composition to find a two-phase region
 
         Returns
         -------
@@ -362,9 +359,15 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         if hasattr(gExtra, '__len__'):
             gExtra = np.array(gExtra)
 
-        dc, mc, gba, beta, ca, cb = self.curvatureFactor(x, T, precPhase, training)
-        if dc is None:
+        curv_results = self.curvatureFactor(x, T, precPhase, training, searchDir)
+        if curv_results is None:
             return None, None, None, None, None
+    
+        dc, mc, gba, beta, ca, cb = curv_results
+
+        #dc, mc, gba, beta, ca, cb = self.curvatureFactor(x, T, precPhase, training, searchDir)
+        #if dc is None:
+        #    return None, None, None, None, None
 
         Rdiff = (dG - gExtra)
 
@@ -412,5 +415,50 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
         '''
-        dc, mc, gba, beta, ca, cb = self.curvatureFactor(x, T, precPhase, training)
+        curv_results = self.curvatureFactor(x, T, precPhase, training)
+        if curv_results is None:
+            return self._prevBeta[precPhase]
+        dc, mc, gba, beta, ca, cb = curv_results
         return beta
+        #dc, mc, gba, beta, ca, cb = self.curvatureFactor(x, T, precPhase, training)
+        #print(beta)
+        #return beta
+    
+    def _getCompositionSetsForCurvature(self, x, T, precPhase):
+        cond = self._getConditions(x, T, 0)
+        eq = self.getEq(x, T, 0, precPhase)
+        state_variables = np.array([cond[v.GE], cond[v.N], cond[v.P], cond[v.T]], dtype=np.float64)
+        stable_phases = eq.Phase.values.ravel()
+        phase_amounts = eq.NP.values.ravel()
+        matrix_idx = np.where(stable_phases == self.phases[0])[0]
+        precip_idx = np.where(stable_phases == precPhase)[0]
+
+        #If matrix phase is not stable (why?), then return previous values
+        #Curvature can't be calculated if matrix phase isn't present
+        if len(matrix_idx) == 0:
+            return None
+
+        cs_matrix, miscMatrix = self._createCompositionSet(eq, state_variables, self.phases[0], phase_amounts, matrix_idx)
+
+        chemical_potentials = eq.MU.values.ravel()
+
+        #If precipitate phase is not stable, then only store matrix phase in composition sets
+        #Checks for single phase regions are done in _curvatureFactorFromEq,
+        # so this will allow to fail there
+        if len(precip_idx) == 0:
+            composition_sets = [cs_matrix]
+            self._compset_cache[precPhase] = None
+        else:
+            cs_precip, miscPrec = self._createCompositionSet(eq, state_variables, precPhase, phase_amounts, precip_idx)
+
+            composition_sets = [cs_matrix, cs_precip]
+            self._compset_cache[precPhase] = composition_sets
+
+            if miscMatrix or miscPrec:
+                result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
+                                                        self.models, self.phase_records,
+                                                        composition_sets=self._compset_cache[precPhase])
+                self._compset_cache[precPhase] = composition_sets
+                chemical_potentials = result.chemical_potentials
+
+        return chemical_potentials, composition_sets

@@ -1,10 +1,11 @@
 from kawin.solver.Iterator import Iterator
+import numpy as np
 
 class RK4Iterator (Iterator):
     def __init__(self):
         super().__init__()
 
-    def iterate(self, f, t, X_old, dtfunc, dtmin, dtmax):
+    def iterate(self, f, t, X_old, dtfunc, dtmin, dtmax, correctdXdt):
         '''
         Function to iterate X by dt
 
@@ -30,11 +31,29 @@ class RK4Iterator (Iterator):
             dt = dtmin
         if dt > dtmax:
             dt = dtmax
-        k1 = self._flatten(dXdt)
-        k2 = self._flatten(f(t+dt/2, self._unflatten(X_flat + dt*k1/2, X_old)))
-        k3 = self._flatten(f(t+dt/2, self._unflatten(X_flat + dt*k2/2, X_old)))
-        k4 = self._flatten(f(t+dt, self._unflatten(X_flat + dt*k3, X_old)))
-        return self._unflatten(X_flat + dt/6 * (k1 + 2*k2 + 2*k3 + k4), X_old), dt
+        
+        k1 = dXdt
+        dXdtsum = self._flatten(k1)
+        correctdXdt(dt/2, X_old, k1)
+        X_k1 = self._unflatten(X_flat + dt/2 * self._flatten(k1), X_old)
+
+        k2 = f(t+dt/2, X_k1)
+        dXdtsum += 2*self._flatten(k2)
+        correctdXdt(dt/2, X_old, k2)
+        X_k2 = self._unflatten(X_flat + dt/2 * self._flatten(k2), X_old)
+
+        k3 = f(t+dt/2, X_k2)
+        dXdtsum += 2*self._flatten(k3)
+        correctdXdt(dt, X_old, k3)
+        X_k3 = self._unflatten(X_flat + dt * self._flatten(k3), X_old)
+
+        k4 = f(t+dt, X_k3)
+        dXdtsum += self._flatten(k4)
+        dXdtsum /= 6
+        dXdtsum = self._unflatten(dXdtsum, X_old)
+        correctdXdt(dt, X_old, dXdtsum)
+
+        return self._unflatten(X_flat + dt * self._flatten(dXdtsum), X_old), dt
     
     
         

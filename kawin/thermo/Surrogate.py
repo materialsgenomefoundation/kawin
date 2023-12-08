@@ -1248,9 +1248,11 @@ class MulticomponentSurrogate:
         
         for t in temperature:
             for x in comps:
-                dc, mc, gba, beta, ca, cb = self.curvature(x, t)
+                results = self.curvature(x, t)
+                #dc, mc, gba, beta, ca, cb = self.curvature(x, t)
 
-                if dc is not None:
+                if results is not None:
+                    dc, mc, gba, beta, ca, cb = results
                     #Since Dc, Mc and Gba is constant for a given tie-line, add 3 training data points (at bulk compostion and phase boundaries)
                     #This should give more accurate values at very small or very large supersaturations without having to calculate a lot of training data
                     compCoords = [x, ca, cb]
@@ -1418,7 +1420,7 @@ class MulticomponentSurrogate:
             
             return dc, mc, gba, beta, ca, cb
 
-    def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra):
+    def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, searchDir = None):
         '''
         Returns growth rate and interfacial compostion given Gibbs-Thomson contribution
 

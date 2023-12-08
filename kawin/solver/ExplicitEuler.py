@@ -4,7 +4,7 @@ class ExplicitEulerIterator(Iterator):
     def __init__(self):
         super().__init__()
 
-    def iterate(self, f, t, X_old, dtfunc, dtmin, dtmax):
+    def iterate(self, f, t, X_old, dtfunc, dtmin, dtmax, correctdXdt):
         '''
         Function to iterate X by dt
 
@@ -29,5 +29,6 @@ class ExplicitEulerIterator(Iterator):
             dt = dtmin
         if dt > dtmax:
             dt = dtmax
+        correctdXdt(dt, X_old, dXdt)
         return self._unflatten(self._flatten(X_old)+self._flatten(dXdt)*dt, X_old), dt
         

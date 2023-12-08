@@ -25,9 +25,11 @@ class BinaryThermodynamics (GeneralThermodynamics):
     interfacialCompMethod: str (optional)
         Method used to calculate interfacial composition
         Options are 'eq' (default) and 'curvature' (not recommended)
+    parameters : list [str] or dict {str : float}
+        List of parameters to keep symbolic in the thermodynamic or mobility models
     '''
-    def __init__(self, database, elements, phases, drivingForceMethod = 'approximate', interfacialCompMethod = 'equilibrium'):
-        super().__init__(database, elements, phases, drivingForceMethod)
+    def __init__(self, database, elements, phases, drivingForceMethod = 'tangent', interfacialCompMethod = 'equilibrium', parameters = None):
+        super().__init__(database, elements, phases, drivingForceMethod, parameters)
 
         if self.elements[1] < self.elements[0]:
             self.reverse = True

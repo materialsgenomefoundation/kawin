@@ -23,7 +23,6 @@ class GenericModel:
         for var in varDict:
             saveDict[var] = getattr(self, varDict[var])
         self._addExtraSaveVariables(saveDict)
-        print(saveDict.keys())
         if compressed:
             np.savez_compressed(filename, **saveDict)
         else:
@@ -52,6 +51,9 @@ class GenericModel:
     
     def getdXdt(self, x):
         raise NotImplementedError()
+
+    def correctdXdt(self, dt, x, dXdt):
+        pass
     
     def preProcess(self):
         pass
@@ -59,20 +61,21 @@ class GenericModel:
     def postProcess(self, time, x):
         pass
 
-    def printStatus(self):
+    def printHeader(self):
         pass
 
-    def solve(self, simTime, solverType = SolverType.RK4, verbose=False, vIt=10):
+    def printStatus(self, iteration, simTimeElapsed):
+        pass
+
+    def solve(self, simTime, solverType = SolverType.RK4, verbose=False, vIt=10, minDtFrac = 1e-8, maxDtFrac = 1):
         '''
         Solves model using the DESolver
         '''
         self.setup()
-        if verbose:
-            print('Iteration\tSim Time (h)\tRun time (s)')
 
-        solver = DESolver(solverType)
-        solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printStatus=self.printStatus, getDt=self.getDt)
+        solver = DESolver(solverType, minDtFrac = minDtFrac, maxDtFrac = maxDtFrac)
+        solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printHeader=self.printHeader, printStatus=self.printStatus, getDt=self.getDt)
 
         t, X0 = self.getCurrentX()
         self.deltaTime = simTime - t
-        solver.solve(self.getdXdt, t, X0, t+simTime, verbose, vIt)
+        solver.solve(self.getdXdt, t, X0, t+simTime, verbose, vIt, self.correctdXdt)

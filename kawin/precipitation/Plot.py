@@ -22,7 +22,7 @@ def getTimeAxis(precModel, timeUnits='s', bounds=None):
             timeLabel = 'Time (hrs)'
 
         if bounds is None:
-            bounds = [timeScale*1e-5*precModel.time[precModel.n], timeScale * precModel.time[precModel.n]]
+            bounds = [timeScale*1e-5*precModel.time[-1], timeScale * precModel.time[-1]]
 
         return timeScale, timeLabel, bounds
 
@@ -177,13 +177,19 @@ def plotCompositions(precModel, timeScale, labels, variable, axes, *args, **kwar
         axes.semilogx(timeScale * precModel.time, precModel.xComp[:,0], *args, **kwargs)
         axes.set_ylabel('Matrix Composition (at.% ' + precModel.elements[0] + ')')
     else:
+        #If kwargs has label, add it as an extension to the label we add
+        #And also pop label from kwargs so we don't have double arguments
+        label_ext = ''
+        if 'label' in kwargs:
+            label_ext = '_' + kwargs['label']
+            kwargs.pop('label')
         for i in range(precModel.numberOfElements):
             #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
             if 'color' in kwargs:
-                axes.semilogx(timeScale * precModel.time, precModel.xComp[:,i], label=precModel.elements[i], *args, **kwargs)
+                axes.semilogx(timeScale * precModel.time, precModel.xComp[:,i], label=precModel.elements[i] + label_ext, *args, **kwargs)
             else:
-                axes.semilogx(timeScale * precModel.time, precModel.xComp[:,i], label=precModel.elements[i], color='C'+str(i), *args, **kwargs)
-        axes.legend(precModel.elements)
+                axes.semilogx(timeScale * precModel.time, precModel.xComp[:,i], label=precModel.elements[i] + label_ext, color='C'+str(i), *args, **kwargs)
+        axes.legend()
         axes.set_ylabel(labels[variable])
     yRange = [np.amin(precModel.xComp), np.amax(precModel.xComp)]
     axes.set_ylim([yRange[0] - 0.1 * (yRange[1] - yRange[0]), yRange[1] + 0.1 * (yRange[1] - yRange[0])])

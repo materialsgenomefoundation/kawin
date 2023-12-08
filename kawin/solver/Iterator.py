@@ -5,7 +5,7 @@ class Iterator:
     def __init__(self):
         return
     
-    def iterate(self, f, t, X_old, dtfunc, dtmin, dtmax):
+    def iterate(self, f, t, X_old, dtfunc, dtmin, dtmax, correctdXdt):
         '''
         Function to iterate X by dt
 

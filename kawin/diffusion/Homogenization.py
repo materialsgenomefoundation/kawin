@@ -269,6 +269,19 @@ class HomogenizationModel(DiffusionModel):
     def _getFluxes(self, t, x_curr):
         '''
         Return fluxes and time interval for the current iteration
+
+        Steps:
+            1. Get average mobility from homogenization function. Interpolate to get mobility (M) at cell boundaries
+            2. Interpolate composition to get composition (x) at cell boundaries
+            3. Calculate chemical potential gradient (dmu/dz) at cell boundaries
+            4. Calculate composition gradient (dx/dz) at cell boundaries
+            5. Calculate homogenization flux = -M / dmu/dz
+            6. Calculate ideal contribution = -eps * M*R*T / x * dx/dz
+            7. Apply boundary conditions for fluxes at ends of mesh
+                If fixed flux condition (Neumann) - then use the flux defined in the condition
+                If fixed composition condition (Dirichlet) - then use nearby flux (this will keep the composition fixed after apply the fluxes)
+
+        TODO: If using RK4, I believe the phase fraction will be from the last step of the RK4 iteration. May not make sense to do that
         '''
         x = x_curr[0]
         self.T = self.Tfunc(self.z, t)
@@ -321,7 +334,9 @@ class HomogenizationModel(DiffusionModel):
         return vfluxes, dt
     
     def getDt(self, dXdt):
-        #Time increment
-        #This is done by finding the time interval such that the composition
-        # change caused by the fluxes will be lower than self.maxCompositionChange
+        '''
+        Time increment
+        This is done by finding the time interval such that the composition
+            change caused by the fluxes will be lower than self.maxCompositionChange
+        '''
         return self.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))

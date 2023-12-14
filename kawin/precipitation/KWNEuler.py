@@ -64,7 +64,6 @@ class PrecipitateModel (PrecipitateBase):
         data = np.load(filename)
         model = PrecipitateModel(data['phases'], data['elements'])
         model._loadData(data)
-        model._loadExtraVariables(data)
         return model
 
     def _loadExtraVariables(self, data):
@@ -324,11 +323,17 @@ class PrecipitateModel (PrecipitateBase):
     def getDt(self, dXdt):
         '''
         The following checks are made
-            1) change number of particles moving between bins
+            1) change in number of particles moving between bins
+                This is controlled by the implementation in PopulationBalanceModel,
+                but essentially limits the number of particles moving between bins
             2) change in nucleation rate
+                Time will be proportional to the 1/log(previous nuc rate / new nuc rate)
             3) change in temperature
+                Limits how fast temperature can change
             4) change in critical radius
+                Proportional to a percent change in critical radius
             5) estimated change in volume fraction
+                Estimates the change in volume fraction from the nucleation rate and nucleation radius
         '''
         #Start test dt at 0.01 or previous dt
         i = self.n
@@ -405,34 +410,32 @@ class PrecipitateModel (PrecipitateBase):
     
     def _processX(self, x):
         '''
-        for p in range(len(self.phases)):
-            #In the previous KWN implementation, fast dissolution of particles were
-            # treated by limited the max flux across bins to be the number of particles leaving the bin
-            # We can't do this now since we don't know dt until after we get dXdt for the first time
-            # An alternative solution would be to remove all the indices up to the first negative index
-            #  which should account for the max flux limits set before
-            #Remove all indices up to the last negative index below Rcrit
-            indices = (x[p] < 0) & (self.PBM[p].PSDsize < self.Rcrit[self.n,p])
-            lastIndex = np.asarray(indices).nonzero()[0]
-            if len(lastIndex) > 0:
-                x[p][:lastIndex[-1]+1] = 0
-
-            #Remove all indices starting from first negative index above Rcrit
-            indices = (x[p] < 0) & (self.PBM[p].PSDsize > self.Rcrit[self.n,p])
-            firstIndex = np.asarray(indices).nonzero()[0]
-            if len(firstIndex) > 0:
-                x[p][firstIndex[0]:] = 0
-            #x[p][:self.dissolutionIndex[p]] = 0
-            print('processX')
+        Quick check to make sure particles below the thresholds are 0
+            RdrivingForceIndex - only for binary, where energy from the Gibbs-Thompson effect is high enough
+                that the free energy of the precipitate is above the free energy surface of the matrix phase
+                and equilibrium cannot be calculated
+            minRadius - minimum radius to be considered a precipitate
         '''
-        #The commented code above should be fixed by the correctdXdt function
-        #  Where the fluxes are adjusted with the now calculated dt to correct and avoid negative bins
         for p in range(len(self.phases)):
             x[p][:self.RdrivingForceIndex[p]+1] = 0
             x[p][self.PBM[p].PSDsize < self.minRadius] = 0
         return
     
     def _calcNucleationRate(self, t, x):
+        '''
+        The _calcNucleationRate function in KWNBase calculates the nucleation rate as the
+            probability that a site can form a nucleate that will continue to grow
+
+        To convert this probability to an actual nucleation rate, we multiply by the amount
+            of available nucleation sites
+
+        The number of available sites is determined by:
+            Available sites = All sites - used up sites + sites on parent precipitates
+            The used up sites depends on the type of nucleation
+                Bulk and grain corners - used sites = number of current precipitates
+                Dislocation and grain edges - number of sites filled along the edges (assumes average radius of precipitates)
+                Grain boundaries - number of sites filled along the faces (assumes average cross sectional area of precipitates)
+        '''
         super()._calcNucleationRate(t, x)
         for p in range(len(self.phases)):
             #If parent phases exists, then calculate the number of potential nucleation sites on the parent phase
@@ -462,6 +465,11 @@ class PrecipitateModel (PrecipitateBase):
             self._currY[self.NUC_RATE][0,p] *= nucleationSites
     
     def _calcMassBalance(self, t, x):
+        '''
+        Mass balance to find matrix composition with new particle size distribution
+
+        This also includes: volume fraction, precipitate density, average radius, average aspect ratio and sum of precipitate composition
+        '''
         fBeta = np.zeros((1,len(self.phases)))
         fConc = np.zeros((1, len(self.phases),self.numberOfElements))
         precDens = np.zeros((1,len(self.phases)))
@@ -512,6 +520,9 @@ class PrecipitateModel (PrecipitateBase):
                     y = volRatio * self.GB[p].volumeFactor * np.sum((self.PBM[p].PSDsize**3*(x[p]-self.PBM[p].PSD))*midX[:,e])
                     fConc[0,p,e] = self.fConc[self.n,p,e] + y
 
+            #Only record these terms if there are non-zero number of precipitates
+            #Otherwise we will be dividing by 0 for avgR and avgAR
+            #   Argueably, RadSum and ARsum would be 0 if Ntot is 0, so it should be fine to do this
             if Ntot > self.minNucleateDensity:
                 avgR[0,p] = RadSum / Ntot
                 precDens[0,p] = Ntot
@@ -521,7 +532,7 @@ class PrecipitateModel (PrecipitateBase):
                 precDens[0,p] = 0
                 avgAR[0,p] = 0
 
-            #Not sure if needed
+            #Not sure if needed, but just in case
             if self.betaFrac[self.n,p] == 1:
                 fBeta[0,p] = 1
 
@@ -537,9 +548,15 @@ class PrecipitateModel (PrecipitateBase):
         self._currY[self.COMPOSITION] = xComp
 
     def _getdXdt(self, t, x):
+        '''
+        Returns dn_i/dt for each PBM of each phase
+        '''
         return [self.PBM[p].getdXdtEuler(self.growth[p], self._currY[self.NUC_RATE][0,p], self._currY[self.R_NUC][0,p], x[p]) for p in range(len(self.phases))]
 
     def correctdXdt(self, dt, x, dXdt):
+        '''
+        Corrects dXdt with the newly found dt, this adjusts the fluxes at the ends of the PBM so that we don't get negative bins
+        '''
         for p in range(len(self.phases)):
             dXdt[p] = self.PBM[p].correctdXdtEuler(dt, self.growth[p], self._currY[self.NUC_RATE][0,p], self._currY[self.R_NUC][0,p], x[p])
 
@@ -607,6 +624,8 @@ class PrecipitateModel (PrecipitateBase):
         growth, xAlpha, xBeta, xEqAlpha, xEqBeta = self.interfacialComposition[p](xComp, T, dGs[p] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]), searchDir = self._precBetaTemp[p])
 
         #If two-phase equilibrium not found, two possibilities - precipitates are unstable or equilibrium calculations didn't converge
+        #We try to avoid this as much as possible to where if precipitates are unstable, then attempt to get a growth rate from the nearest composition on the phase boundary
+        #And if equilibrium calculations didn't converge, try to use the previous calculations assuming the new composition is close to the previous
         if growth is None:
             #If driving force is negative, then precipitates are unstable
             if dGs[p] < 0:
@@ -649,8 +668,19 @@ class PrecipitateModel (PrecipitateBase):
         self.growth = growthRate
 
     def _updateParticleSizeDistribution(self, t, x):
-        #self._processX(x)
+        '''
+        Updates particle size distribution with new x
 
+        Steps:
+            1. Check if growth rate calculation failed with negative driving force
+                We'll reset the PBM since we can't do much from here, but the chances of this happening should be pretty low
+            2. Update the PBM with new x
+            3. Check if the PBM needs to adjust the size class
+                If so, then update the cached aspect ratio and precipitate composition with the new size classes
+            4. Remove precipitates below a certain threshold (RdrivingForceIndex and minRadius)
+            5. Calculate the dissolution index (index at which below are not considered when calculating dt)
+                This is to prevent very small dt as the growth rate increases rapidly when R->0
+        '''
         for p in range(len(self.phases)):
             if self.dGs[self.n,p] < 0 and np.all(self.xEqAlpha[self.n,p,:] == 0):
                 self.PBM[p].reset()
@@ -685,6 +715,41 @@ class PrecipitateModel (PrecipitateBase):
             #self.PBM[p].PSD[:self.dissolutionIndex[p]] = 0
 
     def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
+        '''
+        Plots model outputs
+        
+        Parameters
+        ----------
+        axes : Axis
+        variable : str
+            Specified variable to plot
+            Options are 'Volume Fraction', 'Total Volume Fraction', 'Critical Radius',
+                'Average Radius', 'Volume Average Radius', 'Total Average Radius', 
+                'Total Volume Average Radius', 'Aspect Ratio', 'Total Aspect Ratio'
+                'Driving Force', 'Nucleation Rate', 'Total Nucleation Rate',
+                'Precipitate Density', 'Total Precipitate Density', 
+                'Temperature', 'Composition',
+                'Size Distribution', 'Size Distribution Curve',
+                'Size Distribution KDE', 'Size Distribution Density
+                'Interfacial Composition Alpha', 'Interfacial Composition Beta'
+
+                Note: for multi-phase simulations, adding the word 'Total' will
+                    sum the variable for all phases. Without the word 'Total', the variable
+                    for each phase will be plotted separately
+
+                    Interfacial composition terms are more relavent for binary systems than
+                    for multicomponent systems
+                    
+        bounds : tuple (optional)
+            Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
+        radius : str (optional)
+            For non-spherical precipitates, plot the Average Radius by the -
+                Equivalent spherical radius ('spherical')
+                Short axis ('short')
+                Long axis ('long')
+            Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
+        *args, **kwargs - extra arguments for plotting
+        '''
         plotEuler(self, axes, variable, bounds, timeUnits, radius, *args, **kwargs)
 
 

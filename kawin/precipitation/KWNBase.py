@@ -1,14 +1,8 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from kawin.precipitation.non_ideal.EffectiveDiffusion import EffectiveDiffusionFunctions
 from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
 from kawin.precipitation.non_ideal.ElasticFactors import StrainEnergy
 from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
-import copy
-import time
-import csv
-from itertools import zip_longest
-import traceback
 from kawin.GenericModel import GenericModel
 from enum import Enum
 
@@ -16,7 +10,6 @@ class VolumeParameter(Enum):
     MOLAR_VOLUME = 0
     ATOMIC_VOLUME = 1
     LATTICE_PARAMETER = 2
-
 
 class PrecipitateBase(GenericModel):
     '''
@@ -30,6 +23,7 @@ class PrecipitateBase(GenericModel):
     elements : list (optional)
         Solute elements in system
         Note: order of elements must correspond to order of elements set in Thermodynamics module
+                Also, the list here should just be the solutes while the Thermodynamics module needs also the parent element
         If binary system, then defualt is ['solute']
     '''
     def __init__(self, phases = ['beta'], elements = ['solute']):
@@ -65,6 +59,7 @@ class PrecipitateBase(GenericModel):
         self.xInit = None
         self.Tparameters = None
 
+        #Nucleation site density, it will default to dislocations with 5e12 /m2 density
         self._isNucleationSetup = False
         self.GBareaN0 = None
         self.GBedgeN0 = None
@@ -87,6 +82,7 @@ class PrecipitateBase(GenericModel):
         self.dG = [None for i in self.phases]
         self.interfacialComposition = [None for i in self.phases]
 
+        #Beta function for nucleation rate
         if self.numberOfElements == 1:
             self._Beta = self._BetaBinary1
         else:
@@ -146,9 +142,9 @@ class PrecipitateBase(GenericModel):
         Extra variables include incubation offset and incubation sum
 
         Time dependent variables will be set up as either
-            (iterations)                     time
+            (iterations)                     time, temperature
             (iterations, elements)           composition
-            (iterations, phases, elements)   eq composition
+            (iterations, phases, elements)   eq composition, total precipitate composition
             (iterations, phases)             Everything else
             This is intended for appending arrays to always be on the first axis
         '''
@@ -161,9 +157,9 @@ class PrecipitateBase(GenericModel):
         self.temperature = np.zeros(1)
 
         #Composition
-        self.xComp = np.zeros((1, self.numberOfElements))
-        self.xEqAlpha = np.zeros((1, len(self.phases), self.numberOfElements))
-        self.xEqBeta = np.zeros((1, len(self.phases), self.numberOfElements))
+        self.xComp = np.zeros((1, self.numberOfElements))                       #Matrix composition
+        self.xEqAlpha = np.zeros((1, len(self.phases), self.numberOfElements))  #Equilibrium matrix composition
+        self.xEqBeta = np.zeros((1, len(self.phases), self.numberOfElements))   #Equilibrium beta compostion
 
         #Nucleation
         self.dGs = np.zeros((1, len(self.phases)))                  #Driving force
@@ -191,6 +187,12 @@ class PrecipitateBase(GenericModel):
         self._precBetaTemp = [None for _ in range(len(self.phases))]    #Composition of nucleate (found from driving force)
 
     def _setEnum(self):
+        '''
+        Pseudo-enumeration
+
+        This is just to keep a consistent list of IDs for each variable
+        so we can grab the current values from varList
+        '''
         self.TIME = 0
         self.TEMPERATURE = 1
         self.COMPOSITION = 2
@@ -212,17 +214,33 @@ class PrecipitateBase(GenericModel):
     def _packArrays(self):
         '''
         Create internal list of variables to solve for
-        The "constants" will also act as the index to use when taking variables out of x
+        The "enumerators" in getEnum will serve as the indexing for this list
+            Make sure the arrays in here and getEnum correspond to the same values
         '''
         self.varList = [
-                self.time, self.temperature, self.xComp, self.xEqAlpha, self.xEqBeta,
-                self.dGs, self.betas, self.Gcrit, self.Rcrit, self.Rad,
-                self.nucRate, self.precipitateDensity,
-                self.avgR, self.avgAR, self.betaFrac,
+                self.time, 
+                self.temperature, 
+                self.xComp, 
+                self.xEqAlpha, 
+                self.xEqBeta,
+                self.dGs, 
+                self.betas, 
+                self.Gcrit, 
+                self.Rcrit, 
+                self.Rad,
+                self.nucRate, 
+                self.precipitateDensity,
+                self.avgR, 
+                self.avgAR, 
+                self.betaFrac,
                 self.fConc
                 ]
 
     def _getVarDict(self):
+        '''
+        Returns mapping of { variable name : attribute name } for saving
+        The variable name will be the name in the .npz file
+        '''
         saveDict = {
             'elements': 'elements',
             'phases': 'phases',
@@ -246,10 +264,12 @@ class PrecipitateBase(GenericModel):
         return saveDict
     
     def load(filename):
+        '''
+        Loads data from filename and returns a PrecipitateModel
+        '''
         data = np.load(filename)
         model = PrecipitateBase(data['phases'], data['elements'])
         model._loadData(data)
-        model._loadExtraVariables(data)
         return model
     
     def _appendArrays(self, newVals):
@@ -258,6 +278,10 @@ class PrecipitateBase(GenericModel):
         NOTE: newVals must correspond to the same order as _packArrays with first axis as 1
             Ex rCrit is (n, phases) so corresponding new value should be (1, phases)
         Since np append creates a new variable in memory, we have to reassign each term, then pack them into varList again
+            TODO: it would be nice to reduce the number of times it copies, perhaps by preallocating some amount (say 1000)
+                    for each array and if we have not reached the end of the array, just stick the values at the latest index
+                    but once we reach the end of the array, we would append another 1000
+                    The after solving, we could clean up the arrays, or just use self.n to state where the end of the simulation is
         I suppose we could make a list of str for each variable and call setattr
         '''
         self.time = np.append(self.time, newVals[self.TIME], axis=0)
@@ -306,20 +330,20 @@ class PrecipitateBase(GenericModel):
         self.checkVolumePre = True
         self.maxVolumeChange = 0.001
         
-        self.checkCompositionPre = False
-        self.maxCompositionChange = 0.001
         self.minComposition = 0
 
         self.minNucleateDensity = 1e-10
+
+        #TODO: may want to test more to see if this value should be lower or higher
+        #This will attempt to increase the time by 0.01%
+        #This also only affects the sim if the calculated dt is extremely large
+        #So probably only when nucleation rate is 0 will this matter
+        #This roughly corresponds to 1e5 steps over 5-7 orders of magnitude on a log time scale
         self.dtScale = 1e-4
 
     def setConstraints(self, **kwargs):
         '''
         Sets constraints
-
-        TODO: the following constraints are not implemented
-            maxDTFraction
-            maxRcritChange - this is somewhat implemented but disabled by default
 
         Possible constraints:
         ---------------------
@@ -346,11 +370,8 @@ class PrecipitateBase(GenericModel):
         checkVolumePost - checks maximum calculated volume change (True)
         maxVolumeChange - maximum absolute value that volume fraction can change per single time step (0.001)
 
-        checkComposition - checks maximum change in composition (True)
-        chekcCompositionPre - estimates maximum change in composition (False)
-        maxCompositionChange - maximum change in composition in single time step (0.01)
-
         minNucleateDensity - minimum nucleate density to consider nucleation to have occurred (1e-5)
+        dtScale - scaling factor to attempt to progressively increase dt over time
         '''
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -358,8 +379,11 @@ class PrecipitateBase(GenericModel):
     def setBetaBinary(self, functionType = 1):
         '''
         Sets function for beta calculation in binary systems
+            1 for implementation seen in Perez et al, 2008 (default)
+            2 for implementation similar to multicomponent systems
 
-        If using a multicomponent system, this function will not do anything
+        If using a multicomponent system, the beta function defaults to the 2nd
+            So this function will not do anything
 
         Parameters
         ----------
@@ -426,6 +450,18 @@ class PrecipitateBase(GenericModel):
         self.shapeFactors[index].setPrecipitateShape(precipitateShape, ratio)
 
     def _setVolume(self, value, valueType: VolumeParameter, atomsPerCell):
+        '''
+        Private function that returns Vm, Va, a, atomsPerCell given a VolumeParameter and atomsPerCell
+
+        Parameters
+        ----------
+        value : float
+            Value for volume parameters (lattice parameter, atomic (unit cell) volume or molar volume)
+        valueType : VolumeParameter
+            States what volume term that value is
+        atomsPerCell : int
+            Number of atoms in the unit cell
+        '''
         if valueType == VolumeParameter.MOLAR_VOLUME:
             Vm = value
             Va = atomsPerCell * Vm / self.avo
@@ -441,9 +477,35 @@ class PrecipitateBase(GenericModel):
         return Vm, Va, a, atomsPerCell
     
     def setVolumeAlpha(self, value, valueType: VolumeParameter, atomsPerCell):
+        '''
+        Sets volume parameters for parent phase
+
+        Parameters
+        ----------
+        value : float
+            Value for volume parameters (lattice parameter, atomic (unit cell) volume or molar volume)
+        valueType : VolumeParameter
+            States what volume term that value is
+        atomsPerCell : int
+            Number of atoms in the unit cell
+        '''
         self.VmAlpha, self.VaAlpha, self.aAlpha, self.atomsPerCellAlpha = self._setVolume(value, valueType, atomsPerCell)
 
     def setVolumeBeta(self, value, valueType: VolumeParameter, atomsPerCell, phase = None):
+        '''
+        Sets volume parameters for precipitate phase
+
+        Parameters
+        ----------
+        value : float
+            Value for volume parameters (lattice parameter, atomic (unit cell) volume or molar volume)
+        valueType : VolumeParameter
+            States what volume term that value is
+        atomsPerCell : int
+            Number of atoms in the unit cell
+        phase : str (optional)
+            Phase to consider (defaults to first precipitate in list)
+        '''
         index = self.phaseIndex(phase)
         self.VmBeta[index], self.VaBeta[index], _, self.atomsPerCellBeta[index] = self._setVolume(value, valueType, atomsPerCell)
 
@@ -478,6 +540,7 @@ class PrecipitateBase(GenericModel):
             allow it to be called right before the simulation starts
         '''
         #Set bulk nucleation site to the number of solutes per unit volume
+        #   This is the represent that any solute atom can be a nucleation site
         #NOTE: some texts will state the bulk nucleation sites to just be the number
         #       of lattice sites per unit volume. The justification for this would be 
         #       the solutes can diffuse around to any lattice site and nucleate there
@@ -490,12 +553,15 @@ class PrecipitateBase(GenericModel):
         self.dislocationN0 = self.dislocationDensity * (self.avo / self.VmAlpha)**(1/3)
         
         if self.grainSize != np.inf:
+            #Number of lattice sites on grain boundaries (#/m3)
             if self.GBareaN0 is None:
                 self.GBareaN0 = (6 * np.sqrt(1 + 2 * self.grainAspectRatio**2) + 1 + 2 * self.grainAspectRatio) / (4 * self.grainAspectRatio * self.grainSize)
                 self.GBareaN0 *= (self.avo / self.VmAlpha)**(2/3)
+            #Number of lattice sites on grain edges (#/m3)
             if self.GBedgeN0 is None:
                 self.GBedgeN0 = 2 * (np.sqrt(2) + 2 * np.sqrt(1 + self.grainAspectRatio**2)) / (self.grainAspectRatio * self.grainSize**2)
                 self.GBedgeN0 *= (self.avo / self.VmAlpha)**(1/3)
+            #Number of lattice sites on grain corners (which is just the number of corners) (#/m3)
             if self.GBcornerN0 is None:
                 self.GBcornerN0 = 12 / (self.grainAspectRatio * self.grainSize**3)
         else:
@@ -593,6 +659,21 @@ class PrecipitateBase(GenericModel):
         self.theta[index] = theta
 
     def setTemperature(self, temperature):
+        '''
+        Sets temperature parameter
+
+        Options:
+            temperature : float
+                Isothermal temperature
+            temperature : function
+                Function takes in time in seconds and returns temperature
+            temperature : [times, temps]
+                Temperature will be interpolated between the times and temps list
+                Each index in the lists will correspond to the time that temperature is reached
+                Ex. [0, 15, 20], [100, 500, 400]
+                    Temperature starts at 100 and ramps to 500, reaching it at 15 hours
+                    Then temperature will drop to 400, reaching it at 20 hours
+        '''
         self.Tparameters = temperature
         self.temperature[0] = self.getTemperature(0)
         if np.isscalar(temperature):
@@ -601,6 +682,20 @@ class PrecipitateBase(GenericModel):
             self._incubation = self._incubationNonIsothermal
 
     def getTemperature(self, t):
+        '''
+        Gets temperature at time t
+
+        Options:
+            Options:
+            temperature : float
+                Returns temperature
+            temperature : function
+                Returns evaluated temperature function at time t
+            temperature : [times, temps]
+                If t < time[0] -> return first temperature
+                If t > time[-1] -> return last temperature
+                Else, find the two times that t is between and interpolate
+        '''
         if np.isscalar(self.Tparameters):
             return self.Tparameters
         elif len(self.Tparameters) == 2:
@@ -619,14 +714,24 @@ class PrecipitateBase(GenericModel):
     def setStrainEnergy(self, strainEnergy, phase = None, calculateAspectRatio = False):
         '''
         Sets strain energy class to precipitate
+
+        Parameters
+        ----------
+        strainEnergy : StrainEnergy object
+        phase : str
+            Precipitate phase of interest that will nucleate
+        calculateAspectRatio : bool
+            Will use strain energy to get aspect ratio if True
         '''
         index = self.phaseIndex(phase)
         self.strainEnergy[index] = strainEnergy
         self.calculateAspectRatio[index] = calculateAspectRatio
 
     def _setupStrainEnergyFactors(self):
-        #For each phase, the strain energy calculation will be set to assume
-        # a spherical, cubic or ellipsoidal shape depending on the defined shape factors
+        ''''
+        For each phase, the strain energy calculation will be set to assume
+        a spherical, cubic or ellipsoidal shape depending on the defined shape factors
+        '''
         for i in range(len(self.phases)):
             self.strainEnergy[i].setup()
             if self.strainEnergy[i].type != StrainEnergy.CONSTANT:
@@ -639,12 +744,13 @@ class PrecipitateBase(GenericModel):
 
     def setDiffusivity(self, diffusivity):
         '''
+        For binary systems only
+
         Parameters
         ----------
         diffusivity : function taking 
             Composition and temperature (K) and returning diffusivity (m2/s)
             Function must have inputs in this order: f(x, T)
-                For multicomponent systems, x is an array
         '''
         self.Diffusivity = diffusivity
 
@@ -774,12 +880,19 @@ class PrecipitateBase(GenericModel):
         self.couplingModels.append(model)
 
     def clearCouplingModels(self):
+        '''
+        Clears list of coupling models
+
+        Note - this will not reset the coupling models, just removes them from the list
+        '''
         self.couplingModels = []
 
     def setup(self):
         '''
         Sets up hidden parameters before solving
-        Here it's just the nucleation density and the grain boundary nucleation factors
+            Nucleation site density
+            Grain boundary factors
+            Strain energy
         '''
         if self._isSetup:
             return
@@ -805,9 +918,11 @@ class PrecipitateBase(GenericModel):
                 Phase name, precipitate density, volume fraction, avg radius and driving force
         '''
         i = len(self.time)-1
+        #For single element, we just print the composition as matrix comp in terms of the solute
         if self.numberOfElements == 1:
             print('N\tTime (s)\tSim Time (s)\tTemperature (K)\tMatrix Comp')
             print('{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t{:.4f}\n'.format(i, self.time[i], simTimeElapsed, self.temperature[i], 100*self.xComp[i,0]))
+        #For multicomponent systems, print each element
         else:
             compStr = 'N\tTime (s)\tSim Time (s)\tTemperature (K)\t'
             compValStr = '{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t'.format(i, self.time[i], simTimeElapsed, self.temperature[i])
@@ -817,6 +932,8 @@ class PrecipitateBase(GenericModel):
             compValStr += '\n'
             print(compStr)
             print(compValStr)
+
+        #Print status of each phase
         print('\tPhase\tPrec Density (#/m3)\tVolume Frac\tAvg Radius (m)\tDriving Force (J/mol)')
         for p in range(len(self.phases)):
             print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.precipitateDensity[i,p], 100*self.betaFrac[i,p], self.avgR[i,p], self.dGs[i,p]*self.VmBeta[p]))
@@ -839,15 +956,21 @@ class PrecipitateBase(GenericModel):
         TODO: _firstIt appears to be unused
         '''
         self._currY = None
-        self._firstIt = True
         return
     
     def _calculateDependentTerms(self, t, x):
         '''
         Gets all dependent terms (everything but PBM variables) that are needed to find dXdt
 
-        For the first iteration, self._currX will be None from the preProcess function, in this case, we want
-            to just grab the latest values
+        Steps:
+            1. Mass balance
+            2. Driving force - must be done after mass balance to get the current matrix composition
+            3. Growth rate - must be done after driving force since dG is needed in multicomponent systems
+            4. Nucleation rate
+            5. Nucleate radius - must be done after nucleation rate since derived classes can change nucleation rate
+
+        For the first iteration, self._currY will be None from the preProcess function, in this case, we want
+            to just grab the latest values to avoid double calculations
         '''
         self._processX(x)
         if self._currY is None:
@@ -865,12 +988,12 @@ class PrecipitateBase(GenericModel):
 
     def getdXdt(self, t, x):
         '''
-        Gets dXdt (aka dn_i/dt) as a list for each phase
+        Gets dXdt as a list for each phase
+
+        For the eulerian implementation, this is dn_i/dt for the bins in PBM for each phase
         '''
         self._calculateDependentTerms(t, x)
         dXdt = self._getdXdt(t, x)
-        if self._firstIt:
-            self._firstIt = False
         return dXdt
 
     def postProcess(self, t, x):
@@ -938,6 +1061,8 @@ class PrecipitateBase(GenericModel):
 
         If driving force is positive (precipitation is favorable)
             Calculate Rcrit and Gcrit based off the nucleation site type
+
+        This will also calculate critical radius (Rcrit) and nucleation barrier (Gcrit)
         '''
         #Get variables
         dGs = np.zeros((1,len(self.phases)))
@@ -981,6 +1106,8 @@ class PrecipitateBase(GenericModel):
         for p in range(len(self.phases)):
             Z = self._Zeldovich(p)
             betas[0,p] = self._Beta(p)
+
+            #If beta is 0, then nucRate is 0 and no need to do anymore calculation
             if betas[0,p] == 0:
                 continue
             
@@ -1055,7 +1182,9 @@ class PrecipitateBase(GenericModel):
         Incubation time for non-isothermal conditions
         This must match isothermal conditions if the temperature is constant
 
-        Solve for integral(beta(t-t0)) from 0 to tau = 1/theta*Z(tau)^2
+        Solve for tau by: integral(beta(t-t0)) from 0 to tau = 1/theta*Z(tau)^2
+
+        Then it's exp(-tau/t) like the isothermal behavior
         '''
         T = self._currY[self.TEMPERATURE][0]
         startIndex = int(self.incubationOffset[p])

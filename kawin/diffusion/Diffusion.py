@@ -110,6 +110,10 @@ class DiffusionModel(GenericModel):
         self.Tfunc = lambda z, t: self.Tparam(z, t)
 
     def _getVarDict(self):
+        '''
+        Returns mapping of { variable name : attribute name } for saving
+        The variable name will be the name in the .npz file
+        '''
         saveDict = {
             'elements': 'elements',
             'phases': 'phases',
@@ -124,8 +128,12 @@ class DiffusionModel(GenericModel):
             'recordZ': '_recordedZ',
             'recordTime': '_recordedTime',
         }
+        return saveDict
 
     def load(filename):
+        '''
+        Loads data from filename and returns a PrecipitateModel
+        '''
         data = np.load(filename)
         model = DiffusionModel(data['zLim'], data['N'], data['elements'], data['phases'])
         model._loadData(data)
@@ -158,8 +166,6 @@ class DiffusionModel(GenericModel):
             Composition set to create hash
         '''
         return hash(tuple((np.concatenate((x, [T]))*self.hashSensitivity).astype(np.int32)))
-        #return hash(tuple((x*self.hashSensitivity).astype(np.int32)))
-        #return int(np.sum(np.power(self.hashSensitivity, 1+np.arange(len(x))) * x))
 
     def useCache(self, use):
         '''
@@ -224,6 +230,9 @@ class DiffusionModel(GenericModel):
             self._recordedTime[-1] = time
 
     def setMeshtoRecordedTime(self, time):
+        '''
+        From recorded values, interpolated at time to get composition and phase fraction
+        '''
         if self._record:
             if time < self._recordedTime[0]:
                 print('Input time is lower than smallest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[0]))
@@ -448,6 +457,9 @@ class DiffusionModel(GenericModel):
         return self.t, [self.x]
     
     def getdXdt(self, t, x):
+        '''
+        dXdt is defined as -dJ/dz
+        '''
         fluxes = self._getFluxes(t, x)
         return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
     
@@ -455,6 +467,10 @@ class DiffusionModel(GenericModel):
         return
     
     def postProcess(self, time, x):
+        '''
+        Stores new x and t
+        Records new values if recording is enabled
+        '''
         self.t = time
         self.x = x[0]
         self.record(self.t)

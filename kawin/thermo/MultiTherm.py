@@ -22,7 +22,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         Note: matrix phase must be first index in the list
     drivingForceMethod : str (optional)
         Method used to calculate driving force
-        Options are 'approximate' (default), 'sampling' and 'curvature' (not recommended)
+        Options are 'tangent' (default), 'approximate', 'sampling' and 'curvature' (not recommended)
     parameters : list [str] or dict {str : float}
         List of parameters to keep symbolic in the thermodynamic or mobility models
     '''
@@ -140,6 +140,18 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
     def _curvatureFactorFromEq(self, chemical_potentials, composition_sets, precPhase=None, training = False):
         '''
         Curvature factor (from Phillipes and Voorhees - 2013)
+
+        Steps
+            1. Check that there is 2 phases in equilibrium, one being the matrix and the other being precipitate
+            2. Get Dnkj, dmu/dx and inverse mobility term from composition set of matrix phase
+            3. Get dmu/dx of precipitate phase
+            4. Get difference in matrix and precipitate phase composition (we use a second order approximation to get precipitate composition as function of R)
+            5. Compute numerator, denominator, Gba and beta term
+                Denominator (X_bar^T * invMob * X_bar) is used for growth rate (eq 28)
+                Numerator (D^-1 * X_bar), denominator is used for matrix interfacial composition (eq 31)
+                Gba and matrix interfacial composition is used for precipitate interfacial composition (eq 36)
+                    Gba here is (dmu/dx_beta)^-1 * dmu/dx_alpha
+                Note: these equations have a term X_bar^T * dmu/dx_alpha * X_bar_infty, but this is just the driving force so we don't need to calculate it here
 
         Parameters
         ----------
@@ -301,11 +313,17 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         ph = [cs.phase_record.phase_name for cs in composition_sets]
         if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
             return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)
+        #If in a singl phase region, we want to go along a search direction to find the nearest two phase region
+        #    We then use this two-phase region to calculate growth rate (which should all be negative for dissolution)
+        #    In PrecipitateModel, searchDir is the previous precipitate nucleate composition
+        #    We performe a rouch search 
         elif searchDir is not None:
             currX = np.array(x)
             searchDir = np.array(searchDir)
             currX = 0.5 * currX + 0.5 * searchDir
             foundTwoPhases = False
+            maxIt = 15
+            currIt = 0
             while not foundTwoPhases:
                 cs_results = self._getCompositionSetsForCurvature(currX, T, precPhase)
                 if cs_results is None:
@@ -320,6 +338,13 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 elif len(ph) == 1 and precPhase in ph:
                     #Only precipitate is stable, move closer to original x
                     currX = 0.5*currX + 0.5*np.array(x)
+
+                #More than likely, this is not needed, but just in case
+                #MaxIt is 15, which refers to a 6e-5 difference in test composition between the 14th and 15th iteration
+                #    Which is probably more than enough to find a two-phase region
+                currIt += 1
+                if currIt > maxIt:
+                    return None
             
             chemical_potentials, composition_sets = cs_results
             return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)

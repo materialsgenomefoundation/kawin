@@ -321,8 +321,13 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     elements = list(composition_set.phase_record.nonvacant_elements)
     X = composition_set.X
 
+    #U-fraction - defined as U_a = X_a / sum(substitutionals)
+    Usum = np.sum([X[A] for A in range(len(elements)) if elements[A] not in interstitials])
+    U = X / Usum
+
+    #Multiply mobility by U-fraction for ease of use when constructing the mobility matrix
     computedMob = mobility_from_composition_set(composition_set, mobility_callables, mobility_correction, parameters)
-    mob = np.array([X[A] * computedMob[A] for A in range(len(elements))])
+    mob = np.array([U[A] * computedMob[A] for A in range(len(elements))])
 
     #Find vacancy site fractions for multiplying with interstitials when making the mobility matrix
     #If vacancies are not found on the same sublattice, we'll defualt to 1 so there's at least some mobility and not 0
@@ -337,22 +342,44 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
         if composition_set.phase_record.variables[i].species.name in interstitials:
             interstitialTerms[composition_set.phase_record.variables[i].species.name] = composition_set.phase_record.variables[i].sublattice_index
 
+    #For interstitials
+    #    M_aa = y_Va * M_a
+    #    y_Va is taken from the same sublattice that a is on, where more vacancies on the sublattice implies faster diffusion
+    #For substitutionals
+    #    M_aa = (1-U_a) * U_a * M_a
+    #    M_ab = -U_a * U_b * M_b
+    #There are no entries for M_ab if one index is interstitial and the other is substitutional
     mobMatrix = np.zeros((len(elements), len(elements)))
     for a in range(len(elements)):
         if elements[a] in interstitials:
-            mobMatrix[a, a] = vaTerms.get(interstitials[elements[a]], 1) * mob[a]
+            mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
         else:
             for b in range(len(elements)):
-                if a == b:
-                    mobMatrix[a, b] = (1 - X[a]) * mob[b]
-                else:
-                    mobMatrix[a, b] = -X[a] * mob[b]
+                if elements[b] not in interstitials:
+                    if a == b:
+                        mobMatrix[a, b] = (1 - U[a]) * mob[b]
+                    else:
+                        mobMatrix[a, b] = -U[a] * mob[b]
+    #Diffusivity requires dmu_a/dU_b; however, the free energy curvature gives dmu_a/dX_b
+    #Assuming that Usum is constant and using chain-rule derivatives,
+    #    the conversion from dmu_a/dX_b to dmu_a/dU_b can be done by multiplying the sum(substitutionals)
+    mobMatrix *= Usum
+
+    #Old way of computing mobility assuming only substitutional elements (so much simpler...)
+    #mob = np.array([X[A] * computedMob[A] for A in range(len(elements))])
+    #for a in range(len(elements)):
+    #    for b in range(len(elements)):
+    #        if a == b:
+    #            mobMatrix[a, b] = (1 - X[a]) * mob[b]
+    #        else:
+    #            mobMatrix[a, b] = -X[a] * mob[b]
 
     return mobMatrix
 
 def chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction = None, returnHessian = False, parameters = {}):
     '''
-    Chemical diffusivity (D_ab)
+    Chemical diffusivity (D_kj)
+        D_kj = sum((delta_ik - U_k) * U_i * M_i) * dmu_i/dU_j
         D_ab = mobility matrix * free energy hessian
 
     Parameters
@@ -414,12 +441,14 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
     #print('Dkj', Dkj)
     elements = list(composition_set.phase_record.nonvacant_elements)
 
+    #Find index of reference element
     refIndex = 0
     for a in range(len(elements)):
         if elements[a] == refElement:
             refIndex = a
             break
 
+    #Build Dnkj, skipping the reference element
     Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
     c = 0
     d = 0
@@ -439,7 +468,8 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
 
 def inverseMobility(chemical_potentials, composition_set, refElement, mobility_callables, mobility_correction = None, returnOther = True, parameters = {}):
     '''
-    Inverse mobility matrix for determining interfacial composition
+    Inverse mobility matrix for determining interfacial composition from 
+        Philippe and P. W. Voorhees, Acta Materialia 61 (2013) p. 4237
 
     M^-1 = (free energy hessian) * Dnkj^-1
 
@@ -592,3 +622,113 @@ def inverseMobility_from_diffusivity(chemical_potentials, composition_set, refEl
         return Dnkj, totalH, np.matmul(totalH, np.linalg.inv(Dnkj))
     else:
         return None, None, np.matmul(totalH, np.linalg.inv(Dnkj))
+    
+# ------------------------------------------------------------------
+# For ESPEI assessments
+# Quick compute functions using serializable composition set data
+# The CompositionSet object itself doesn't appear serializable
+#   So this will take in data such as dof or elements, which are serializable
+# If assessing only mobility parameters, then the thermodynamic factor will be constant for each data point
+#   Thus, we can cache all the thermodynamic factors and use them to compute mobility without having to compute equilibrium each time
+# ------------------------------------------------------------------
+def mobility_from_composition_set_quick(dof, elements, mobility_callables = None, mobility_correction = None, parameters = {}):
+    if mobility_callables is None:
+        raise ValueError('mobility_callables is required')
+
+    #Set mobility correction if not set
+    if mobility_correction is None:
+        mobility_correction = {A: 1 for A in elements}
+    else:
+        for A in elements:
+            if A not in mobility_correction:
+                mobility_correction[A] = 1
+
+    #return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
+    param_keys, param_values = extract_parameters(parameters)
+    if len(param_values) > 0:
+        callableInput = np.concatenate((dof, param_values[0]), dtype=np.float_)
+    else:
+        callableInput = dof
+    return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](callableInput) for A in range(len(elements))])
+    
+def tracer_diffusivity_quick(T, mob_from_CS):
+    R = 8.314
+    return R * T * mob_from_CS
+
+def mobility_matrix_quick(dof, composition, elements, mob_from_CS, phase_record):
+    X = composition
+    Usum = np.sum([X[A] for A in range(len(elements)) if elements[A] not in interstitials])
+    U = X / Usum
+
+    mob = np.array([U[A] * mob_from_CS[A] for A in range(len(elements))])
+
+    #Find vacancy site fractions for multiplying with interstitials when making the mobility matrix
+    #If vacancies are not found on the same sublattice, we'll defualt to 1 so there's at least some mobility and not 0
+    #       A mobility of 0 would be quite unrealistic
+    #       In addition, as we're working with interstitals, the vacancies are going to be close to 1, so this assumption wouldn't hurt
+    vaTerms = {}            #Maps sublattice index to site fraction index for vacancies
+    interstitialTerms = {}  #Maps interstitial to sublattice index
+    index = len(phase_record.state_variables)
+    for i in range(len(phase_record.variables)):
+        if phase_record.variables[i].species.name == 'VA':
+            vaTerms[phase_record.variables[i].sublattice_index] = dof[index+i]
+        if phase_record.variables[i].species.name in interstitials:
+            interstitialTerms[phase_record.variables[i].species.name] = phase_record.variables[i].sublattice_index
+
+    mobMatrix = np.zeros((len(elements), len(elements)))
+    for a in range(len(elements)):
+        if elements[a] in interstitials:
+            mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
+        else:
+            for b in range(len(elements)):
+                if elements[b] not in interstitials:
+                    if a == b:
+                        mobMatrix[a, b] = (1 - U[a]) * mob[b]
+                    else:
+                        mobMatrix[a, b] = -U[a] * mob[b]
+    mobMatrix *= Usum
+
+    #for a in range(len(elements)):
+    #    for b in range(len(elements)):
+    #        if a == b:
+    #            mobMatrix[a, b] = (1 - U[a]) * mob[b]
+    #        else:
+    #           mobMatrix[a, b] = -U[a] * mob[b]
+
+    return mobMatrix
+
+def chemical_diffusivity_quick(dmudx, mobMatrix, returnHessian = False):
+    Dkj = np.matmul(mobMatrix, dmudx)
+    
+    if returnHessian:
+        return Dkj, dmudx
+    else:
+        return Dkj, None
+
+def interdiffusivity_quick(dmudx, mobMatrix, elements, refElement, mobility_callables = None, mobility_correction = None, returnHessian = False, parameters = {}):
+    Dkj, hessian = chemical_diffusivity_quick(dmudx, mobMatrix, returnHessian)
+
+    refIndex = 0
+    for a in range(len(elements)):
+        if elements[a] == refElement:
+            refIndex = a
+            break
+
+    Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
+    c = 0
+    d = 0
+    for a in range(len(elements)):
+        if a != refIndex:
+            for b in range(len(elements)):
+                if b != refIndex:
+                    if elements[b] in interstitials:
+                        Dnkj[c, d] = Dkj[a, b]
+                    else:
+                        Dnkj[c, d] = Dkj[a, b] - Dkj[a, refIndex]
+                    d += 1
+            c += 1
+            d = 0
+
+    return Dnkj, hessian
+
+

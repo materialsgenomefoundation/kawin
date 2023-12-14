@@ -21,10 +21,10 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Note: matrix phase must be first index in the list
     drivingForceMethod : str (optional)
         Method used to calculate driving force
-        Options are 'approximate' (default), 'sampling' and 'curvature' (not recommended)
+        Options are 'tangent' (default), 'approximate', 'sampling', and 'curvature' (not recommended)
     interfacialCompMethod: str (optional)
         Method used to calculate interfacial composition
-        Options are 'eq' (default) and 'curvature' (not recommended)
+        Options are 'equilibrium' (default) and 'curvature' (not recommended)
     parameters : list [str] or dict {str : float}
         List of parameters to keep symbolic in the thermodynamic or mobility models
     '''

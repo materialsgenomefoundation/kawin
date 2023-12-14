@@ -6,8 +6,14 @@ class SinglePhaseModel(DiffusionModel):
         '''
         Private function that gets fluxes at the boundary of each nodes given an array of compositions and current time
 
-        When used in the iterator, calculation of the first step in the iteration will be done twice, once for dt and once for flux
-            However, if using the cache, this shouldn't be much of an issue since we'll just take from the hash table
+        Steps:
+            1. Get diffusivity from cell centers using cell compositions
+            2. Interpolate diffusivity to get diffusivity (D) at cell boundaries
+            3. Calculate fluxes from concentration gradient (dx/dz) and interpolated diffusivity = -D * dx/dz
+            4. Apply boundary conditions for fluxes at ends of mesh
+                If fixed flux condition (Neumann) - then use the flux defined in the condition
+                If fixed composition condition (Dirichlet) - then use nearby flux (this will keep the composition fixed after apply the fluxes)
+            5. Store dt (from von Neumann analysis) for later
 
         Returns
         -------
@@ -17,6 +23,7 @@ class SinglePhaseModel(DiffusionModel):
         dt : float
             Maximum calculated time interval for numerical stability
         '''
+        #Calculate diffusivity at cell centers
         x = x_curr[0]
         T = self.Tfunc(self.z, t)
         if len(self.elements) == 1:
@@ -32,65 +39,25 @@ class SinglePhaseModel(DiffusionModel):
         else:
             d = self.therm.getInterdiffusivity(x.T, T, phase=self.phases[0])
         
+        #Get diffusivity and composition gradient at cell boundaries
         dmid = (d[1:] + d[:-1]) / 2
         dxdz = (x[:,1:] - x[:,:-1]) / self.dz
+
+        #Fluxes = -D * dx/dz
         fluxes = np.zeros((len(self.elements), self.N+1))
         if len(self.elements) == 1:
             fluxes[0,1:-1] = -dmid * dxdz
         else:
             dxdz = np.expand_dims(dxdz, axis=0)
             fluxes[:,1:-1] = -np.matmul(dmid, np.transpose(dxdz, (2,1,0)))[:,:,0].T
+
+        #Boundary condition
         for e in range(len(self.elements)):
             fluxes[e,0] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else fluxes[e,1]
             fluxes[e,-1] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else fluxes[e,-2]
 
+        #Time step from von Neumann analysis (using 0.4 instead of 0.5 to be safe)
         self._currdt = 0.4 * self.dz**2 / np.amax(np.abs(dmid))
-
-        return fluxes
-    
-    def _getFluxes_old(self, t, x_curr):
-        '''
-        Private function that gets fluxes at the boundary of each nodes given an array of compositions and current time
-
-        When used in the iterator, calculation of the first step in the iteration will be done twice, once for dt and once for flux
-            However, if using the cache, this shouldn't be much of an issue since we'll just take from the hash table
-
-        Returns
-        -------
-        fluxes : (e-1, n+1) array of floats
-            e - number of elements including reference element
-            n - number of nodes
-        dt : float
-            Maximum calculated time interval for numerical stability
-        '''
-        x = x_curr[0]
-        xMid = (x[:,1:] + x[:,:-1]) / 2
-        T = self.Tfunc((self.z[1:]+self.z[:-1])/2, t)
-        if len(self.elements) == 1:
-            d = np.zeros(self.N-1)
-        else:
-            d = np.zeros((self.N-1, len(self.elements), len(self.elements)))
-        if self.cache:
-            for i in range(self.N-1):
-                hashValue = self._getHash(xMid[:,i], T[i])
-                if hashValue not in self.hashTable:
-                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(xMid[:,i], T[i], phase=self.phases[0])
-                d[i] = self.hashTable[hashValue]
-        else:
-            d = self.therm.getInterdiffusivity(xMid.T, T, phase=self.phases[0])
-        
-        dxdz = (x[:,1:] - x[:,:-1]) / self.dz
-        fluxes = np.zeros((len(self.elements), self.N+1))
-        if len(self.elements) == 1:
-            fluxes[0,1:-1] = -d * dxdz
-        else:
-            dxdz = np.expand_dims(dxdz, axis=0)
-            fluxes[:,1:-1] = -np.matmul(d, np.transpose(dxdz, (2,1,0)))[:,:,0].T
-        for e in range(len(self.elements)):
-            fluxes[e,0] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else fluxes[e,1]
-            fluxes[e,-1] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else fluxes[e,-2]
-
-        self._currdt = 0.4 * self.dz**2 / np.amax(np.abs(d))
 
         return fluxes
 
@@ -113,4 +80,8 @@ class SinglePhaseModel(DiffusionModel):
         return fluxes, dt
     
     def getDt(self, dXdt):
+        '''
+        Returns dt that was calculated from _getFluxes
+        This prevents double calculation of the diffusivity just to get a time step
+        '''
         return self._currdt

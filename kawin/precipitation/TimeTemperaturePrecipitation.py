@@ -82,7 +82,7 @@ class TTPCalculator:
             for j in range(len(self.stopConds)):
                 self.transformationTimes[i,j] = outputs[i][j]
 
-    def plot(self, ax, labels, xlim = [1, 1e6]):
+    def plot(self, ax, labels, xlim = [1, 1e6], *args, **kwargs):
         '''
         Plots TTP diagram
 
@@ -97,12 +97,11 @@ class TTPCalculator:
         '''
         for i in range(len(self.stopConds)):
             indices = self.transformationTimes[:,i] != -1
-            plt.plot(self.transformationTimes[indices,i], self.temperatures[indices], label=labels[i])
+            ax.plot(self.transformationTimes[indices,i], self.temperatures[indices], label=labels[i], *args, **kwargs)
         ax.legend()
         if xlim[0] == 0:
             xlim[0] = 1e-3
-        plt.xlim(xlim)
-        plt.xlabel('Time (s)')
-        plt.xscale('log')
-        plt.ylabel('Temperature (K)')
-        plt.show()
+        ax.set_xlim(xlim)
+        ax.set_xlabel('Time (s)')
+        ax.set_xscale('log')
+        ax.set_ylabel('Temperature (K)')

@@ -2,6 +2,13 @@ import numpy as np
 import copy
 
 class Iterator:
+    '''
+    Abstract iterator to be implemented by different iteration schemes
+
+    Available schemes:
+        Explicit euler
+        4th order Runga-Kutta
+    '''
     def __init__(self):
         return
     
@@ -15,14 +22,25 @@ class Iterator:
         ----------
         f : function
             dX/dt - function taking in time and X and returning dX/dt
-        X_old : list of arrays
-            X at time t
         t : float
             Current time
-        dt : float
-            Time increment
+        X_old : list of arrays
+            X at time t
+        dtfunc : function
+            Takes in dXdt and return a suitable time step (float)
+        dtmin : float
+            Minimum time step (absolute)
+        dtmax : float
+            Maximum time step (absolute)
+        correctdXdt : function
+            Takes in dt, X and dXdt and modifies dXdt, returns nothing
 
-        Returns X_new
+        Returns
+        -------
+        X_new : unformatted list of floats
+            New values of X in format of X_old
+        dt : float
+            Time step
         '''
         raise NotImplementedError()
     
@@ -31,6 +49,7 @@ class Iterator:
         Since can be a list of arrays, we want to convert it to a 1D array to easily to operations
 
         TODO - this should be compatible with arrays of any dimensions. Currently, this will only work on a list of 1D arrays
+            This is okay for now since none of the models uses arrays more than 1D
 
         Parameters
         ----------
@@ -52,7 +71,12 @@ class Iterator:
             Flattened array
         X_ref : list of arrays
             Template to convert X_flat to
+
+        Returns
+        -------
+        X_new : unflattened list in the same format as X_ref
         '''
+        #Not sure if this is the most efficient way, but we can't assume how the nested list in X_ref is structured
         X_new = copy.copy(X_ref)
         n = 0
         for i in range(len(X_new)):

@@ -167,6 +167,10 @@ def dMudX(chemical_potentials, composition_set, refElement):
 
     This more or less represents the curvature of the free energy surface with reference element R
 
+    Rows correspond to mu_A and columns correspond to X_A so for ternary system with (A,B,R), its
+    |   dmu_A/dX_A   dmu_A/dX_B   |
+    |   dmu_B/dX_A   dmu_B/dX_B   |
+
     Parameters
     ----------
     chemical_potentials : 1-D ndarray
@@ -199,6 +203,10 @@ def dMudX(chemical_potentials, composition_set, refElement):
 def partialdMudX(chemical_potentials, composition_set):
     '''
     Partial derivative of chemical potential with respect to system composition
+
+    Rows correspond to mu_A and columns correspond to X_A so for binary system, its
+    |   dmu_A/dX_A   dmu_A/dX_B   |
+    |   dmu_B/dX_A   dmu_B/dX_B   |
 
     Parameters
     ----------

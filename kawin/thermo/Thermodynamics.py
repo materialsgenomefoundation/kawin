@@ -40,14 +40,15 @@ class GeneralThermodynamics:
         Note: matrix phase must be first index in the list
     drivingForceMethod : str (optional)
         Method used to calculate driving force
-        Options are 'approximate' (default), 'sampling' and 'curvature' (not recommended)
-    parameters : list [str] or dict {str : float}
+        Options are 'tangent' (default), 'approximate', 'sampling' and 'curvature' (not recommended)
+    parameters : list [str] or dict {str : float} or None
         List of parameters to keep symbolic in the thermodynamic or mobility models
+        If None, then parameters are fixed
     '''
 
     gOffset = 1      #Small value to add to precipitate phase for when order/disorder models are used
 
-    def __init__(self, database, elements, phases, drivingForceMethod = 'approximate', parameters = None):
+    def __init__(self, database, elements, phases, drivingForceMethod = 'tangent', parameters = None):
         if isinstance(database, str):
             database = Database(database)
         self.db = database
@@ -395,8 +396,13 @@ class GeneralThermodynamics:
             Temperature
         gExtra : float
             Gibbs-Thomson contribution (if applicable)
-        precPhase : str
+        precPhase : str, int, list or None
             Precipitate phase (default is first precipitate)
+            Options:
+                None - first precipitate phase in phase list
+                str - specific precipitate phase by name
+                list - all phases by name in list
+                -1 - no precipitate phase
 
         Returns
         -------
@@ -427,6 +433,32 @@ class GeneralThermodynamics:
         return eq
 
     def getLocalEq(self, x, T, gExtra = 0, precPhase = None, composition_sets = None):
+        '''
+        Calculates local equilibrium at specified x, T, gExtra
+
+        Parameters
+        ----------
+        x : float or array
+            Composition
+            Needs to be array for multicomponent systems
+        T : float
+            Temperature
+        gExtra : float
+            Gibbs-Thomson contribution (if applicable)
+        precPhase : str, int, list or None
+            Precipitate phase (default is first precipitate)
+            Options:
+                None - first precipitate phase in phase list
+                str - specific precipitate phase by name
+                list - all phases by name in list
+                -1 - no precipitate phase
+
+        Returns
+        -------
+        result - equilibrium convergence and chemical potentials
+        composition_sets - list of CompositionSet for phases in "equilibrium"
+            Note - "equilibrium" in terms of the matrix and singled out precipitate phase (or just matrix if precPhase is -1)
+        '''
         phases = [self.phases[0]]
         if precPhase != -1:
             if precPhase is None:
@@ -614,7 +646,7 @@ class GeneralThermodynamics:
         cs_matrix = [cs for cs in self._matrix_cs if cs.phase_record.phase_name == phase][0]
 
         if self.mobCallables[phase] is None:
-            #NOTE: This is note tested yet
+            #NOTE: This is not tested yet
             Dtrace = tracer_diffusivity_from_diff(cs_matrix, self.diffCallables[phase], diffusivity_correction=self.mobility_correction, parameters=self._parameters)
         else:
             Dtrace = tracer_diffusivity(cs_matrix, self.mobCallables[phase], mobility_correction=self.mobility_correction, parameters=self._parameters)
@@ -667,6 +699,14 @@ class GeneralThermodynamics:
     def _getDrivingForceSampling(self, x, T, precPhase = None, returnComp = False, training = False):
         '''
         Gets driving force for nucleation by sampling
+
+        Steps
+            1. Compute local equilibrium at x and T of only the matrix phase
+            2. Sample precipitate phase
+                If ordered contribution to matrix phase, then sample ordering contribution
+                and remove points on the matrix free energy surface
+            3. Compute energy difference between precipitate samples and chemical potential hyperplane
+            4. Find sample that maximizes energy difference and return sample composition and driving force
 
         Parameters
         ----------
@@ -723,6 +763,14 @@ class GeneralThermodynamics:
         Assumes equilibrium composition of precipitate phase
 
         Sampling method is used if driving force is negative
+
+        Steps:
+            1. Compute equilibrium and get composition sets for matrix and precipitate phase
+            2. Check for 2 phases and that one phase is the matrix and other phase is precipitate
+                If not, then resort to sampling method
+            3. Compute equilibrium at matrix composition and get chemical potential hyperplane
+            4. Driving force is the difference between the free energy of the precipitate (from step 1)
+               and the free energy on the chemical potential hyperplane (from step 3) at the precipitate composition
 
         Parameters
         ----------
@@ -810,6 +858,14 @@ class GeneralThermodynamics:
         Gets driving force from curvature of free energy function
         Assumes small saturation
 
+        Steps:
+            1. Compute equilibrium and get composition sets for matrix and precipitate phase
+            2. Check for 2 phases and that one phase is the matrix and other phase is precipitate
+                If not, then resort to sampling method
+            3. Get dmu/dx (free energy curvature)
+            4. Compute (x_infty - x_matrix) * dmu/dx * (x_prec - x_matrix)^T
+                This does a first (or second?) order approximation of the driving force based off the curvature at x_infty
+
         Sampling method is used if driving force is negative
 
         Parameters
@@ -890,11 +946,12 @@ class GeneralThermodynamics:
         Gets driving force from parallel tangent calculation
 
         Steps
-        1. Compute equilibrium to get composition sets (or used previous cached CS)
-        2. Compute equilibrium of matrix phase at matrix composition
-        3. Remove composition and extra free energy from conditions
-        4. Add chemical potential for each component to conditions
-        5. Compute equilibrium of precipitate phase with new conditions
+            1. Compute equilibrium to get composition sets (or used previous cached CS)
+            2. Compute equilibrium of matrix phase at matrix composition
+            3. Remove composition and extra free energy from conditions
+            4. Add chemical potential for each component to conditions
+            5. Compute equilibrium of precipitate phase with new conditions
+                The calculated v.GE is the driving force
 
         This will work for positive and negative driving forces
 
@@ -943,16 +1000,22 @@ class GeneralThermodynamics:
             if any(np.isnan(self._parentEq.chemical_potentials)):
                 return None, None
 
+        #Remove element conditions and free extra Gibbs energy conditions
         for e in self.elements:
             if v.X(e) in cond:
                 cond.pop(v.X(e))
         if v.GE in cond:
             cond.pop(v.GE)
 
+        #Add chemical potential conditions
         sortedEl = sorted(list(set(self.elements) - set(['VA'])))
         for i in range(len(sortedEl)):
             cond[v.MU(sortedEl[i])] = self._parentEq.chemical_potentials[i]
 
+        #Solving for local equilibrium on precipitate
+        #The fixed conditions are T, P and MU, so this should solve for precipitate composition and GE
+        #   Rather than solving for parallel tangent where the driving force is the difference between the chemical potentials of matrix and precipitate phase
+        #   This instead solves for the offset in the precipitate energy surface to make the precipitate lie on the chemical potential hyperplane of the matrix phase
         prev_dof = np.array(self._compset_cache_df[precPhase][0].dof)
         _precEq, _prec_cs = local_equilibrium(self.db, self.elements, [precPhase], cond,
                                                 self.models, self.phase_records, composition_sets=self._compset_cache_df[precPhase])
@@ -984,12 +1047,74 @@ class GeneralThermodynamics:
         return dg, xb[1:]
     
     def _getCompositionSetsForDF(self, x, T, cond, precPhase = None, training = False):
+        '''
+        Wrapper for getting composition set from x and T by either global equilibrium or local from a cached composition set
+
+        Parameters
+        ----------
+        x : float or array
+            Composition of minor element in bulk matrix phase
+            Use float for binary systems
+            Use array for multicomponent systems
+        T : float
+            Temperature in K
+        precPhase : str (optional)
+            Precipitate phase to consider (default is first precipitate phase in list)
+        returnComp : bool (optional)
+            Whether to return composition of precipitate (defaults to False)
+
+        Returns
+        -------
+        phases - set of stable phases
+        elements - set of elements
+        chemical_potentials
+        composition_sets - all composition sets at equilibrium
+        cs_matrix - composition set of matrix phase
+        x_matrix - composition of matrix phase
+        cs_precip - composition set of precipitate phase
+        x_precip - composition of precipitate phase
+        '''
         if self._compset_cache_df.get(precPhase, None) is None or training:
             return self._getCompositionSetsEq(x, T, cond, precPhase)
         else:
             return self._getCompositionSetsCache(x, T, cond, precPhase)
     
     def _getCompositionSetsEq(self, x, T, cond, precPhase = None):
+        '''
+        Gets composition set from x and T by global equilibrium
+
+        Steps
+            1. Compute equilibrium at x and T
+                If equilibrium did not converge or matrix phase is not stable, then return None
+            2. Get composition sets and add to cache
+                If precipitate is not stable, the return None
+            3. Resolve possible issues with miscibility gaps
+            4. Return values
+
+        Parameters
+        ----------
+        x : float or array
+            Composition of minor element in bulk matrix phase
+            Use float for binary systems
+            Use array for multicomponent systems
+        T : float
+            Temperature in K
+        precPhase : str (optional)
+            Precipitate phase to consider (default is first precipitate phase in list)
+        returnComp : bool (optional)
+            Whether to return composition of precipitate (defaults to False)
+
+        Returns
+        -------
+        phases - set of stable phases
+        elements - set of elements
+        chemical_potentials
+        composition_sets - all composition sets at equilibrium
+        cs_matrix - composition set of matrix phase
+        x_matrix - composition of matrix phase
+        cs_precip - composition set of precipitate phase
+        x_precip - composition of precipitate phase
+        '''
         #Create cache of composition set if not done so already or if training a surrogate
         #Training points for surrogates may be far apart, so starting from a previous
         #   composition set could give a bad starting position for the minimizer
@@ -1027,6 +1152,7 @@ class GeneralThermodynamics:
             composition_sets = [cs_matrix, cs_precip]
             self._compset_cache_df[precPhase] = composition_sets
 
+            #If there's a miscibility gap in the matrix or precipitate phase, then calculate local equilibrium with the singled out comp sets
             if miscMatrix or miscPrec:
                 result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
                                                         self.models, self.phase_records,
@@ -1047,6 +1173,39 @@ class GeneralThermodynamics:
         return ph, ele, chemical_potentials, composition_sets, cs_matrix, x_matrix, cs_precip, x_precip
     
     def _getCompositionSetsCache(self, x, T, cond, precPhase = None):
+        '''
+        Gets composition set from x and T by global equilibrium
+
+        Steps
+            1. Compute local equilibrium at x and T using previous composition sets
+            2. Get composition sets and update cache
+                If equilibrium did not converge, then return None
+            3. Return values
+
+        Parameters
+        ----------
+        x : float or array
+            Composition of minor element in bulk matrix phase
+            Use float for binary systems
+            Use array for multicomponent systems
+        T : float
+            Temperature in K
+        precPhase : str (optional)
+            Precipitate phase to consider (default is first precipitate phase in list)
+        returnComp : bool (optional)
+            Whether to return composition of precipitate (defaults to False)
+
+        Returns
+        -------
+        phases - set of stable phases
+        elements - set of elements
+        chemical_potentials
+        composition_sets - all composition sets at equilibrium
+        cs_matrix - composition set of matrix phase
+        x_matrix - composition of matrix phase
+        cs_precip - composition set of precipitate phase
+        x_precip - composition of precipitate phase
+        '''
         result, composition_sets = local_equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond,
                                                          self.models, self.phase_records,
                                                          composition_sets=self._compset_cache_df[precPhase])
@@ -1070,6 +1229,37 @@ class GeneralThermodynamics:
         return ph, ele, chemical_potentials, composition_sets, cs_matrix, x_matrix, cs_precip, x_precip
     
     def _getPrecCompositionSetSamplingDF(self, x, T, cond, precPhase = None, training = False):
+        '''
+        Gets samples for precipitate phase for use in sampling driving force method and returns driving force and precipitate composition
+
+        This is also use in tangent driving force method for when equilibrium is not (yet) cached
+
+        Steps
+            1. Compute local equilibrium at x and T of only the matrix phase
+            2. Sample precipitate phase
+                If ordered contribution to matrix phase, then sample ordering contribution
+                and remove points on the matrix free energy surface
+            3. Compute energy difference between precipitate samples and chemical potential hyperplane
+            4. Find sample that maximizes energy difference and return sample composition and driving force
+
+        Parameters
+        ----------
+        x : float or array
+            Composition of minor element in bulk matrix phase
+            Use float for binary systems
+            Use array for multicomponent systems
+        T : float
+            Temperature in K
+        precPhase : str (optional)
+            Precipitate phase to consider (default is first precipitate phase in list)
+        returnComp : bool (optional)
+            Whether to return composition of precipitate (defaults to False)
+
+        Returns
+        -------
+        driving force - max free energy difference
+        precipitate composition - corresponds to max driving force
+        '''
         orderTol = -1e-8
 
         #Equilibrium at matrix composition for only the parent phase

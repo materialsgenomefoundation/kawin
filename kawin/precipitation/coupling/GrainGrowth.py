@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kawin.precipitation.PopulationBalance import PopulationBalanceModel
+from kawin.precipitation import PopulationBalanceModel
+from kawin.solver import SolverType
+from kawin.GenericModel import GenericModel
 
-class GrainGrowthModel:
+class GrainGrowthModel(GenericModel):
     '''
     Model for grain growth that can be coupled with the KWN model to account for Zener pinning
 
@@ -19,7 +21,7 @@ class GrainGrowthModel:
     maxBins : int (optional)
         Maximum number of bins (default is 200)
     '''
-    def __init__(self, cMin = 1e-10, cMax = 1e-8, bins = 150, minBins = 100, maxBins = 200):
+    def __init__(self, cMin = 1e-10, cMax = 1e-8, bins = 150, minBins = 100, maxBins = 200, solverType = SolverType.RK4):
         self.pbm = PopulationBalanceModel(cMin, cMax, bins, minBins, maxBins)
         self.gbe = 1
         self.M = 1
@@ -27,8 +29,10 @@ class GrainGrowthModel:
 
         self.m, self.K = {'all': 1}, {'all': 4/3}
 
-        self.time = np.array([0])
-        self.avgR = np.array([0])
+        self.time = np.zeros(1)
+        self.avgR = np.zeros(1)
+
+        self.solverType = solverType
 
     def setGrainBoundaryEnergy(self, gbe):
         '''

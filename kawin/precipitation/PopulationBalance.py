@@ -490,7 +490,7 @@ class PopulationBalanceModel:
         return np.amax([np.argmax(self.CumulativeMoment(3) > dissFrac), minIndex])
         
 
-    def getDTEuler(self, currDT, growth, dissolutionIndex):
+    def getDTEuler(self, currDT, growth, dissolutionIndex, maxBinRatio = 0.4):
         '''
         Calculates time interval for Euler implementation
             dt < dR / (2 * growth rate)
@@ -513,8 +513,11 @@ class PopulationBalanceModel:
             Maximum volume allowed to dissolve
         startIndex : int
             First index to look at for growth rate, all indices below startIndex will be ignored
+        maxBinRatio : float (optional)
+            Max ratio of particles in bin allowed to move to a nearby bin
+            Default is 0.4
         '''
-        self.maxRatio = 0.4
+        self.maxRatio = maxBinRatio
         growthFilter = growth[dissolutionIndex:-1][self.PSD[dissolutionIndex:] > 0]
 
         if len(growthFilter) == 0:

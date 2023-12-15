@@ -5,6 +5,10 @@ class StrengthModel:
     '''
     Defines strength model
 
+    Following implementation described in
+    M.R. Ahmadi, E. Povoden-Karadeni, K.I. Oksuz, A. Falahati and E. Kozeschnik
+        Computational Materials Science 91 (2014) 173-186
+
     6 contributions are accounted for
     For dislocation cutting, contributions are coherency, modulus, anti-phase boundary, stacking fault energy and interfacial energy
     For dislocation bowing, contribution is orowan
@@ -461,7 +465,7 @@ class StrengthModel:
     def ssStrength(self, model, n):
         '''
         Solid solution strength model
-        \sigma_ss = \sum{k_i * c_i^n}
+        sigma_ss = sum(k_i * c_i^n)
 
         Parameters
         ----------
@@ -483,7 +487,9 @@ class StrengthModel:
         '''
         Mean projected radius of particles
 
-        This function is inserted into a PrecipitateModel object as an additional output
+        r1 = first ordered moment of particle size distribution
+        r2 = second ordered moment of particle size distribution
+        rss = sqrt(2/3) * r2 / r1
 
         Parameters
         ----------
@@ -505,7 +511,10 @@ class StrengthModel:
         '''
         Mean surface to surface distance between particles
 
-        This function is inserted into a PrecipitateModel object as an additional output
+        r1 = first ordered moment of particle size distribution
+        r2 = second ordered moment of particle size distribution
+        rss = sqrt(2/3) * r2 / r1
+        ls = sqrt(ln(3)/(2*pi*r1) + (2*rss)^2) - 2*rss
 
         Parameters
         ----------
@@ -525,6 +534,14 @@ class StrengthModel:
         return Ls
     
     def updateCoupledModel(self, model):
+        '''
+        Computes rss, ls and solid solution strengthening terms
+        from current state of the PrecipitateModel
+
+        Parameters
+        ----------
+        model : PrecpitateModel
+        '''
         if self.rss is None:
             self.rss = np.zeros((1, len(model.phases)))
             self.ls = np.zeros((1, len(model.phases)))

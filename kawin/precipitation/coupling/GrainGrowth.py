@@ -3,10 +3,14 @@ import matplotlib.pyplot as plt
 from kawin.precipitation import PopulationBalanceModel
 from kawin.solver import SolverType
 from kawin.GenericModel import GenericModel
+from kawin.precipitation.Plot import getTimeAxis
 
 class GrainGrowthModel(GenericModel):
     '''
     Model for grain growth that can be coupled with the KWN model to account for Zener pinning
+
+    Following implentation described in
+    K. W, J. Jeppsson and P. Mason, J. Phase Equilib. Diffus. 43 (2022) 866-875
 
     Parameters
     ----------
@@ -23,16 +27,20 @@ class GrainGrowthModel(GenericModel):
     '''
     def __init__(self, cMin = 1e-10, cMax = 1e-8, bins = 150, minBins = 100, maxBins = 200, solverType = SolverType.RK4):
         self.pbm = PopulationBalanceModel(cMin, cMax, bins, minBins, maxBins)
-        self.gbe = 1
-        self.M = 1
-        self.alpha = 1
+        self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
 
-        self.m, self.K = {'all': 1}, {'all': 4/3}
-
-        self.time = np.zeros(1)
-        self.avgR = np.zeros(1)
+        #Model parameters - these are values taken from the paper as general default values
+        self.gbe = 0.5      #Grain boundary energy (J/m2)
+        self.M = 1e-14      #Grain boundary mobility (m4/J-s)
+        self.alpha = 1      #Correction factor (for when fitting data to the model)
+        self.m, self.K = {'all': 1}, {'all': 4/3}   #Factors related to spatial distribution of precipitates
 
         self.solverType = solverType
+
+        self.dissolutionIndex = 0
+        self.maxDissolution = 1e-6
+
+        self.reset()
 
     def setGrainBoundaryEnergy(self, gbe):
         '''
@@ -91,9 +99,12 @@ class GrainGrowthModel(GenericModel):
         data : array of floats
             Array of data to be inserted into PSD
         '''
+        self.pbm.reset()
         self.pbm.PSD, self.pbm.PSDbounds = np.histogram(data, self.pbm.PSDbounds)
         self.pbm.PSD = self.pbm.PSD.astype('float')
         self.Normalize()
+        self.avgR[0] = self.Rm(self.pbm.PSD)
+        self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
 
     def LoadDistributionFunction(self, function):
         '''
@@ -104,32 +115,59 @@ class GrainGrowthModel(GenericModel):
         function : function
             Takes in R and returns density
         '''
+        self.pbm.reset()
         self.pbm.PSD = function(self.pbm.PSDsize)
         self.Normalize()
+        self.avgR[0] = self.Rm(self.pbm.PSD)
+        self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
 
-    @property
-    def Rcr(self):
+    def reset(self):
+        '''
+        Resets model with initially loaded grain size distribution
+        '''
+        self.time = np.zeros(1)
+        self.avgR = np.zeros(1)
+        self._z = 0
+        self._growthRate = np.zeros(len(self.pbm.PSDbounds))
+        self.pbm.reset()
+        self.pbm.PSD, self.pbm.PSDbounds = np.array(self._oldPSD), np.array(self._oldPSDbounds)
+
+    def Rcr(self, x):
         '''
         Critical radius, grains larger than Rcr will growth while smaller grains will shrink
 
         Critical radius is defined so that the volume will be constant when applying the growth rate
-        '''
-        return self.pbm.SecondMoment() / self.pbm.FirstMoment()
 
-    @property
-    def Rm(self):
+        Parameters
+        ----------
+        x : np.array
+            Grain size distribution corresponding to GrainGrowthModel.pbm.PSDbounds
+        '''
+        return self.pbm.SecondMomentFromN(x) / self.pbm.FirstMomentFromN(x)
+    
+    def Rm(self, x):
         '''
         Mean radius
-        '''
-        return np.cbrt(self.pbm.ThirdMoment() / self.pbm.ZeroMoment())
 
-    def grainGrowth(self):
+        Parameters
+        ----------
+        x : np.array
+            Grain size distribution corresponding to GrainGrowthModel.pbm.PSDbounds
+        '''
+        return np.cbrt(self.pbm.ThirdMomentFromN(x) / self.pbm.ZeroMomentFromN(x))
+    
+    def grainGrowth(self, x):
         '''
         Grain growth model
         dRi/dt = alpha * M * gbe * (1/Rcr - 1/Ri)
-        '''
-        return self.alpha * self.M * self.gbe * (1 / self.Rcr - 1 / self.pbm.PSDbounds)
 
+        Parameters
+        ----------
+        x : np.array
+            Grain size distribution corresponding to GrainGrowthModel.pbm.PSDbounds
+        '''
+        return self.alpha * self.M * self.gbe * (1 / self.Rcr(x) - 1 / self.pbm.PSDbounds)
+    
     def Normalize(self):
         '''
         Normalize PSD to have a third moment of 1
@@ -139,25 +177,18 @@ class GrainGrowthModel(GenericModel):
         '''
         self.pbm.PSD *= 1 / self.pbm.ThirdMoment()
 
-    def zenerRadius(self, model, i):
-        '''
-        Calculates Zener radius from model at iteration i
-
-        Parameters
-        ----------
-        model : KWNmodel object
-        i : iteration
-        '''
-        z = np.zeros(len(model.phases))
-        for p in range(len(model.phases)):
-            phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
-            if model.avgR[p,i] > 0:
-                z[p] += np.power(model.betaFrac[p,i], self.m[phaseName]) / (self.K[phaseName] * model.avgR[p,i])
-        return np.sum(z)
-
     def constrainedGrowth(self, growthRate, z = 0):
         '''
         Constrain growth rate due to zener pinning
+
+        The growth rate given the zener radius is defined by:
+            dR/dt = alpha * M * gbe * ((1/Rcr - 1/Ri) +/- 1/Rz)
+            Where 1/Rz is added if (1/Rcr - 1/Ri) + 1/Rz < 0 (inhibits grain dissolution)
+            And   1/Rz is subtracted in (1/Rcr - 1/Ri) - 1/Rz) > 0 (inhibits grain growth)
+            And   dR/dt is 0 for Ri between these two limits
+        
+        Note: Rather than Rz (zener radius), we use z here which represents the drag force
+            But these are related by z = 1/Rz
 
         Parameters
         ----------
@@ -174,33 +205,101 @@ class GrainGrowthModel(GenericModel):
         cG[growIndices] = lower[growIndices]
         cG[dissolveIndices] = upper[dissolveIndices]
         return cG
-
-    def Update(self, dt, z = 0):
+    
+    def getCurrentX(self):
         '''
-        Updates particle size distribution over a fixed increment
+        Returns current time and grain size distribution
+        '''
+        return self.time[-1], [self.pbm.PSD]
+    
+    def getdXdt(self, t, x):
+        '''
+        Returns dn_i/dt for the grain size distribution
+
+        Steps:
+            1. Get grain growth rate and corrected it with zener drag force
+            2. Get dn_i/dt from the PBM given the Eulerian implementation
+        '''
+        self._growthRate = self.grainGrowth(x[0])
+        self._growthRate = self.constrainedGrowth(self._growthRate, self._z)
+        return [self.pbm.getdXdtEuler(self._growthRate, 0, 0, x[0])]
+
+    def correctdXdt(self, dt, x, dXdt):
+        '''
+        Corrects dn_i/dt with the new time step
+        '''
+        dXdt[0] = self.pbm.correctdXdtEuler(dt, self._growthRate, 0, 0, x[0])
+
+    def getDt(self, dXdt):
+        '''
+        Calculated a suitable dt with the growth rate and new time step
+        We'll limit the max time step to the remaining time for solving
+        '''
+        return self.pbm.getDTEuler(self.finalTime - self.time[-1], self._growthRate, self.dissolutionIndex)
+
+    def postProcess(self, time, x):
+        '''
+        Sets grain size distribution to x and record time and average grain size
+
+        Steps:
+            1. Set grain size distribution
+            2. Adjust PSD size classes
+            3. Remove grains below the dissolution threshold
+            4. Normalize grain size distribution to 1 (should be a tiny correction factor due to step 3)
+            5. Record time and average grain size
+        '''
+        self.pbm.PSD = x[0]
+        self.pbm.adjustSizeClassesEuler(True)
+        self.dissolutionIndex = self.pbm.getDissolutionIndex(self.maxDissolution, 0)
+        #self.pbm.PSD[:self.dissolutionIndex] = 0
+        self.Normalize()
+        self.time = np.append(self.time, time)
+        self.avgR = np.append(self.avgR, self.Rm(self.pbm.PSD))
+        return [self.pbm.PSD], False
+    
+    def printHeader(self):
+        '''
+        Header string before solving
+        '''
+        print('Iteration\tTime(s)\t\tSim Time(s)\tGrain Size (um)')
+    
+    def printStatus(self, iteration, simTimeElapsed):
+        '''
+        Status string that prints every n iteration
+        '''
+        print('{}\t\t{:.5e}\t\t{:.3f}\t\t{:.3e}'.format(iteration, self.time[-1], simTimeElapsed, self.avgR[-1]*1e6))
+
+    def computeZenerRadius(self, model):
+        '''
+        Gets zener radius/drag force from PrecipitateModel
+
+        Drag force is defined as z_j = f_j^m_j / (K_j * avgR_j)
+            Where f_j is volume fraction for phase j
+            And   avgR_j is average radius for phase j
+        The total drag force is the sum of z_j over all the phases
 
         Parameters
         ----------
-        dt : float
-            Time increment to update by
+        model : PrecpitateModel
         '''
-        totalT = 0
-        while totalT < dt:
-            growthRate = self.grainGrowth()
-            growthRate = self.constrainedGrowth(growthRate, z)
-            subDT = self.pbm.getDTEuler(dt - totalT, growthRate, 1e-5, 0)
-            self.pbm.UpdateEuler(subDT, growthRate)
-            totalT += subDT
-            self.Normalize()
+        z = np.zeros(len(model.phases))
+        for p in range(len(model.phases)):
+            phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
+            if model.avgR[model.n, p] > 0:
+                z[p] += np.power(model.betaFrac[model.n, p], self.m[phaseName]) / (self.K[phaseName] * model.avgR[model.n, p])
+        self._z = np.sum(z)
 
-    def couplingFunction(self, model, dt, i):
+    def updateCoupledModel(self, model):
         '''
-        Coupling function to add to the KWN model
+        Computes zener radius/drag force from the PrecipitateModel,
+        Then solves the grain growth model with the time step of the PrecipitateModel
+
+        Parameters
+        ----------
+        model : PrecpitateModel
         '''
-        z = self.zenerRadius(model, i)
-        self.Update(dt, z)
-        self.time = np.append(self.time, [model.time[i]])
-        self.avgR = np.append(self.avgR, [self.Rm])
+        self.computeZenerRadius(model)
+        self.solve(model.time[model.n] - model.time[model.n-1], solverType=self.solverType)
 
     def plotDistribution(self, ax, *args, **kwargs):
         '''
@@ -210,7 +309,8 @@ class GrainGrowthModel(GenericModel):
         ----------
         ax : matplotlib axes
         '''
-        self.pbm.plotCurve(ax, *args, **kwargs)
+        self.pbm.PlotCurve(ax, *args, **kwargs)
+        ax.set_xlabel('Radius (m)')
 
     def plotDistributionDensity(self, ax, *args, **kwargs):
         '''
@@ -221,6 +321,19 @@ class GrainGrowthModel(GenericModel):
         ax : matplotlib axes
         '''
         self.pbm.PlotDistributionDensity(ax, *args, **kwargs)
+        ax.set_xlabel('Radius (m)')
 
-    def plotRadiusvsTime(self, ax, *args, **kwargs):
-        ax.plot(self.time, self.avgR, *args, **kwargs)
+    def plotRadiusvsTime(self, ax, bounds = None, timeUnits = 's', *args, **kwargs):
+        '''
+        Plots average grain size over time
+
+        Parameters
+        ----------
+        ax : matplotlib axes
+        '''
+        timeScale, timeLabel, bounds = getTimeAxis(self, timeUnits, bounds)
+        ax.plot(self.time*timeScale, self.avgR, *args, **kwargs)
+        ax.set_xlabel(timeLabel)
+        ax.set_ylabel('Radius (m)')
+        ax.set_ylim([0, 1.1*np.amax(self.avgR)])
+        ax.set_xlim(bounds)

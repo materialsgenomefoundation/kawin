@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from kawin.precipitation import PrecipitateModel
 from kawin.precipitation.StoppingConditions import PrecipitationStoppingCondition
+from typing import List
 
 class TTPCalculator:
     '''
@@ -14,7 +15,7 @@ class TTPCalculator:
         Stopping conditions to store times when these conditions are reached
         Model will continue to solve until the max time is reached or all conditions are satisfied
     '''
-    def __init__(self, model : PrecipitateModel, stopConds : list[PrecipitationStoppingCondition]):
+    def __init__(self, model : PrecipitateModel, stopConds : List[PrecipitationStoppingCondition]):
         self.model = model
         self.stopConds = stopConds
         self._maxTime = 0

@@ -939,13 +939,6 @@ class PrecipitateBase(GenericModel):
             print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.precipitateDensity[i,p], 100*self.betaFrac[i,p], self.avgR[i,p], self.dGs[i,p]*self.VmBeta[p]))
         print('')
 
-    def getCurrentX(self):
-        '''
-        Returns current value of time and X
-        In this case, X is the particle size distribution for each phase
-        '''
-        return self.time[self.n], [self.PBM[p].PSD for p in range(len(self.phases))]
-
     def preProcess(self):
         '''
         Store array for non-derivative terms (which is everything except for the PBM models)

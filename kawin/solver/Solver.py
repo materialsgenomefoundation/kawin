@@ -152,10 +152,12 @@ class DESolver:
                 self.printStatus(i, timeFinish - timeStart)
 
             self.preProcess()
+            #Limit dtmax to remaining time if it's larger
+            if dtmax > tf - currTime:
+                dtmax = tf - currTime
             X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax, correctdXdtFunc)
             currTime += dt
             X0, stop = self.postProcess(currTime, X0)
-
             i += 1
 
         if verbose:

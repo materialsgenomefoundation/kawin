@@ -343,7 +343,7 @@ class PrecipitateModel (PrecipitateBase):
         #  Thus, we can get away with increasing the time step over time assuming that kinetics are slowing down
         #  Plus, unlike the single phase diffusion module, there's no form way to define a good time step apart from the checks here
         dtPropose = (1 + self.dtScale) * dtPrev
-        dtMax = self.deltaTime - self.time[i]
+        dtMax = self.finalTime - self.time[i]
         
         dtAll = [dtMax]
         if self.checkPSD:
@@ -546,6 +546,13 @@ class PrecipitateModel (PrecipitateBase):
         self._currY[self.R_AVG] = avgR
         self._currY[self.AR_AVG] = avgAR
         self._currY[self.COMPOSITION] = xComp
+
+    def getCurrentX(self):
+        '''
+        Returns current value of time and X
+        In this case, X is the particle size distribution for each phase
+        '''
+        return self.time[self.n], [self.PBM[p].PSD for p in range(len(self.phases))]
 
     def _getdXdt(self, t, x):
         '''

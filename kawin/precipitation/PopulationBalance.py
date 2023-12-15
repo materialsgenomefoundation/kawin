@@ -572,8 +572,17 @@ class PopulationBalanceModel:
         Given dt, correct the net flux so PSD will not be negative
             Essentially, the total number of particles leaving a bin should be less than or equal to the number of particles in the bin
 
-        For any term in netFlux where netFlux_i*dt that is larger than n_i
-            We correct netFlux such that netFlux_i*dt = n_i
+        Size of fluxes is bins+1 while for PSD, it is bins
+
+        For fluxes on the right (positive) side of the PSD
+            We limit fluxes so that J_i+1 * dt < PSD_i
+
+        For fluxes on the left (negative) side of the PSD
+            We limit fluxes so that -J_i * dt < PSD_i
+
+        Normally, this wouldn't be an issue since the time step from getDtEuler would limit J_i*dt to less than half the number of particles in a bin
+            But because we set a dissolution threshold to ignore (to prevent extremely small dt since growth rate scales by 1/r), the bins below
+            the dissolution threshold will not follow the constraint we apply in getDtEuler
 
         Parameters
         ----------
@@ -592,10 +601,15 @@ class PopulationBalanceModel:
         -------
         dXdt (bins) - corresponds to dn_i/dt corrected to avoid negative bins
         '''
-        indBelow = self._netFlux[1:-1]*dt < -psd[1:]
-        self._netFlux[1:-1][indBelow] = -psd[1:][indBelow] / dt
-        indAbove = self._netFlux[1:-1]*dt > psd[:-1]
-        self._netFlux[1:-1][indAbove] = psd[:-1][indAbove] / dt
+        #indBelow = self._netFlux[1:-1]*dt < -psd[1:]
+        #self._netFlux[1:-1][indBelow] = -psd[1:][indBelow] / dt
+        #indAbove = self._netFlux[1:-1]*dt > psd[:-1]
+        #self._netFlux[1:-1][indAbove] = psd[:-1][indAbove] / dt
+
+        indBelow = self._netFlux[:-1]*dt < -psd
+        self._netFlux[:-1][indBelow] = -psd[indBelow] / dt
+        indAbove = self._netFlux[1:]*dt > psd
+        self._netFlux[1:][indAbove] = psd[indAbove] / dt
 
         dXdt = (self._netFlux[:-1] - self._netFlux[1:])
 

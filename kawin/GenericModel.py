@@ -129,6 +129,7 @@ class GenericModel:
 
         Returns
         -------
+        t : current time of model
         X : unformatted list of floats
         '''
         raise NotImplementedError()
@@ -223,6 +224,16 @@ class GenericModel:
         '''
         pass
 
+    def setTimeInfo(self, currTime, simTime):
+        '''
+        Store time variables for starting, final and delta time
+
+        This is sometimes useful for determining the time step
+        '''
+        self.deltaTime = simTime
+        self.startTime = currTime
+        self.finalTime = currTime+simTime
+
     def solve(self, simTime, solverType = SolverType.RK4, verbose=False, vIt=10, minDtFrac = 1e-8, maxDtFrac = 1):
         '''
         Solves model using the DESolver
@@ -252,7 +263,7 @@ class GenericModel:
 
         solver = DESolver(solverType, minDtFrac = minDtFrac, maxDtFrac = maxDtFrac)
         solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printHeader=self.printHeader, printStatus=self.printStatus, getDt=self.getDt)
-
+        
         t, X0 = self.getCurrentX()
-        self.deltaTime = simTime
-        solver.solve(self.getdXdt, t, X0, t+simTime, verbose, vIt, self.correctdXdt)
+        self.setTimeInfo(t, simTime)
+        solver.solve(self.getdXdt, self.startTime, X0, self.finalTime, verbose, vIt, self.correctdXdt)

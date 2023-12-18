@@ -26,6 +26,7 @@ class DiffusionModel(GenericModel):
         phases : list of str
             Number of phases in the system
         '''
+        super().__init__()
         if isinstance(phases, str):
             phases = [phases]
         self.zlim, self.N = zlim, N
@@ -450,8 +451,8 @@ class DiffusionModel(GenericModel):
     def printHeader(self):
         print('Iteration\tSim Time (h)\tRun time (s)')
 
-    def printStatus(self, iteration, simTimeElapsed):
-        print(str(iteration) + '\t\t{:.3f}\t\t{:.3f}'.format(self.t/3600, simTimeElapsed))
+    def printStatus(self, iteration, modelTime, simTimeElapsed):
+        super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
         return self.t, [self.x]
@@ -474,6 +475,7 @@ class DiffusionModel(GenericModel):
         self.t = time
         self.x = x[0]
         self.record(self.t)
+        self.updateCoupledModels()
         return self.getCurrentX()[1], False
 
     def getX(self, element):

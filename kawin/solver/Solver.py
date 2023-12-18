@@ -1,5 +1,4 @@
-from kawin.solver.ExplicitEuler import ExplicitEulerIterator
-from kawin.solver.RK4 import RK4Iterator
+from kawin.solver.Iterators import ExplicitEulerIterator, RK4Iterator
 from enum import Enum
 import time
 
@@ -28,11 +27,9 @@ class DESolver:
         self.dtmin = minDtFrac       #Min and max dt fraction of simulation time
         self.dtmax = maxDtFrac
         self.dt = defaultDT
-        self.getDt = self.defaultDtFunc
-        self.preProcess = self.defaultPreProcess
-        self.printHeader = self.defaultPrintHeader
-        self.printStatus = self.defaultPrintStatus
-        self.postProcess = self.defaultPostProcess
+
+        self.setFunctions(self.defaultPreProcess, self.defaultPostProcess, self.defaultPrintHeader, self.defaultPrintStatus, self.defaultDtFunc)
+
         self.setIterator(iterator)
 
     def setIterator(self, iterator):
@@ -43,9 +40,9 @@ class DESolver:
             Defines what iteration scheme to use
         '''
         if iterator == SolverType.EXPLICITEULER:
-            self.iterator = ExplicitEulerIterator()
+            self.iterator = ExplicitEulerIterator
         elif iterator == SolverType.RK4:
-            self.iterator = RK4Iterator()
+            self.iterator = RK4Iterator
         else:
             self.iterator = iterator
 
@@ -56,16 +53,11 @@ class DESolver:
         If any of these are not defined, then the corresponding function will be the default defined here
             Except for getDt (which returns defaultDt), the other functions will do nothing
         '''
-        if preProcess is not None:
-            self.preProcess = preProcess
-        if postProcess is not None:
-            self.postProcess = postProcess
-        if printHeader is not None:
-            self.printHeader = printHeader
-        if printStatus is not None:
-            self.printStatus = printStatus
-        if getDt is not None:
-            self.getDt = getDt
+        self.preProcess = self.preProcess if preProcess is None else preProcess
+        self.postProcess = self.postProcess if postProcess is None else postProcess
+        self.printHeader = self.printHeader if printHeader is None else printHeader
+        self.printStatus = self.printStatus if printStatus is None else printStatus
+        self.getDt = self.getDt if getDt is None else getDt
 
     def defaultDtFunc(self, dXdt):
         '''
@@ -91,7 +83,7 @@ class DESolver:
         '''
         return
     
-    def defaultPrintStatus(self, iteration, simTimeElapsed):
+    def defaultPrintStatus(self, iteration, modeltime, simTimeElapsed):
         '''
         Default print function for when n iterations passed and verbose is true
         '''
@@ -102,8 +94,20 @@ class DESolver:
         Default function to correct dXdt
         '''
         pass
+
+    def flattenXNotImplemented(self, X):
+        '''
+        Default flattenX function, which assumes X is in the correct format
+        '''
+        return X
     
-    def solve(self, f, t0, X0, tf, verbose = False, vIt = 10, correctdXdtFunc = None):
+    def unflattenXNotImplemented(self, X_flat, X_ref):
+        '''
+        Default unflattenX function which assumes X is in the correct format
+        '''
+        return X_flat
+    
+    def solve(self, f, t0, X0, tf, verbose = False, vIt = 10, correctdXdtFunc = None, flattenXFunc = None, unflattenXFunc = None):
         '''
         Solves dX/dt over a time increment
         This will be the main function that a model will use
@@ -136,9 +140,10 @@ class DESolver:
         if verbose:
             self.printHeader()
 
-        #Use default function if correctdXdtFunc is not supplied
-        if correctdXdtFunc is None:
-            correctdXdtFunc = self.correctdXdtNotImplemented
+        #Use default function if correctdXdtFunc, flattenXFunc or unflattenXFunc is not supplied
+        correctdXdtFunc = self.correctdXdtNotImplemented if correctdXdtFunc is None else correctdXdtFunc
+        flattenXFunc = self.flattenXNotImplemented if flattenXFunc is None else flattenXFunc
+        unflattenXFunc = self.unflattenXNotImplemented if unflattenXFunc is None else unflattenXFunc
 
         dtmin = self.dtmin * (tf - t0)
         dtmax = self.dtmax * (tf - t0)
@@ -149,13 +154,14 @@ class DESolver:
         while currTime < tf and not stop:
             if verbose and i % vIt == 0:
                 timeFinish = time.time()
-                self.printStatus(i, timeFinish - timeStart)
+                self.printStatus(i, currTime, timeFinish - timeStart)
 
             self.preProcess()
             #Limit dtmax to remaining time if it's larger
             if dtmax > tf - currTime:
                 dtmax = tf - currTime
-            X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax, correctdXdtFunc)
+            #X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax, correctdXdtFunc)
+            X0, dt = self.iterator(f, currTime, X0, self.getDt, dtmin, dtmax, correctdXdtFunc, flattenXFunc, unflattenXFunc)
             currTime += dt
             X0, stop = self.postProcess(currTime, X0)
             i += 1
@@ -165,4 +171,4 @@ class DESolver:
                 print('Stopping condition met. Ending simulation early.')
                 
             timeFinish = time.time()
-            self.printStatus(i, timeFinish - timeStart)
+            self.printStatus(i, currTime, timeFinish - timeStart)

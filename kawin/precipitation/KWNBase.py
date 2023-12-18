@@ -27,6 +27,7 @@ class PrecipitateBase(GenericModel):
         If binary system, then defualt is ['solute']
     '''
     def __init__(self, phases = ['beta'], elements = ['solute']):
+        super().__init__()
         self.elements = elements
         self.numberOfElements = len(elements)
         self.phases = np.array(phases)
@@ -866,27 +867,6 @@ class PrecipitateBase(GenericModel):
         self._stoppingConditions = []
         self._stopConditionMode = []
 
-    def addCouplingModel(self, model):
-        '''
-        Adds a coupling model to the KWN model
-
-        These will be updated after each iteration with the new values of the model
-
-        Parameters
-        ----------
-        model : object
-            Must have a function called updateCoupledModel that takes in a KWNBase or KWNEuler object
-        '''
-        self.couplingModels.append(model)
-
-    def clearCouplingModels(self):
-        '''
-        Clears list of coupling models
-
-        Note - this will not reset the coupling models, just removes them from the list
-        '''
-        self.couplingModels = []
-
     def setup(self):
         '''
         Sets up hidden parameters before solving
@@ -908,7 +888,7 @@ class PrecipitateBase(GenericModel):
         self._setupStrainEnergyFactors()
         self._isSetup = True
 
-    def printStatus(self, iteration, simTimeElapsed):
+    def printStatus(self, iteration, modelTime, simTimeElapsed):
         '''
         Prints various terms at latest step
 
@@ -921,11 +901,11 @@ class PrecipitateBase(GenericModel):
         #For single element, we just print the composition as matrix comp in terms of the solute
         if self.numberOfElements == 1:
             print('N\tTime (s)\tSim Time (s)\tTemperature (K)\tMatrix Comp')
-            print('{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t{:.4f}\n'.format(i, self.time[i], simTimeElapsed, self.temperature[i], 100*self.xComp[i,0]))
+            print('{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t{:.4f}\n'.format(i, modelTime, simTimeElapsed, self.temperature[i], 100*self.xComp[i,0]))
         #For multicomponent systems, print each element
         else:
             compStr = 'N\tTime (s)\tSim Time (s)\tTemperature (K)\t'
-            compValStr = '{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t'.format(i, self.time[i], simTimeElapsed, self.temperature[i])
+            compValStr = '{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t'.format(i, modelTime, simTimeElapsed, self.temperature[i])
             for a in range(self.numberOfElements):
                 compStr += self.elements[a] + '\t'
                 compValStr += '{:.4f}\t'.format(100*self.xComp[i,a])
@@ -1005,8 +985,7 @@ class PrecipitateBase(GenericModel):
         self._updateParticleSizeDistribution(t, x)
 
         #Update coupled models
-        for cm in self.couplingModels:
-            cm.updateCoupledModel(self)
+        self.updateCoupledModels()
 
         #Check stopping conditions
         orCondition = False

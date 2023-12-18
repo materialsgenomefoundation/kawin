@@ -110,5 +110,5 @@ def test_DT():
     ratio = 0.4
     trueDT = ratio * (pbm.PSDbounds[1] - pbm.PSDbounds[0]) / (growth[0])
     dissIndex = pbm.getDissolutionIndex(1e-3, 0)
-    calcDT = pbm.getDTEuler(5, growth, dissIndex)
+    calcDT = pbm.getDTEuler(5, growth, dissIndex, maxBinRatio=ratio)
     assert_allclose(trueDT, calcDT, rtol=1e-6)

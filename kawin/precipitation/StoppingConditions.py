@@ -6,6 +6,8 @@ Defines class to handle a single stopping conditions
 Per iteration, these will take in a model, and check with internal members to see if stopping condition has been satisfied
 If it has, then it will be set to True and the time will be recorded
 These can also be checked if they were satisfied already if we want to use them to stop a simulation
+
+TODO: Abstract out the stopping condition so it can be used in GenericModel
 '''
 
 class Inequality (Enum):

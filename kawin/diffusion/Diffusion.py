@@ -477,6 +477,22 @@ class DiffusionModel(GenericModel):
         self.record(self.t)
         self.updateCoupledModels()
         return self.getCurrentX()[1], False
+    
+    def flattenX(self, X):
+        '''
+        np.hstack does not flatten a 2D array, so we have to overload this function
+            By itself, this doesn't actually affect the solver/iterator, but when coupled with other models,
+            it becomes an issue
+
+        This will convert the 2D array X to a 1D array by reshaping to 1D array of len(# elements * # nodes)
+        '''
+        return np.reshape(X[0], (np.prod(X[0].shape)))
+    
+    def unflattenX(self, X_flat, X_ref):
+        '''
+        Reshape X_flat to original shape
+        '''
+        return [np.reshape(X_flat, X_ref[0].shape)]
 
     def getX(self, element):
         '''

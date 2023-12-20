@@ -480,6 +480,9 @@ class PrecipitateModel (PrecipitateBase):
         for p in range(len(self.phases)):
             volRatio = self.VmAlpha / self.VmBeta[p]
             Ntot = self.PBM[p].ZeroMomentFromN(x[p])
+            #If no precipitates, then avgR, avgAR, precDens, fConc and fBeta for phase p is all 0
+            if Ntot == 0:
+                continue
             RadSum = self.PBM[p].MomentFromN(x[p], 1)
             ARsum = self.PBM[p].WeightedMomentFromN(x[p], 0, self.shapeFactors[p].aspectRatio(self.PBM[p].PSDsize))
             fBeta[0,p] = np.amin([volRatio * self.GB[p].volumeFactor * self.PBM[p].ThirdMomentFromN(x[p]), 1])

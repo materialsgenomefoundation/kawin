@@ -336,11 +336,11 @@ class PrecipitateBase(GenericModel):
         self.minNucleateDensity = 1e-10
 
         #TODO: may want to test more to see if this value should be lower or higher
-        #This will attempt to increase the time by 0.01%
+        #This will attempt to increase the time by 0.1%
         #This also only affects the sim if the calculated dt is extremely large
         #So probably only when nucleation rate is 0 will this matter
-        #This roughly corresponds to 1e5 steps over 5-7 orders of magnitude on a log time scale
-        self.dtScale = 1e-4
+        #This roughly corresponds to 1e4 steps over 5-7 orders of magnitude on a log time scale
+        self.dtScale = 1e-3
 
     def setConstraints(self, **kwargs):
         '''
@@ -1072,10 +1072,15 @@ class PrecipitateBase(GenericModel):
         '''
         gCrit = self._currY[self.G_CRIT][0]
         T = self._currY[self.TEMPERATURE][0]
+        dg = self._currY[self.DRIVING_FORCE][0]
 
         betas = np.zeros((1,len(self.phases)))
         nucRate = np.zeros((1,len(self.phases)))
         for p in range(len(self.phases)):
+            #If driving force is negative, then nucleation rate is 0
+            if dg[p] < 0:
+                continue
+
             Z = self._Zeldovich(p)
             betas[0,p] = self._Beta(p)
 

@@ -500,22 +500,22 @@ class Coupler(GenericModel):
     
     def coupledXdt(self, t, x, dXdt):
         '''
-        Empty function where inherited classes can perform
-        tighter coupling for dXdt
+        Empty function where inherited classes can do extra operations on
+        the time derivatives each models or between models
         '''
         return
     
     def couplePreProcess(self):
         '''
-        Empty function where inherited classes can perform
-        tighter coupling for pre processing
+        Empty function where inherited classes can do extra operations on
+        each models or between models for an iteration
         '''
         return
     
     def couplePostProcess(self):
         '''
-        Empty function where inherited classes can perform
-        tighter coupling for post processing
+        Empty function where inherited classes can do extra operations on
+        each models or between models after an iteration
         '''
         return
 

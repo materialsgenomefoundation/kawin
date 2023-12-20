@@ -93,19 +93,46 @@ class StrengthModel:
         self.rss = data['rss']
         self.ls = data['ls']
 
-    def _getStrengthFunctions(self):
+    def _getStrengthFunctions(self, selectedContributions = None):
         '''
         Internal function that creates arrays for dislocation cutting mechanisms
 
         wfuncs, sfuncs - list of functions for each contribution for weak and strong effects
         contributions - each contribution has a dictionary of str : boolean to say whether a phase has that contribution
         labels - labels for plotting
+
+        Parameters
+        ----------
+        selectedContributions : None or List[str]
+            If None, will return weak/strong functions and labels for all contributions
+            If List[str], will return weak/strong functions and labels for only the contributions defined in list
+                Options are: Coherency, Modulus, APB, SFE and/or Interfacial
+        
+        Returns
+        -------
+        wfuncs - List of functions for weak contributions
+        sfuncs - List of functions for strong contributions
+        contributions - List of {phase str:boolean} for whether the contribution is enabled
+        labels - List of labels for plotting
         '''
         wfuncs = [self.coherencyWeak, self.modulusWeak, self.APBweak, self.SFEweak, self.interfacialWeak]
         sfuncs = [self.coherencyStrong, self.modulusStrong, self.APBstrong, self.SFEstrong, self.interfacialStrong]
         contributions = [self.coherencyEffect, self.modulusEffect, self.APBEffect, self.SFEffect, self.IFEffect]
         labels = ['Coherency', 'Modulus', 'APB', 'SFE', 'Interfacial']
-        return wfuncs, sfuncs, contributions, labels
+        if selectedContributions is None:
+            return wfuncs, sfuncs, contributions, labels
+        else:
+            wfuncsSub, sfuncsSub, contributionsSub, labelsSub = [], [], [], []
+            lowerLabels = [l.lower() for l in labels]
+            for c in selectedContributions:
+                if c.lower() in lowerLabels:
+                    index = lowerLabels.index(c.lower())
+                    wfuncsSub.append(wfuncs[index])
+                    sfuncsSub.append(sfuncs[index])
+                    contributionsSub.append(contributions[index])
+                    labelsSub.append(labels[index])
+            return wfuncsSub, sfuncsSub, contributionsSub, labelsSub 
+        
 
     def setBaseStrength(self, sigma0):
         '''
@@ -569,7 +596,7 @@ class StrengthModel:
         totalCompare = np.zeros(len(rss[:,0]))
         for i in range(len(model.phases)):
             weakContributions, strongContributions, orowan, _ = self.getStrengthContributions(rss[:,i], Ls[:,i], model.phases[i])
-            strength, compare = self.combineStrengthContributions(weakContributions, strongContributions, orowan, returnComparison=True)
+            strength, compare, _ = self.combineStrengthContributions(weakContributions, strongContributions, orowan, returnComparison=True)
             compare[~np.isfinite(strength)] = 0
             strength[~np.isfinite(strength)] = 0
             ps.append(strength)
@@ -581,7 +608,7 @@ class StrengthModel:
         totalStrength[~indices] = np.power(np.sum(np.power(ps[:,~indices], self.multiphaseMixedExp), axis=0), 1/self.multiphaseMixedExp)
         return totalStrength
 
-    def getStrengthContributions(self, rss, Ls, phase = 'all'):
+    def getStrengthContributions(self, rss, Ls, phase = 'all', selectedContributions=None):
         '''
         Gets strength contributions from a model
 
@@ -594,13 +621,17 @@ class StrengthModel:
         phase : str (optional)
             Phase name
             Defaults to 'all'
+        selectedContributions : None or List[str]
+            If None, will return weak/strong functions and labels for all contributions
+            If List[str], will return weak/strong functions and labels for only the contributions defined in list
+                Options are: Coherency, Modulus, APB, SFE and/or Interfacial
         '''
         r0Weak = Ls / np.sqrt(np.cos(self.psi / 2))
         r0Strong = Ls
         weakContributions = []
         strongContributions = []
         contributionsList = []
-        wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions()
+        wfuncs, sfuncs, contributions, ylabel = self._getStrengthFunctions(selectedContributions)
         for i in range(len(wfuncs)):
             if contributions[i]['all'] or (phase in contributions[i] and contributions[i][phase]):
                 with np.errstate(divide='ignore', invalid='ignore'):
@@ -618,7 +649,7 @@ class StrengthModel:
         tauowo = np.array(self.orowan(rss, Ls))
         tauowo[~np.isfinite(tauowo)] = 0
         return weakContributions, strongContributions, tauowo, contributionsList
-
+    
     def combineStrengthContributions(self, weakContributions, strongContributions, orowan, returnComparison = False):
         '''
         Combines weak, strong and orowan contributions
@@ -643,7 +674,7 @@ class StrengthModel:
         orowan[~np.isfinite(orowan)] = 0
         taumin = np.amin(np.array([tausumweak, tausumstrong, orowan]), axis=0)
         if returnComparison:
-            return self.M * taumin, (tausumweak > tausumstrong) & (tausumweak > orowan)
+            return self.M * taumin, (tausumweak > tausumstrong) & (tausumweak > orowan), (self.M * tausumweak, self.M * tausumstrong, self.M * orowan)
         else:
             return self.M * taumin
 
@@ -678,7 +709,7 @@ class StrengthModel:
             ylabel = 'Strength (GPa)'
         return yscale, ylabel
 
-    def plotPrecipitateStrengthOverR(self, ax, r, Ls, phase=None, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
+    def plotPrecipitateStrengthOverR(self, ax, r, Ls, phase=None, strengthUnits = 'MPa', contribution = None, *args, **kwargs):
         '''
         Plots precipitate strength contribution as a function of radius
 
@@ -691,15 +722,18 @@ class StrengthModel:
             Surface to surface particle distance
         strengthUnits : str
             Units for strength, options are 'Pa', 'kPa', 'MPa' or 'GPa'
-        plotContributions : bool
-            Whether to plot all contributions
+        contribution : None or str
+            If None, will plot overall strength
+            If str, will plot selected contribution or all contributions
+                Options are: Coherency, Modulus, APB, SFE or Interfacial
         '''
         if phase is None:
             phase = 'all'
 
-        self.plotPrecipitateStrengthOverX(ax, r, r, Ls, phase, strengthUnits, plotContributions, *args, **kwargs)
+        self.plotPrecipitateStrengthOverX(ax, r, r, Ls, phase, strengthUnits, contribution, *args, **kwargs)
+        ax.set_xlabel('Radius (m)')
 
-    def plotPrecipitateStrengthOverTime(self, ax, model, phase = None, bounds = None, timeUnits = 's', strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
+    def plotPrecipitateStrengthOverTime(self, ax, model, phase = None, bounds = None, timeUnits = 's', strengthUnits = 'MPa', contribution = None, *args, **kwargs):
         '''
         Plots precipitate strength contribution as a function of time
 
@@ -712,24 +746,19 @@ class StrengthModel:
             Surface to surface particle distance
         strengthUnits : str
             Units for strength, options are 'Pa', 'kPa', 'MPa' or 'GPa'
-        plotContributions : bool
-            Whether to plot all contributions
+        contribution : None or str
+            If None, will plot overall strength
+            If str, will plot selected contribution or all contributions
+                Options are: Coherency, Modulus, APB, SFE or Interfacial
         '''
         timeScale, timeLabel, bounds = getTimeAxis(model, timeUnits, bounds)
 
-        self.plotPrecipitateStrengthOverX(ax, model.time*timeScale, self.rss, self.ls, phase, strengthUnits, plotContributions, *args, **kwargs)
-        if plotContributions:
-            row, col = [0, 0, 1, 1, 2, 2], [0, 1, 0, 1, 0, 1]
-            for i in range(len(row)):
-                ax[row[i], col[i]].set_xlabel(timeLabel)
-                ax[row[i], col[i]].set_xscale('log')
-                ax[row[i], col[i]].set_xlim(bounds)
-        else:
-            ax.set_xlabel(timeLabel)
-            ax.set_xscale('log')
-            ax.set_xlim(bounds)
+        self.plotPrecipitateStrengthOverX(ax, model.time*timeScale, self.rss, self.ls, phase, strengthUnits, contribution, *args, **kwargs)
+        ax.set_xlabel(timeLabel)
+        ax.set_xscale('log')
+        ax.set_xlim(bounds)
 
-    def plotPrecipitateStrengthOverX(self, ax, x, r, Ls, phase = None, strengthUnits = 'MPa', plotContributions = False, *args, **kwargs):
+    def plotPrecipitateStrengthOverX(self, ax, x, r, Ls, phase = None, strengthUnits = 'MPa', contribution = None, *args, **kwargs):
         '''
         Plots precipitate strength contribution as a function of x
 
@@ -747,37 +776,46 @@ class StrengthModel:
             Surface to surface particle distance, must correspond to x
         strengthUnits : str
             Units for strength, options are 'Pa', 'kPa', 'MPa' or 'GPa'
-        plotContributions : bool
-            Whether to plot all contributions
+        contribution : None or str
+            If None, will plot overall strength
+            If str, will plot selected contribution or all contributions
+                Options are: Coherency, Modulus, APB, SFE, Interfacial, Orowan or All
         '''
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
-        if plotContributions:
-            _, _, _, ylabel = self._getStrengthFunctions()
-            row, col = [0, 0, 1, 1, 2], [0, 1, 0, 1, 0]
-            weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, phase)
-            for i in range(len(row)):
-                if ylabel[i] in contributionList:
-                    index = contributionList.index(ylabel[i])
-                    ax[row[i], col[i]].plot(x, self.M * weak[index] / yscale, x, self.M * strong[index] / yscale, *args, **kwargs)
-                    ax[row[i], col[i]].legend(['Weak', 'Strong'])
-                    ax[row[i], col[i]].set_ylim(bottom=0)
-                else:
-                    ax[row[i], col[i]].plot(x, np.zeros(len(x)), *args, **kwargs)
-                    ax[row[i], col[i]].set_ylim([-1, 1])
-                ax[row[i], col[i]].set_xlabel('Radius (m)')
-                ax[row[i], col[i]].set_ylabel(r'$\tau_{' + ylabel[i] + '}$ (' + strengthUnits + ')')
-                ax[row[i], col[i]].set_xlim([x[0], x[-1]])
+        if contribution is not None:
+            if contribution.lower() == 'orowan':
+                tauowo = np.array(self.orowan(r, Ls))
+                tauowo[~np.isfinite(tauowo)] = 0
+                ax.plot(x, self.M * tauowo / yscale, *args, **kwargs)
+                ax.set_ylabel(r'$\tau_{orowan}$ (' + strengthUnits + ')')
+                ax.set_ylim(bottom=0)
+                ax.set_xlim([x[0], x[-1]])
 
-            #If no contributions exists for shearable precipitates, then wtot and stot is 0
-            wtot = np.zeros(len(x)) if len(weak) == 0 else np.array(np.power(np.sum(np.power(weak, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp))
-            stot = np.zeros(len(x)) if len(strong) == 0 else np.array(np.power(np.sum(np.power(strong, self.singlePhaseExp), axis=0), 1/self.singlePhaseExp))
-            smin = np.amin([wtot, stot, oro], axis=0)
-            ax[2,1].plot(x, self.M * wtot/yscale, x, self.M * stot/yscale, x, self.M * oro/yscale, x, self.M * smin/yscale, *args, **kwargs)
-            ax[2,1].set_ylim(bottom=0)
-            ax[2,1].set_ylabel(r'$\tau$ (' + strengthUnits + ')')
-            ax[2,1].set_xlabel('Radius (m)')
-            ax[2,1].legend(['Weak', 'Strong', 'Orowan', 'Minimum'])
-            ax[2,1].set_xlim([x[0], x[-1]])
+            elif contribution.lower() != 'all':
+                _, _, _, ylabel = self._getStrengthFunctions([contribution])
+                weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, phase, [contribution])
+                if ylabel[0] in contributionList:
+                    ax.plot(x, self.M * weak[0] / yscale, x, self.M * strong[0] / yscale, *args, **kwargs)
+                    ax.set_ylim(bottom=0)
+                    ax.legend(['Weak', 'Strong'])
+                else:
+                    ax.plot(x, np.zeros(len(x)), *args, **kwargs)
+                    ax.set_ylim([-1, 1])
+                ax.set_ylabel(r'$\tau_{' + ylabel[0] + '}$ (' + strengthUnits + ')')
+                ax.set_xlim([x[0], x[-1]])
+
+            else:
+                _, _, _, ylabel = self._getStrengthFunctions()
+                weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, phase)
+                strength, _, summedContributions = self.combineStrengthContributions(weak, strong, oro, returnComparison=True)
+                wtot, stot, oro = summedContributions
+
+                ax.plot(x, wtot/yscale, x, stot/yscale, x, oro/yscale, x, strength/yscale, *args, **kwargs)
+                ax.set_ylim(bottom=0)
+                ax.set_ylabel(r'$\tau$ (' + strengthUnits + ')')
+                ax.legend(['Weak', 'Strong', 'Orowan', 'Minimum'])
+                ax.set_xlim([x[0], x[-1]])
+            
 
         else:
             weak, strong, oro, contributionList = self.getStrengthContributions(r, Ls, phase)

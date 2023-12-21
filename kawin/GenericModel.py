@@ -244,7 +244,7 @@ class GenericModel:
 
         verbose must be True when calling solve
         '''
-        print('Iteration\tSim Time(s)\t\Run Time(s)')
+        print('Iteration\tSim Time(s)\tRun Time(s)')
 
     def printStatus(self, iteration, modelTime, simTimeElapsed):
         '''

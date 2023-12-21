@@ -888,6 +888,13 @@ class PrecipitateBase(GenericModel):
         self._setupStrainEnergyFactors()
         self._isSetup = True
 
+    def printHeader(self):
+        '''
+        Overloads printHeader from GenericModel to do nothing
+        since status displays the necessary outputs
+        '''
+        return
+
     def printStatus(self, iteration, modelTime, simTimeElapsed):
         '''
         Prints various terms at latest step

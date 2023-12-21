@@ -137,7 +137,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         return None, None
 
-    def _curvatureFactorFromEq(self, chemical_potentials, composition_sets, precPhase=None, training = False):
+    def _curvatureFactorFromEq(self, chemical_potentials, composition_sets, precPhase=None):
         '''
         Curvature factor (from Phillipes and Voorhees - 2013)
 
@@ -159,9 +159,6 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         composition_sets : List[pycalphad.composition_set.CompositionSet]
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
-        training : bool (optional)
-            For surrogate training, will return None rather than previous results
-            if 2-phase region is not detected in equilibrium calculation
 
         Returns
         -------
@@ -240,15 +237,16 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
             return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
         else:
-            if training:
-                return None
-            else:
-                #print('Warning: only a single phase detected in equilibrium, using results of previous calculation')
-                #return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
+            return None
+            # if training:
+            #     return None
+            # else:
+            #     #print('Warning: only a single phase detected in equilibrium, using results of previous calculation')
+            #     #return self._prevDc[precPhase], self._prevMc[precPhase], self._prevGba[precPhase], self._prevBeta[precPhase], self._prevCa[precPhase], self._prevCb[precPhase]
 
-                #If two-phase equilibrium is not found, then the temperature may have changed to where the precipitate is unstable
-                #Return None in this case
-                return None
+            #     #If two-phase equilibrium is not found, then the temperature may have changed to where the precipitate is unstable
+            #     #Return None in this case
+            #     return None
 
 
     def curvatureFactor(self, x, T, precPhase = None, training = False, searchDir = None):
@@ -266,6 +264,9 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Precipitate phase (defaults to first precipitate in list)
         searchDir : None or array
             If two-phase equilibrium is not present, then move x towards this composition to find two-phase equilibria
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------
@@ -312,7 +313,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         ph = [cs.phase_record.phase_name for cs in composition_sets]
         if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
-            return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)
+            return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase)
         #If in a singl phase region, we want to go along a search direction to find the nearest two phase region
         #    We then use this two-phase region to calculate growth rate (which should all be negative for dissolution)
         #    In PrecipitateModel, searchDir is the previous precipitate nucleate composition
@@ -347,7 +348,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                     return None
             
             chemical_potentials, composition_sets = cs_results
-            return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase, training)
+            return self._curvatureFactorFromEq(chemical_potentials, composition_sets, precPhase)
         else:
             return None
 
@@ -371,6 +372,9 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Precipitate phase (defaults to first precipitate in list)
         searchDir : None or array
             If two-phase equilibrium is not present, then move x towards this composition to find a two-phase region
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------
@@ -439,17 +443,29 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Temperature
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
         '''
         curv_results = self.curvatureFactor(x, T, precPhase, training)
         if curv_results is None:
             return self._prevBeta[precPhase]
         dc, mc, gba, beta, ca, cb = curv_results
         return beta
-        #dc, mc, gba, beta, ca, cb = self.curvatureFactor(x, T, precPhase, training)
-        #print(beta)
-        #return beta
     
     def _getCompositionSetsForCurvature(self, x, T, precPhase):
+        '''
+        Create composition sets from equilibrium to be used for curvature factor
+
+        Parameters
+        ----------
+        x : array
+            Composition of solutes
+        T : float
+            Temperature
+        precPhase : str (optional)
+            Precipitate phase (defaults to first precipitate in list)
+        '''
         cond = self._getConditions(x, T, 0)
         eq = self.getEq(x, T, 0, precPhase)
         state_variables = np.array([cond[v.GE], cond[v.N], cond[v.P], cond[v.T]], dtype=np.float64)
@@ -487,3 +503,24 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 chemical_potentials = result.chemical_potentials
 
         return chemical_potentials, composition_sets
+    
+    def _curvatureWithSearch(self, x, T, precPhase = None, training = True):
+        '''
+        Performs driving force calculation to get xb, which can be used to find
+        curvature factors when driving force is negative. Main use is for the surrogate model
+        to train on all points
+
+        Parameters
+        ----------
+        x : array
+            Composition of solutes
+        T : float
+            Temperature
+        precPhase : str (optional)
+            Precipitate phase (defaults to first precipitate in list)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
+        '''
+        dg, xb = self.getDrivingForce(x, T, precPhase, returnComp = True, training = training)
+        return self.curvatureFactor(x, T, precPhase, training = training, searchDir=xb)

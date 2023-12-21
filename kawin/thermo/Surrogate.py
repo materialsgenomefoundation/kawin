@@ -926,7 +926,8 @@ class MulticomponentSurrogate:
         #    but this needs to be compatible with the same parameters
         if curvature is None:
             #self.curvature = self.therm.curvatureFactor
-            self.curvature = lambda x, T, training = True: self.therm.curvatureFactor(x, T, self.precPhase, training)
+            #self.curvature = lambda x, T, training = True: self.therm.curvatureFactor(x, T, self.precPhase, training)
+            self.curvature = lambda x, T, training = True: self.therm._curvatureWithSearch(x, T, self.precPhase, training)
         else:
             self.curvature = curvature
 

@@ -676,6 +676,9 @@ class GeneralThermodynamics:
             Precipitate phase to consider (default is first precipitate phase in list)
         returnComp : bool (optional)
             Whether to return composition of precipitate (defaults to False)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------
@@ -720,6 +723,9 @@ class GeneralThermodynamics:
             Precipitate phase to consider (default is first precipitate phase in list)
         returnComp : bool (optional)
             Whether to return composition of precipitate (defaults to False)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------
@@ -784,6 +790,9 @@ class GeneralThermodynamics:
             Precipitate phase to consider (default is first precipitate phase in list)
         returnComp : bool (optional)
             Whether to return composition of precipitate (defaults to False)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------
@@ -880,6 +889,9 @@ class GeneralThermodynamics:
             Precipitate phase to consider (default is first precipitate phase in list)
         returnComp : bool (optional)
             Whether to return composition of precipitate (defaults to False)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------
@@ -967,7 +979,10 @@ class GeneralThermodynamics:
             Precipitate phase to consider (default is first precipitate phase in list)
         returnComp : bool (optional)
             Whether to return composition of precipitate (defaults to False)
-
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
+            
         Returns
         -------
         (driving force, precipitate composition)
@@ -1062,6 +1077,9 @@ class GeneralThermodynamics:
             Precipitate phase to consider (default is first precipitate phase in list)
         returnComp : bool (optional)
             Whether to return composition of precipitate (defaults to False)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------
@@ -1254,6 +1272,9 @@ class GeneralThermodynamics:
             Precipitate phase to consider (default is first precipitate phase in list)
         returnComp : bool (optional)
             Whether to return composition of precipitate (defaults to False)
+        training : bool (optional)
+            If True, this will not cache any equilibrium
+            This is used for training since training points may not be near each other
 
         Returns
         -------

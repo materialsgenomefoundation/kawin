@@ -342,11 +342,13 @@ class GenericModel:
         self.setup()
 
         solver = DESolver(solverType, minDtFrac = minDtFrac, maxDtFrac = maxDtFrac)
-        solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printHeader=self.printHeader, printStatus=self.printStatus, getDt=self.getDt)
+        solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printHeader=self.printHeader, printStatus=self.printStatus)
+        solver.setdXdtFunctions(self.getdXdt, self.correctdXdt, self.getDt, self.flattenX, self.unflattenX)
         
         t, X0 = self.getCurrentX()
         self.setTimeInfo(t, simTime)
-        solver.solve(self.getdXdt, self.startTime, X0, self.finalTime, verbose, vIt, self.correctdXdt, self.flattenX, self.unflattenX)
+        solver.solve(self.startTime, X0, self.finalTime, verbose, vIt)
+        #solver.solve(self.getdXdt, self.startTime, X0, self.finalTime, verbose, vIt, self.correctdXdt, self.flattenX, self.unflattenX)
 
 class Coupler(GenericModel):
     '''

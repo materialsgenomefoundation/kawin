@@ -922,6 +922,8 @@ class MulticomponentSurrogate:
         else:
             self.interfacialCompositionFunction = interfacialComposition
 
+        #TODO: curvatureFactor should take in searchDir from drivingForceFunction
+        #    but this needs to be compatible with the same parameters
         if curvature is None:
             #self.curvature = self.therm.curvatureFactor
             self.curvature = lambda x, T, training = True: self.therm.curvatureFactor(x, T, self.precPhase, training)

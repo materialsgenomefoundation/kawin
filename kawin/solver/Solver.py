@@ -28,7 +28,7 @@ class DESolver:
         self.dtmax = maxDtFrac
         self.dt = defaultDT
 
-        self.setFunctions(self.defaultPreProcess, self.defaultPostProcess, self.defaultPrintHeader, self.defaultPrintStatus, self.defaultDtFunc)
+        self.setFunctions(self.defaultPreProcess, self.defaultPostProcess, self.defaultPrintHeader, self.defaultPrintStatus)
 
         self.setIterator(iterator)
 
@@ -46,7 +46,7 @@ class DESolver:
         else:
             self.iterator = iterator
 
-    def setFunctions(self, preProcess = None, postProcess = None, printHeader = None, printStatus = None, getDt = None):
+    def setFunctions(self, preProcess = None, postProcess = None, printHeader = None, printStatus = None):
         '''
         Sets functions before solving
 
@@ -57,7 +57,13 @@ class DESolver:
         self.postProcess = self.postProcess if postProcess is None else postProcess
         self.printHeader = self.printHeader if printHeader is None else printHeader
         self.printStatus = self.printStatus if printStatus is None else printStatus
-        self.getDt = self.getDt if getDt is None else getDt
+
+    def setdXdtFunctions(self, f, correctdXdt, getDt, flattenX, unflattenX):
+        self._f = f
+        self._correctdXdt = correctdXdt
+        self._getDt = getDt
+        self._flattenX = flattenX
+        self._unflattenX = unflattenX
 
     def defaultDtFunc(self, dXdt):
         '''
@@ -107,7 +113,53 @@ class DESolver:
         '''
         return X_flat
     
-    def solve(self, f, t0, X0, tf, verbose = False, vIt = 10, correctdXdtFunc = None, flattenXFunc = None, unflattenXFunc = None):
+    def _getdXdt(self, t, x, getDt = False):
+        '''
+        Wrapper around getdXdt which will handle the following:
+            Handle flattening/unfalttening the x and dx/dt arrays
+            Calculate dt if not supplied
+
+        The API for the iterator will be that all arrays are 1D np.arrays where operators will be trivial
+
+        Parameters
+        ----------
+        t : float
+            Time
+        x : 1D np.array
+            Model values
+        getDt : bool
+            Will calculate dt if True
+        '''
+        unflatX = self._unflattenX(x, self._X0)
+        dXdt = self._f(t, unflatX)
+        if getDt:
+            dt = self._getDt(dXdt)
+            dt = dt if dt > self._dtmin else self._dtmin
+            dt = dt if dt < self._dtmax else self._dtmax
+            return self._flattenX(dXdt), dt
+        else:
+            return self._flattenX(dXdt)
+        
+    def _updateX(self, x, dxdt, dt):
+        '''
+        Helper function that hides the correctdXdt function
+
+        The API for the iterator will be that all arrays are 1D np.arrays where operators will be trivial
+
+        Parameters
+        ----------
+        x : 1D np.array
+            Model values
+        dxdt : 1D np.array
+            Derivatives at x
+        dt : float
+            Time step
+        '''
+        unflatdxdt = self._unflattenX(dxdt, self._X0)
+        self._correctdXdt(dt, self._X0, unflatdxdt)
+        return x + self._flattenX(unflatdxdt)*dt
+    
+    def solve(self, t0, X0, tf, verbose = False, vIt = 10):
         '''
         Solves dX/dt over a time increment
         This will be the main function that a model will use
@@ -133,20 +185,12 @@ class DESolver:
             Whether to print status
         vIt : integer (defaults to 10)
             Number of iterations to print status
-        correctdXdtFunc : function (defaults to None)
-            Corrects dXdt (takes in t, x and dXdt) and returns nothing
-            Should this be here or in setFunctions? It only gets called in Iterator.iterator
         '''
         if verbose:
             self.printHeader()
 
-        #Use default function if correctdXdtFunc, flattenXFunc or unflattenXFunc is not supplied
-        correctdXdtFunc = self.correctdXdtNotImplemented if correctdXdtFunc is None else correctdXdtFunc
-        flattenXFunc = self.flattenXNotImplemented if flattenXFunc is None else flattenXFunc
-        unflattenXFunc = self.unflattenXNotImplemented if unflattenXFunc is None else unflattenXFunc
-
-        dtmin = self.dtmin * (tf - t0)
-        dtmax = self.dtmax * (tf - t0)
+        self._dtmin = self.dtmin * (tf - t0)
+        self._dtmax = self.dtmax * (tf - t0)
         currTime = t0
         i = 0
         timeStart = time.time()
@@ -158,10 +202,17 @@ class DESolver:
 
             self.preProcess()
             #Limit dtmax to remaining time if it's larger
-            if dtmax > tf - currTime:
-                dtmax = tf - currTime
-            #X0, dt = self.iterator.iterate(f, currTime, X0, self.getDt, dtmin, dtmax, correctdXdtFunc)
-            X0, dt = self.iterator(f, currTime, X0, self.getDt, dtmin, dtmax, correctdXdtFunc, flattenXFunc, unflattenXFunc)
+            if self._dtmax > tf - currTime:
+                self._dtmax = tf - currTime
+
+            #Store X0 as a reference variable for _unflattenX
+            #We have to do this per iteration since the shape of X0 can change during postProcess
+            #    This is especially true for the population balance model with adaptive bins
+            #The iterator also returns the flat array of X, so we need to unflatten it afterwards here
+            self._X0 = X0
+            X0_flat, dt = self.iterator(self._getdXdt, currTime, self._flattenX(X0), self._updateX)
+            X0 = self._unflattenX(X0_flat, self._X0)
+            
             currTime += dt
             X0, stop = self.postProcess(currTime, X0)
             i += 1

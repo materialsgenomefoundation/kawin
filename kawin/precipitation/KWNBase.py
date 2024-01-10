@@ -932,8 +932,6 @@ class PrecipitateBase(GenericModel):
 
         We use these terms for the first step of the iterators (for Euler, this is all the steps)
             For RK4, these terms will be recalculated in dXdt
-
-        TODO: _firstIt appears to be unused
         '''
         self._currY = None
         return

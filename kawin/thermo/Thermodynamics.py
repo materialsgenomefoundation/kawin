@@ -172,16 +172,16 @@ class GeneralThermodynamics:
                     self.mobCallables[p] = {}
                     for c in self.phase_records[p].nonvacant_elements:
                         bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
-                                            parameter_symbols=self._parameters, output='mob_'+c, build_gradients=False, build_hessians=False,
+                                            parameter_symbols=self._parameters, output='MOB_'+c, build_gradients=False, build_hessians=False,
                                             additional_statevars=[v.T, v.P, v.N, v.GE])
-                        self.mobCallables[p][c] = bcp['mob_'+c]['callables'][p]
+                        self.mobCallables[p][c] = bcp['MOB_'+c]['callables'][p]
                 else:
                     self.diffCallables[p] = {}
                     for c in self.phase_records[p].nonvacant_elements:
                         bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
-                                            parameter_symbols=self._parameters, output='diff_'+c, build_gradients=False, build_hessians=False,
+                                            parameter_symbols=self._parameters, output='DIFF_'+c, build_gradients=False, build_hessians=False,
                                             additional_statevars=[v.T, v.P, v.N, v.GE])
-                        self.diffCallables[p][c] = bcp['diff_'+c]['callables'][p]
+                        self.diffCallables[p][c] = bcp['DIFF_'+c]['callables'][p]
 
         #This applies to all phases since this is typically reflective of quenched-in vacancies
         self.mobility_correction = {A: 1 for A in self.elements}

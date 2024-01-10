@@ -45,13 +45,17 @@ class MobilityModel(Model):
                 for s in self._parameters_arg:
                     symbols.pop(wrap_symbol(s))
 
+        #Replace symbols with database symbols for mobility and exponential term
+        #Also store a copy of the mobility/diffusivity as MOB_A or DIFF_A
         for name, value in self.mobility.items():
             self.mobility[name] = self.symbol_replace(value, symbols).xreplace(v.supported_variables_in_databases)
-            setattr(self, 'mob_'+name, self.symbol_replace(getattr(self, 'mob_' + name), symbols).xreplace(v.supported_variables_in_databases))
+            setattr(self, 'MOB_'+name, self.mobility[name])
+            setattr(self, 'MQ_'+name, self.symbol_replace(getattr(self, 'MQ_'+name), symbols).xreplace(v.supported_variables_in_databases))
 
         for name, value in self.diffusivity.items():
             self.diffusivity[name] = self.symbol_replace(value, symbols).xreplace(v.supported_variables_in_databases)
-            setattr(self, 'diff_'+name, self.symbol_replace(getattr(self, 'diff_' + name), symbols).xreplace(v.supported_variables_in_databases))
+            setattr(self, 'DIFF_'+name, self.diffusivity[name])
+            setattr(self, 'DQ_'+name, self.symbol_replace(getattr(self, 'DQ_'+name), symbols).xreplace(v.supported_variables_in_databases))
 
         self.mob_site_fractions = {c: sorted([x for x in self.mobility_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.mobility}
         self.diff_site_fractions = {c: sorted([x for x in self.diffusivity_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.diffusivity}
@@ -134,19 +138,40 @@ class MobilityModel(Model):
                         self.mob_models[name] = {}
                     self.mob_models[name][c.name] = rk
 
+                #Additional parameters search if diffusing species are not included
+                #   This is mainly intended to help with parameter fitting
+                #   Parameters will be in the format for MOB_A, MOB_B (or the respective keyword)
+                #   This will reflect how the models are stored in MobilityModel
+                #       Ex. MOB_A is the entire mobility model of A while MQ_A is the redlich kister polynomial used for A mobility
+                #Additional parameters will be in tuples of (database keyword, mob_models keyword)
+                additional_params = [('MOB', 'MQ'), ('MQ', 'MQ'), ('DIFF', 'DQ'), ('DQ', 'DQ')]
+                for p in additional_params:
+                    fit_name = p[0] + '_' + c.name
+                    param_query = (
+                        (where('phase_name') == phase.name) & \
+                        (where('parameter_type') == fit_name) & \
+                        (where('constituent_array').test(self._mobility_validity))
+                    )
+                    rk = self.redlich_kister_sum(phase, param_search, param_query)
+                    self.mob_models[p[1]][c.name] += rk
+
         self.checkOrderingContribution(dbe)
         for c in self.components:
             if c.name != 'VA':
                 #In thermo-calc, the mobility model is defined as exp(sum(MF)/RT) * exp(sum(MQ)/RT) / RT
                 #The diffusivity model is defined either as dilute - exp(sum(DF)/RT) * exp(sum(DQ)/RT)
-                # or simple - sum(DF) + sum(DQ)
+                #                                        or simple - sum(DF) + sum(DQ)
                 # We use the dilute assumption here
                 #In summary, there's no difference between MF and MQ, or between DF and DQ
                 # For papers using Q and theta (pre-exponential term), corrections must be made to theta have it fit the definitions above
-                mob[c.name] = (1 / (v.R * v.T)) * exp((self.mob_models['MF'][c.name] + self.mob_models['MQ'][c.name]) / (v.R * v.T))
-                diff[c.name] = exp((self.mob_models['DF'][c.name] + self.mob_models['DQ'][c.name]) / (v.R * v.T))
-                setattr(self, 'mob_'+str(c.name).upper(), mob[c.name])
-                setattr(self, 'diff_' + str(c.name).upper(), diff[c.name])
+                mqsum = self.mob_models['MF'][c.name] + self.mob_models['MQ'][c.name]
+                dqsum = self.mob_models['DF'][c.name] + self.mob_models['DQ'][c.name]
+                mob[c.name] = (1 / (v.R * v.T)) * exp(mqsum / (v.R * v.T))
+                diff[c.name] = exp(dqsum / (v.R * v.T))
+
+                #Also store the exponential term in case we want to grab the activation energy or pre-exp term
+                setattr(self, 'MQ_'+str(c.name).upper(), mqsum)
+                setattr(self, 'DQ_'+str(c.name).upper(), dqsum)
 
         return mob, diff
     

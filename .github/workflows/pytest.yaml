@@ -28,14 +28,14 @@ jobs:
       run: python -m pip install git+https://github.com/pycalphad/pycalphad.git@develop
     - name: Save pycalphad version
       run: |
-        echo "PYCALPHAD_VERSION=$(python -c "from importlib.metadata import version;print(version('pycalphad'))")" >> $GITHUB_ENV
+        echo "PYCALPHAD_VERSION=$(python -c "from importlib_metadata import version;print(version('pycalphad'))")" >> $GITHUB_ENV
     - run: python -m pip install build
     - run: python -m build --wheel
     - run: python -m pip install dist/*.whl
     - run: python -m pip install pytest
     - run: python -m pip list
     # pytest:
-    # - The `--import-mode=append` and `--pyargs pycalphad` flags test the installed package over the local one
+    # - The `--import-mode=append` and `--pyargs kawin` flags test the installed package over the local one
     # - The `--cov` flag is required to turn on coverage
     - run: pytest -v --import-mode=append --cov --cov-config=pyproject.toml --pyargs kawin
     - run: coverage xml

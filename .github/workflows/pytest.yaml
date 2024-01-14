@@ -26,6 +26,9 @@ jobs:
     - name: Install pycalphad development version
       if: matrix.pycalphad_develop_version
       run: python -m pip install git+https://github.com/pycalphad/pycalphad.git@develop
+    - name: Save pycalphad version
+      run: |
+        echo "PYCALPHAD_VERSION=$(python -c 'from importlib.metadata import version;version(\'pycalphad\')')" >> $GITHUB_ENV
     - run: python -m pip install build
     - run: python -m build --wheel
     - run: python -m pip install dist/*.whl
@@ -38,7 +41,7 @@ jobs:
     - run: coverage xml
     - uses: actions/upload-artifact@v4
       with:
-        name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
+        name: coverage-${{ matrix.os }}-${{ matrix.python-version }}-pycalphad-${{ env.PYCALPHAD_VERSION }}
         path: coverage.xml
 
   Upload-Coverage:

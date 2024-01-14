@@ -28,7 +28,7 @@ jobs:
       run: python -m pip install git+https://github.com/pycalphad/pycalphad.git@develop
     - name: Save pycalphad version
       run: |
-        echo "PYCALPHAD_VERSION=$(python -c 'from importlib.metadata import version;version(\'pycalphad\')')" >> $GITHUB_ENV
+        echo "PYCALPHAD_VERSION=$(python -c "from importlib.metadata import version;print(version('pycalphad'))")" >> $GITHUB_ENV
     - run: python -m pip install build
     - run: python -m build --wheel
     - run: python -m pip install dist/*.whl

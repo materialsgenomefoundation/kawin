@@ -1059,7 +1059,10 @@ class GeneralThermodynamics:
         unsortIndices = np.argsort(sortIndices)
         xb = xb[unsortIndices]
 
-        return dg, xb[1:]
+        if len(x) == 1:
+            return dg, xb[1:][0]
+        else:
+            return dg, xb[1:]
     
     def _getCompositionSetsForDF(self, x, T, cond, precPhase = None, training = False):
         '''

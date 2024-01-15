@@ -283,18 +283,19 @@ class BinaryThermodynamics (GeneralThermodynamics):
                     xParentEq = cParent[1]
                     xPrecEq = cPrec[1]
 
+                #dmudx are scalars here
                 dMudxParent = dMudxParent[0,0]
                 dMudxPrec = dMudxPrec[0,0]
 
                 if dMudxParent != 0:
                     xParent = gExtra / dMudxParent / (xPrecEq - xParentEq) + xParentEq
                 else:
-                    xParent = xParentEq
+                    xParent = xParentEq*np.ones(len(gExtra))
 
                 if dMudxPrec != 0:
                     xPrec = dMudxParent * (xParent - xParentEq) / dMudxPrec + xPrecEq
                 else:
-                    xPrec = xPrecEq
+                    xPrec = xPrecEq*np.ones(len(gExtra))
 
                 xParent[xParent < 0] = 0
                 xParent[xParent > 1] = 1

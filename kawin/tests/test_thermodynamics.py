@@ -4,12 +4,13 @@ from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, Multicompo
 from kawin.tests.datasets import *
 from pycalphad import Database
 
-AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='approximate')
-NiCrAlTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
-NiCrAlThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
-NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
-NiAlCrThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
-AlCrNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'CR', 'NI'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')
+#Default driving force method will be 'tangent'
+AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
+NiCrAlTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
+NiCrAlThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
+NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
+NiAlCrThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
+AlCrNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'CR', 'NI'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
 
 #Set constant sampling densities for each Thermodynamics object
 #pycalphad equilibrium results may change based off sampling density, so this is to make sure
@@ -30,9 +31,11 @@ AlCrNiTherm.setEQSamplingDensity(500)
 def test_DG_binary():
     '''
     Checks value of binary driving force calculation
+
+    Driving force value was updated due to switch from approximate to tangent method
     '''
     dg, _ = AlZrTherm.getDrivingForce(0.004, 673.15, training = True)
-    assert_allclose(dg, 6346.929428, atol=0, rtol=1e-3)
+    assert_allclose(dg, 6346.930428, atol=0, rtol=1e-3)
 
 def test_DG_binary_output():
     '''
@@ -41,20 +44,27 @@ def test_DG_binary_output():
         (scalar, scalar) input -> scalar
         (array, array) input -> array
     '''
-    dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, returnComp=True, training = True)
-    dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], returnComp=True, training = True)
+    methods = ['sampling', 'approximate', 'curvature', 'tangent']
+    for m in methods:
+        AlZrTherm.setDrivingForceMethod(m)
+        dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, returnComp=True, training = True)
+        dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], returnComp=True, training = True)
 
-    assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
-    assert np.isscalar(xP) or (type(xP) == np.ndarray and xP.ndim == 0)
-    assert hasattr(dgarray, '__len__') and len(dgarray) == 2
-    assert hasattr(xParray, '__len__') and len(xParray) == 2
+        assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
+        assert np.isscalar(xP) or (type(xP) == np.ndarray and xP.ndim == 0)
+        assert hasattr(dgarray, '__len__') and len(dgarray) == 2
+        assert hasattr(xParray, '__len__') and len(xParray) == 2
+
+    AlZrTherm.setDrivingForceMethod('tangent')
 
 def test_DG_ternary():
     '''
     Checks value of ternary driving force calculation
+
+    Driving force value was updated due to switch from approximate to tangent method
     '''
     dg, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
-    assert_allclose(dg, 244.012027, atol=0, rtol=1e-3)
+    assert_allclose(dg, 265.779087, atol=0, rtol=1e-3)
 
 def test_DG_ternary_output():
     '''
@@ -63,12 +73,17 @@ def test_DG_ternary_output():
         (array, scalar) -> scalar
         (2D array, array) -> array
     '''
-    dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, returnComp=True, training = True)
-    dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], returnComp=True, training = True)
-    assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
-    assert xP.ndim == 1 and len(xP) == 2
-    assert hasattr(dgarray, '__len__')
-    assert xParray.shape == (3, 2)
+    methods = ['sampling', 'approximate', 'curvature', 'tangent']
+    for m in methods:
+        NiCrAlTherm.setDrivingForceMethod(m)
+        dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, returnComp=True, training = True)
+        dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], returnComp=True, training = True)
+        assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
+        assert xP.ndim == 1 and len(xP) == 2
+        assert hasattr(dgarray, '__len__')
+        assert xParray.shape == (3, 2)
+
+    NiCrAlTherm.setDrivingForceMethod('tangent')
 
 def test_DG_ternary_order():
     '''
@@ -105,16 +120,21 @@ def test_IC_binary_output():
         (array, array) -> (array, array)
         (scalar, array) -> (array, array)   Special case where T is scalar
     '''
-    xm, xp = AlZrTherm.getInterfacialComposition(673.15, 5000)
-    xmarray, xparray = AlZrTherm.getInterfacialComposition([673.15, 683.15], [5000, 50000])
-    xmarray2, xparray2 = AlZrTherm.getInterfacialComposition(673.15, [5000, 50000])
+    methods = ['curvature', 'equilibrium']
+    for m in methods:
+        AlZrTherm.setInterfacialMethod(m)
+        xm, xp = AlZrTherm.getInterfacialComposition(673.15, 5000)
+        xmarray, xparray = AlZrTherm.getInterfacialComposition([673.15, 683.15], [5000, 50000])
+        xmarray2, xparray2 = AlZrTherm.getInterfacialComposition(673.15, [5000, 50000])
 
-    assert np.isscalar(xm) or (type(xm) == np.ndarray and xm.ndim == 0)
-    assert np.isscalar(xp) or (type(xp) == np.ndarray and xp.ndim == 0)
-    assert hasattr(xmarray, '__len__') and len(xmarray) == 2
-    assert hasattr(xparray, '__len__') and len(xparray) == 2
-    assert hasattr(xmarray2, '__len__') and len(xmarray2) == 2
-    assert hasattr(xparray2, '__len__') and len(xparray2) == 2
+        assert np.isscalar(xm) or (type(xm) == np.ndarray and xm.ndim == 0)
+        assert np.isscalar(xp) or (type(xp) == np.ndarray and xp.ndim == 0)
+        assert hasattr(xmarray, '__len__') and len(xmarray) == 2
+        assert hasattr(xparray, '__len__') and len(xparray) == 2
+        assert hasattr(xmarray2, '__len__') and len(xmarray2) == 2
+        assert hasattr(xparray2, '__len__') and len(xparray2) == 2
+
+    AlZrTherm.setInterfacialMethod('equilibrium')
 
 def test_Mob_binary():
     '''

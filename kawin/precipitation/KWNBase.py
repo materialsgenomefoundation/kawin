@@ -35,6 +35,7 @@ class PrecipitateBase(GenericModel):
         self._resetArrays()
         self.resetConstraints()
         self._isSetup = False
+        self._currY = None
 
         #Constants
         self.Rg = 8.314     #Gas constant - J/mol-K
@@ -118,6 +119,7 @@ class PrecipitateBase(GenericModel):
         self.dTemp = 0
 
         self._isSetup = False
+        self._currY = None
 
         #Reset temperature array
         if np.isscalar(self.Tparameters):

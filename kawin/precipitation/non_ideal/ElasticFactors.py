@@ -45,6 +45,24 @@ class StrainEnergy:
         self._cachedRange = 5
         self._cachedIntervals = 100
 
+        self._ohm_inverse = self._ohm_quickInverse
+
+    def setOhmInverseFunction(self, method = 'quick'):
+        '''
+        Sets method to invert the ohm term in calculating eshelby's tensor
+
+        Parameters
+        ----------
+        method : str
+            'numpy' - uses np.linalg.inv, which can be slower for batch, but runs through
+                        multiple checks for whether values are real/complex or if inverse exists
+            'quick' - quick inverse using Cramer's rule assuming that values are real and inverse exists - recommended method
+        '''
+        if method == 'numpy':
+            self._ohm_inverse = self._ohm_npinv
+        else:
+            self._ohm_inverse = self._ohm_quickInverse
+
     def setAspectRatioResolution(self, resolution = 0.01, cachedRange = 5):
         '''
         Sets resolution to which equilibrium aspect ratios are calculated
@@ -634,6 +652,54 @@ class StrainEnergy:
         '''
         invOhm = np.tensordot(self._c4, np.tensordot(n, n, axes=0), axes=[[1,2], [0,1]])
         return np.linalg.inv(invOhm)
+    
+    def _ohm_quickInverse(self, m):
+        '''
+        Hard coded inverse of m which is of shape (3,3,n)
+
+        numpy inv is more optimized for larger matrices, but can be slower for small
+        matrices such as a 2x2 or 3x3. We can take advantage of 3x3 matrices having a computable
+        inverse to make it faster
+
+        NOTE: this only works since we know that m has a shape of (3,3,n) and is only composed of real numbers
+
+        This function can probably be a bit more efficient, but quick 
+        profiling on sphInt gives around a 35x speedup compared to doing 
+        np.transpose(np.linalg.inv(np.transpose(m, (2,0,1))), (1,2,0)) 
+        where the slowdown was in np.linalg.inv
+
+        For matrix:
+            |  a  b  c  |
+            |  d  e  f  |
+            |  g  h  i  |
+
+        Inverse is defined as:
+            |  ei-fh  fg-di  dh-eg  |          |  A  B  C  |
+            |  ch-bi  ai-cg  bg-ah  | / det -> |  D  E  F  | / det
+            |  bf-ce  cd-af  ae-bd  |          |  G  H  I  |
+            Where det = aA + bB + cC
+        '''
+        a, b, c, d, e, f, g, h, i = m[0,0], m[0,1], m[0,2], m[1,0], m[1,1], m[1,2], m[2,0], m[2,1], m[2,2]
+        A = e*i - f*h
+        B = f*g - d*i
+        C = d*h - e*g
+        D = c*h - b*i
+        E = a*i - c*g
+        F = b*g - a*h
+        G = b*f - c*e
+        H = c*d - a*f
+        I = a*e - b*d
+        det = a*A + b*B + c*C
+        return np.array([[A, B, C], [D, E, F], [G, H, I]]) / det
+    
+    def _ohm_npinv(self, m):
+        '''
+        Inverts ohm term using np.linalg.inv
+
+        numpy inverse function takes in an array of shape (m,n,n) and inverts each nxn matrix
+            So we have to transpose m from (3,3,n) -> (n,3,3), then invert, then transpose (n,3,3) ->(3,3,n)
+        '''
+        return np.transpose(np.linalg.inv(np.transpose(m, (2,0,1))), (1,2,0))
 
     def sphInt(self):
         '''
@@ -654,7 +720,8 @@ class StrainEnergy:
         #Ohm term (Ohm_ij = inverse(C_iklj * n_k * n_l))
         #For all grid points (Ohm_ijn = inverse(C_iklj) * nProd_kln)
         invOhm = np.tensordot(self._c4, nProd, axes=[[1,2], [0,1]])
-        ohm = np.transpose(np.linalg.inv(np.transpose(invOhm, (2,0,1))), (1,2,0))
+
+        ohm = self._ohm_inverse(invOhm)
 
         #Tensor product (D_ijkl = intergral(ohm_ij * n_k * n_l * endTerm))
         #For summing over grid points (D_ijkl = ohm_ij * nProd_kln * endTerm_n)

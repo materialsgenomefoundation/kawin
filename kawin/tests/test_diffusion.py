@@ -228,6 +228,7 @@ def test_single_phase_dxdt():
     m.setup()
     t, x = m.getCurrentX()
     dxdt = m.getdXdt(t, x)
+    dt = m.getDt(dxdt)
 
     #Index 5
     ind5, vals5 = 5, np.array([1.640437e-9, 5.669268e-10])
@@ -241,6 +242,7 @@ def test_single_phase_dxdt():
     assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
+    assert_allclose(dt, 28721.530474, rtol=1e-3)
 
 def test_diffusion_x_shape():
     '''
@@ -304,6 +306,7 @@ def test_homogenization_dxdt():
     m.setup()
     t, x = m.getCurrentX()
     dxdt = m.getdXdt(t, x)
+    dt = m.getDt(dxdt)
     
     #Index 5
     ind5, vals5 = 5, np.array([-1.592463e-9, 1.211067e-9])
@@ -317,6 +320,7 @@ def test_homogenization_dxdt():
     assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
+    assert_allclose(dt, 61865.352193, rtol=1e-3)
 
 
 

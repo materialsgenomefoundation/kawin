@@ -278,7 +278,7 @@ class StrainEnergy:
                 nu = (3*K - E) / (6*K)
                 G = 3*K*E / (9*K - E)
             elif M:
-                S = -np.sqrt(E**2 + 9*M**2 - 10*E*M)
+                S = np.sqrt(E**2 + 9*M**2 - 10*E*M)
                 nu = (E - M + S) / (4*M)
                 G = (3*M + E - S) / 8
         elif nu:

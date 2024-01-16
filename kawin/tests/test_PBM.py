@@ -72,32 +72,6 @@ def test_decreaseBinSize():
     assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
     pbm.reset()
 
-'''
-Nucleate function is deprecated behavior for PBM in favor of the new solver system, so we'll take this out for now
-
-def test_nucleateSmall():
-    #If nucleate radius is smaller than PSD length, then no change
-    pbm.Nucleate(10, 1e-9)
-    assert(len(pbm.PSD) == bins and pbm.bins == len(pbm.PSD))
-    assert(len(pbm.PSDbounds) == bins+1)
-    assert(len(pbm.PSDsize) == bins)
-    assert(pbm.Moment(0) == 10)
-    assert(pbm.PSDbounds[-1] == 1e-8)
-
-def test_nucleateBig():
-    #If nucleate radius is larger than PSD length, then increase bin size
-    #such that number of bins is the same, but max if 5*radius
-    r = 1e-7
-    pbm.Nucleate(10, r)
-    assert(len(pbm.PSD) == bins and pbm.bins == len(pbm.PSD))
-    assert(len(pbm.PSDbounds) == bins+1)
-    assert(len(pbm.PSDsize) == bins)
-    assert(pbm.Moment(0) == 10)
-    assert_allclose(pbm.PSDbounds[-1], 5*r, rtol=1e-6)
-    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
-    pbm.reset()
-'''
-
 def test_DT():
     '''
     Calculated DT with constant growth rate

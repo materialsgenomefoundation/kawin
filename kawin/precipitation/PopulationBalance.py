@@ -893,9 +893,12 @@ class PopulationBalanceModel:
                 determined by precipitate curvature
         *args, **kwargs - extra arguments for plotting
         '''
-        kernel = sts.gaussian_kde(self.PSDsize, bw_method = bw_method, weights = self.PSD)
-        x = np.linspace(self.min, self.max, 1000)   
-        y = kernel(x) * self.ZeroMoment() * (self.PSDbounds[1] - self.PSDbounds[0])
+        x = np.linspace(self.min, self.max, 1000) 
+        if np.all(self.PSD == 0):
+            y = np.zeros(x.shape)
+        else:
+            kernel = sts.gaussian_kde(self.PSDsize, bw_method = bw_method, weights = self.PSD)  
+            y = kernel(x) * self.ZeroMoment() * (self.PSDbounds[1] - self.PSDbounds[0])
 
         if hasattr(scale, '__len__'):
             scale = np.interp(x, self.PSDbounds, scale)

@@ -87,7 +87,7 @@ def plotBase(precModel, axes, variable, bounds = None, timeUnits = 's', radius='
     }
 
     totalVariables = ['Total Volume Fraction', 'Total Average Radius', 'Total Aspect Ratio', \
-                        'Total Nucleation Rate', 'Total Precipitate Density']
+                        'Total Nucleation Rate', 'Total Precipitate Density', 'Total Volume Average Radius']
     singleVariables = ['Volume Fraction', 'Critical Radius', 'Average Radius', 'Aspect Ratio', \
                         'Driving Force', 'Nucleation Rate', 'Precipitate Density', 'Volume Average Radius']
     eqCompositions = ['Eq Composition Alpha', 'Eq Composition Beta']
@@ -169,7 +169,7 @@ def plotEuler(precModel, axes, variable, bounds = None, timeUnits = 's', radius=
         plotBase(precModel, axes, variable, bounds, timeUnits, radius, *args, **kwargs)
 
 def plotTemperature(precModel, timeScale, labels, variable, axes, *args, **kwargs):
-    axes.semilogx(timeScale * precModel.time, precModel.T, *args, **kwargs)
+    axes.semilogx(timeScale * precModel.time, precModel.temperature, *args, **kwargs)
     axes.set_ylabel(labels[variable])
 
 def plotCompositions(precModel, timeScale, labels, variable, axes, *args, **kwargs):
@@ -242,23 +242,16 @@ def plotSaurations(precModel, timeScale, labels, variable, axes, *args, **kwargs
     #Thus only a single element is needed
     plotVariable = np.zeros(precModel.betaFrac.shape)
     for p in range(len(precModel.phases)):
-        if precModel.numberOfElements == 1:
-            if variable == 'Eq Volume Fraction':
-                num = precModel.xComp[0] - precModel.xEqAlpha[p]
-            else:
-                num = precModel.xComp - precModel.xEqAlpha[p]
-            den = precModel.xEqBeta[p] - precModel.xEqAlpha[p]
+        if variable == 'Eq Volume Fraction':
+            num = precModel.xComp[0,0] - precModel.xEqAlpha[:,p,0]
         else:
-            if variable == 'Eq Volume Fraction':
-                num = precModel.xComp[0,0] - precModel.xEqAlpha[:,p,0]
-            else:
-                num = precModel.xComp[:,0] - precModel.xEqAlpha[:,p,0]
-            den = precModel.xEqBeta[:,p,0] - precModel.xEqAlpha[:,p,0]
+            num = precModel.xComp[:,0] - precModel.xEqAlpha[:,p,0]
+        den = precModel.xEqBeta[:,p,0] - precModel.xEqAlpha[:,p,0]
         #If precipitate is unstable, both xEqAlpha and xEqBeta are set to 0
         #For these cases, change the values of numerator and denominator so that supersaturation is 0 instead of undefined
         num[den == 0] = 0
         den[den == 0] = 1
-        plotVariable[p] = num / den
+        plotVariable[:,p] = num / den
     
     if len(precModel.phases) == 1:
         axes.semilogx(timeScale * precModel.time, plotVariable[:,0], *args, **kwargs)

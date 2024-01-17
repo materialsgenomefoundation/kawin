@@ -135,6 +135,8 @@ def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, *args, **kwar
     ax.set_ylim([0, 1])
     ax.set_xlabel('Distance (m)')
     ax.set_ylabel('Phase Fraction')
-    ax.legend()
+
+    if plotPhase is None:
+        ax.legend()
 
     return ax

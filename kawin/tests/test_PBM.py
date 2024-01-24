@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.testing import assert_allclose
-from kawin.PopulationBalance import PopulationBalanceModel
+from kawin.precipitation import PopulationBalanceModel
 
 #Set parameters for pbm. Default bins are increased here so that added bins should be 50
 bins = 200
@@ -72,39 +72,17 @@ def test_decreaseBinSize():
     assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
     pbm.reset()
 
-def test_nucleateSmall():
-    '''
-    If nucleate radius is smaller than PSD length, then no change
-    '''
-    pbm.Nucleate(10, 1e-9)
-    assert(len(pbm.PSD) == bins and pbm.bins == len(pbm.PSD))
-    assert(len(pbm.PSDbounds) == bins+1)
-    assert(len(pbm.PSDsize) == bins)
-    assert(pbm.Moment(0) == 10)
-    assert(pbm.PSDbounds[-1] == 1e-8)
-
-def test_nucleateBig():
-    '''
-    If nucleate radius is larger than PSD length, then increase bin size
-    such that number of bins is the same, but max if 5*radius
-    '''
-    r = 1e-7
-    pbm.Nucleate(10, r)
-    assert(len(pbm.PSD) == bins and pbm.bins == len(pbm.PSD))
-    assert(len(pbm.PSDbounds) == bins+1)
-    assert(len(pbm.PSDsize) == bins)
-    assert(pbm.Moment(0) == 10)
-    assert_allclose(pbm.PSDbounds[-1], 5*r, rtol=1e-6)
-    assert_allclose(pbm.PSDsize[0], 0.5*(pbm.PSDbounds[0] + pbm.PSDbounds[1]), atol=0, rtol=1e-6)
-    pbm.reset()
-
 def test_DT():
     '''
     Calculated DT with constant growth rate
-    DT = binSize / (2*max(growth rate))
+    DT = ratio * binSize / (max(growth rate))
+
+    Previous version had ratio of 0.5, but this was decreased slightly to 0.4 for numerical stability
     '''
     growth = 5*np.ones(pbm.bins+1)
     pbm.PSD = 2*np.ones(pbm.bins)
-    trueDT = (pbm.PSDbounds[1] - pbm.PSDbounds[0]) / (2*growth[0])
-    calcDT = pbm.getDTEuler(5, growth, 1e-3, 0)
+    ratio = 0.4
+    trueDT = ratio * (pbm.PSDbounds[1] - pbm.PSDbounds[0]) / (growth[0])
+    dissIndex = pbm.getDissolutionIndex(1e-3, 0)
+    calcDT = pbm.getDTEuler(5, growth, dissIndex, maxBinRatio=ratio)
     assert_allclose(trueDT, calcDT, rtol=1e-6)

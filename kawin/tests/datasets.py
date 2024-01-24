@@ -1679,3 +1679,703 @@ PARAMETER DQ(FCC_A1&CR,*;0) 298.15  -40800+R*T*LN(3e-6); 6000 N !
 PARAMETER DQ(FCC_A1&NI,*;0) 298.15  -271960+R*T*LN(1.27E-4); 6000 N !
 $
 """
+
+FECRNI_DB = """
+$ FeCrNi database using parameters taken from MatCalc open steel database mc_fe_v2.060.tdb
+$
+$ The mc_fe_v2.059.tdb database is made available under the 
+$ Open Database License: http://opendatacommons.org/licenses/odbl/1.0/. 
+$ Any rights in individual contents of the database are licensed under the 
+$ Database Contents License: http://opendatacommons.org/licenses/dbcl/1.0/. 
+$
+$ ##########################################################################
+
+ELEMENT VA   VACUUM            0.0                0.00            0.00      !
+ELEMENT CR   BCC_A2           51.996           4050.0            23.5429    !
+ELEMENT FE   BCC_A2           55.847           4489.0            27.2797    !
+ELEMENT NI   FCC_A1           58.69            4787.0            29.7955    !
+
+FUNCTION GHSERCR
+ 273.00 -8856.94+157.48*T-26.908*T*LN(T)
+ +0.00189435*T**2-1.47721E-6*T**3+139250*T**(-1); 2180.00  Y
+ -34869.344+344.18*T-50*T*LN(T)-2.88526E+32*T**(-9); 6000.00  N
+REF:0 !
+FUNCTION GCRFCC
+ 273.00 +7284+0.163*T+GHSERCR#; 6000.00  N
+REF:0 !
+FUNCTION GHSERFE
+ 273.00 +1225.7+124.134*T-23.5143*T*LN(T)-0.00439752*T**2
+ -5.89269E-8*T**3+77358.5*T**(-1); 1811.00  Y
+ -25383.581+299.31255*T-46*T*LN(T)+2.2960305E+31*T**(-9); 6000.00  N
+REF:0 !
+FUNCTION GFEFCC
+ 273.00 -1462.4+8.282*T-1.15*T*LN(T)+6.4E-04*T**2+GHSERFE#; 1811.00  Y
+ -27098.266+300.25256*T-46*T*LN(T)+2.78854E+31*T**(-9); 6000.00  N
+REF:0 !
+FUNCTION GHSERNI
+ 273.00 -5179.159+117.854*T-22.096*T*LN(T)-4.8407E-3*T**2; 1728.00  Y
+ -27840.655+279.135*T-43.10*T*LN(T)+1.12754E+31*T**(-9); 6000.00  N
+REF:0 !
+FUNCTION GNIBCC
+ 273.00 +8715.084-3.556*T+GHSERNI#; 6000.00  N
+REF:0 !
+
+$FCC_A1 phase
+
+TYPE_DEFINITION ' GES A_P_D FCC_A1 MAGNETIC  -3.0    0.28 !
+TYPE_DEFINITION % SEQ *!
+PHASE FCC_A1  %'  2 1   1 ! 
+CONSTITUENT FCC_A1  : CR,FE%,NI : VA% :  !
+
+PARAMETER G(FCC_A1,CR:VA;0) 273.00 +7284+0.163*T+GHSERCR#; 6000.00  N
+REF:0 !
+PARAMETER G(FCC_A1,FE:VA;0) 273.00 -1462.4+8.282*T-1.15*T*LN(T)
+   +0.00064*T**2+GHSERFE#; 1811.00  Y
+   -1713.815+0.94001*T+0.4925095E+31*T**(-9)+GHSERFE#; 6000.00  N
+REF:0 !
+PARAMETER G(FCC_A1,NI:VA;0) 273.00 +GHSERNI#; 3000.00  N
+REF:0 !
+PARAMETER L(FCC_A1,CR,FE:VA;0) 273.00 +10833-7.477*T; 6000.00  N
+REF:11 !
+PARAMETER L(FCC_A1,CR,FE:VA;1) 273.00 +1410; 6000.00  N
+REF:11 !
+PARAMETER L(FCC_A1,CR,NI:VA;0) 273.00 +8030-12.8801*T; 6000.00  N
+REF:11 !
+PARAMETER L(FCC_A1,CR,NI:VA;1) 273.00 +33080-16.0362*T; 6000.00  N
+REF:11 !
+PARAMETER L(FCC_A1,FE,NI:VA;0) 273.00 -12054.355+3.27413*T; 6000.00  N
+REF:20 !
+PARAMETER L(FCC_A1,FE,NI:VA;1) 273.00 +11082.1315-4.45077*T; 6000.00  N
+REF:20 !
+PARAMETER L(FCC_A1,FE,NI:VA;2) 273.00 -725.805174; 6000.00  N
+REF:20 !
+PARAMETER L(FCC_A1,CR,FE,NI:VA;0) 273.00 +8000-8*T; 6000.00 N
+REF:jac17 !
+PARAMETER L(FCC_A1,CR,FE,NI:VA;1) 273.00 -6500; 6000.00 N
+REF:jac17 !
+PARAMETER L(FCC_A1,CR,FE,NI:VA;2) 273.00 +30000; 6000.00 N
+REF:jac17 !
+PARAMETER TC(FCC_A1,CR:VA;0) 273.00 -1109; 6000.00  N
+REF:11 !
+PARAMETER BMAGN(FCC_A1,CR:VA;0) 273.00 -2.46; 6000.00  N
+REF:11 !
+PARAMETER TC(FCC_A1,CR,NI:VA;0) 273.00 -3605; 6000.00  N
+REF:11 !
+PARAMETER BMAGN(FCC_A1,CR,NI:VA;0) 273.00 -1.91; 6000.00  N
+REF:11 !
+PARAMETER TC(FCC_A1,FE:VA;0) 273.00 -201; 6000.00  N
+REF:20 !
+PARAMETER BMAGN(FCC_A1,FE:VA;0) 273.00 -2.1; 6000.00  N
+REF:20 !
+PARAMETER TC(FCC_A1,FE,NI:VA;0) 273.00 +2133; 6000.00  N
+REF:20 !
+PARAMETER TC(FCC_A1,FE,NI:VA;1) 273.00 -682; 6000.00  N
+REF:20 !
+PARAMETER BMAGN(FCC_A1,FE,NI:VA;0) 273.00 +9.55; 6000.00  N
+REF:20 !
+PARAMETER BMAGN(FCC_A1,FE,NI:VA;1) 273.00 +7.23; 6000.00  N
+REF:20 !
+PARAMETER BMAGN(FCC_A1,FE,NI:VA;2) 273.00 +5.93; 6000.00  N
+REF:20 !
+PARAMETER BMAGN(FCC_A1,FE,NI:VA;3) 273.00 +6.18; 6000.00  N
+REF:20 !
+PARAMETER TC(FCC_A1,NI:VA;0) 273.00 +633; 6000.00  N
+REF:0 !
+PARAMETER BMAGN(FCC_A1,NI:VA;0) 273.00 +0.52; 6000.00  N
+REF:0 !
+
+$BCC_A2 phase
+
+TYPE_DEFINITION & GES A_P_D BCC_A2 MAGNETIC  -1.0    0.4 !
+PHASE BCC_A2  %&  2 1   3 !
+CONSTITUENT BCC_A2  : CR,FE%,NI : VA% :  ! 
+
+PARAMETER G(BCC_A2,CR:VA;0) 273.00 +GHSERCR#; 6000.00  N
+REF:0 !
+PARAMETER G(BCC_A2,FE:VA;0) 273.00 +GHSERFE#; 6000.00  N
+REF:0 !
+PARAMETER G(BCC_A2,NI:VA;0) 273.00 +8715.084-3.556*T+GHSERNI#; 3000.00  N
+REF:0 !
+PARAMETER L(BCC_A2,CR,FE:VA;0) 273.00 +20500-9.68*T; 6000.00  N
+REF:11 !
+PARAMETER L(BCC_A2,CR,NI:VA;0) 273.00 +17170-11.8199*T; 6000.00  N
+REF:11 !
+PARAMETER L(BCC_A2,CR,NI:VA;1) 273.00 +34418-11.8577*T; 6000.00  N
+REF:11 !
+PARAMETER L(BCC_A2,CR,NI:VA;2) 273.00 +1e-8; 6000.00  N
+REF:11 !
+PARAMETER L(BCC_A2,FE,NI:VA;0) 273.00 -956.63-1.28726*T; 6000.00  N
+REF:20 !
+PARAMETER L(BCC_A2,FE,NI:VA;1) 273.00 +5000-5*T; 6000.00  N
+REF:pov12 !
+PARAMETER L(BCC_A2,CR,FE,NI:VA;0) 273.00 +3000+5*T; 6000.00 N
+REF:jac17 !
+PARAMETER L(BCC_A2,CR,FE,NI:VA;1) 273.00 +9000-6*T; 6000.00 N
+REF:jac17 !
+PARAMETER L(BCC_A2,CR,FE,NI:VA;2) 273.00 -30000+20*T; 6000.00 N
+REF:jac17 !
+PARAMETER TC(BCC_A2,CR:VA;0) 273.00 -311.5; 6000.00  N
+REF:22 !
+PARAMETER BMAGN(BCC_A2,CR:VA;0) 273.00 -0.008; 6000.00  N
+REF:0 !
+PARAMETER TC(BCC_A2,FE:VA;0) 273.00 +1043; 6000.00  N
+REF:0 !
+PARAMETER BMAGN(BCC_A2,FE:VA;0) 273.00 +2.22; 6000.00  N
+REF:0 !
+PARAMETER TC(BCC_A2,NI:VA;0) 273.00 +575; 6000.00  N
+REF:0 !
+PARAMETER BMAGN(BCC_A2,NI:VA;0) 273.00 +0.85; 6000.00  N
+REF:0 !
+PARAMETER TC(BCC_A2,CR,FE:VA;0) 273.00 +1650; 6000.00  N
+REF:11 !
+PARAMETER TC(BCC_A2,CR,FE:VA;1) 273.00 +550; 6000.00  N
+REF:11 !
+PARAMETER BMAGN(BCC_A2,CR,FE:VA;0) 273.00 -0.85; 6000.00  N
+REF:pov09 !
+PARAMETER TC(BCC_A2,CR,NI:VA;0) 273.00 +2373; 6000.00  N
+REF:11 !
+PARAMETER TC(BCC_A2,CR,NI:VA;1) 273.00 +617; 6000.00  N
+REF:11 !
+PARAMETER BMAGN(BCC_A2,CR,NI:VA;0) 273.00 +4; 6000.00  N
+REF:11 !
+
+$SIGMA phase
+
+PHASE SIGMA %  3 8   4   18  !
+CONSTITUENT SIGMA  : FE%,NI : CR% : CR,FE,NI :!
+
+PARAMETER G(SIGMA,FE:CR:CR;0) 273.00 +8*GFEFCC#+22*GHSERCR#
+ +92300-95.96*T; 6000.00  N
+REF:62 !
+PARAMETER G(SIGMA,FE:CR:FE;0) 273.00 +117300-95.96*T+8*GFEFCC#
+   +4*GHSERCR#+18*GHSERFE#; 6000.00  N
+REF:62 !
+PARAMETER G(SIGMA,FE:CR:NI;0) 273.00 -50000+32*T+8*GFEFCC#+4*GHSERCR#
+   +18*GNIBCC#; 6000.00  N
+REF:pov13 !
+PARAMETER G(SIGMA,NI:CR:CR;0) 273.00 +8*GHSERNI#+22*GHSERCR#
+ +180000-170*T; 6000.00  N
+REF:13 !
+PARAMETER G(SIGMA,NI:CR:FE;0) 273.00 +8*GHSERNI#+4*GHSERCR#
+ +18*GHSERFE#-50000+32*T; 6000.00  N
+REF:pov13 !
+PARAMETER G(SIGMA,NI:CR:NI;0) 273.00 +8*GHSERNI#+4*GHSERCR#
+ +18*GNIBCC#+175400; 6000.00  N
+REF:13 !
+PARAMETER L(SIGMA,FE:CR:CR,NI;0) 273.00 +1e-8; 6000.00  N
+REF:pov12 !
+PARAMETER L(SIGMA,FE:CR:FE,NI;0) 273.00 -200000; 6000.00  N
+REF:pov13 !
+
+$FCC mobility
+$CR
+
+PARAMETER MQ(FCC_A1&CR,CR:*) 273.00 -235000-82.0*T; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&CR,FE:*) 273.00 -286000-71.9*T; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&CR,NI:*) 273.00 -287000-64.4*T; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&CR,CR,FE:*;0) 273.00 -105000; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&CR,CR,NI:*;0) 273.00 -68000; 6000.00  N
+Ref:41 !
+PARAMETER MQ(FCC_A1&CR,FE,NI:*;0) 273.00 +16100; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&CR,CR,FE,NI:*;0) 273.00 +310000; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&CR,CR,FE,NI:*;1) 273.00 +320000; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&CR,CR,FE,NI:*;2) 273.00 +120000; 6000.00  N
+Ref:17 !
+
+$FE
+
+PARAMETER MQ(FCC_A1&FE,CR:*) 273.00 -235000-82.0*T; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&FE,FE:*) 273.00 -286000+R*T*LN(7.0E-5); 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&FE,NI:*) 273.00 -287000-67.5*T; 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&FE,CR,FE:*;0) 273.00 +15900; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&FE,CR,NI:*;0) 273.00 -77500; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&FE,FE,NI:*;0) 273.00 -115000+104*T; 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&FE,FE,NI:*;1) 273.00 +78800-73.3*T; 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&FE,CR,FE,NI:*;0) 273.00 -740000; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&FE,CR,FE,NI:*;1) 273.00 -540000; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&FE,CR,FE,NI:*;2) 273.00 +750000; 6000.00  N
+Ref:17 !
+
+$NI
+
+PARAMETER MQ(FCC_A1&NI,CR:*) 273.00 -235000-82.0*T; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&NI,FE:*) 273.00 -286000-86.0*T; 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&NI,NI:*) 273.00 -287000-69.8*T; 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&NI,CR,FE:*;0) 273.00 -119000; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&NI,CR,NI:*;0) 273.00 -81000; 6000.00  N
+Ref:19 !
+PARAMETER MQ(FCC_A1&NI,FE,NI:*;0) 273.00 +124000-51.4*T; 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&NI,FE,NI:*;1) 273.00 -300000+213*T; 6000.00  N
+Ref:18 !
+PARAMETER MQ(FCC_A1&NI,CR,FE,NI:*;0) 273.00 +1840000; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&NI,CR,FE,NI:*;1) 273.00 +670000; 6000.00  N
+Ref:17 !
+PARAMETER MQ(FCC_A1&NI,CR,FE,NI:*;2) 273.00 -1120000; 6000.00  N
+Ref:17 !
+
+$BCC Mobility
+
+$CR
+
+PARAMETER MQ(BCC_A2&CR,CR:*) 273.00 -407000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,CR:*) 273.00 -35.6*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,FE:*) 273.00 -218000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,FE:*) 273.00 +R*T*LN(8.5E-5); 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,NI:*) 273.00 -218000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,NI:*) 273.00 +R*T*LN(8.5E-5); 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,CR,FE:*;0) 273.00 +361000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,CR,FE:*;0) 273.00 -116*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,CR,FE:*;1) 273.00 +2820; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,CR,FE:*;1) 273.00 +37.5*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,CR,NI:*;0) 273.00 +350000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,CR,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,FE,NI:*;0) 273.00 +150000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,FE,NI:*;1) 273.00 +150000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,FE,NI:*;1) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,CR,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,CR,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,CR,FE,NI:*;1) 273.00 -2400000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,CR,FE,NI:*;1) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&CR,CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&CR,CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+
+$FE
+
+PARAMETER MQ(BCC_A2&FE,CR:*) 273.00 -407000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,CR:*) 273.00 -17.2*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,FE:*) 273.00 -218000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,FE:*) 273.00 +R*T*LN(4.6E-5); 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,NI:*) 273.00 -218000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,NI:*) 273.00 +R*T*LN(4.6E-5); 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,CR,FE:*;0) 273.00 +267000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,CR,FE:*;0) 273.00 -117*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,CR,FE:*;1) 273.00 -416000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,CR,FE:*;1) 273.00 +348*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,CR,NI:*;0) 273.00 +350000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,CR,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,FE,NI:*;0) 273.00 +150000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,CR,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,CR,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,CR,FE,NI:*;1) 273.00 +1400000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,CR,FE,NI:*;1) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&FE,CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&FE,CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+
+$NI
+
+PARAMETER MQ(BCC_A2&NI,CR:*) 273.00 -407000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,CR:*) 273.00 -17.2*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,FE:*) 273.00 -204000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,FE:*) 273.00 +R*T*LN(1.8E-5); 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,NI:*) 273.00 -204000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,NI:*) 273.00 +R*T*LN(1.8E-5); 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,CR,FE:*;0) 273.00 +88000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,CR,FE:*;0) 273.00 +10*T; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,CR,NI:*;0) 273.00 +350000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,CR,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,FE,NI:*;0) 273.00 +150000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,CR,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,CR,FE,NI:*;0) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,CR,FE,NI:*;1) 273.00 -500000; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,CR,FE,NI:*;1) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MQ(BCC_A2&NI,CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+PARAMETER MF(BCC_A2&NI,CR,FE,NI:*;2) 273.00 +1e-8; 6000.00  N
+Ref:14 !
+
+"""
+
+ALMGSI_DB = """
+
+
+$ AL-MG-SI system with metastable phases
+$
+$ Parameters for metastable phases and mobility
+$ taken from E. Povoden-Karadeniz et al, CALPHAD 43 (2011) p. 94
+$ 
+
+$Element     Standard state   mass [g/mol]     H_298             S_298
+ELEMENT VA   VACUUM            0.0             0.00              0.00       !
+ELEMENT AL   FCC_A1           26.98154         4540              28.30      !
+ELEMENT MG   HCP_A3           24.305           4998.0            32.671     !
+ELEMENT SI   DIA_A4           28.0855          3217.             18.81      !
+
+
+$
+$FUNCTIONS FOR PURE ELEMENT
+$
+FUNCTION GHSERAL
+ 273.00 -7976.15+137.093038*T-24.3671976*T*LN(T)
+ -1.884662E-3*T**2-0.877664E-6*T**3+74092*T**(-1); 700.00  Y
+ -11276.24+223.048446*T-38.5844296*T*LN(T)
+ +18.531982E-3*T**2-5.764227E-6*T**3+74092*T**(-1); 933.47  Y
+ -11278.378+188.684153*T-31.748192*T*LN(T)-1.231E+28*T**(-9); 2900.00  N
+REF:0 !
+FUNCTION GHSERMG
+ 273.00 -8367.34+143.675547*T-26.1849782*T*LN(T)+0.4858E-3*T**2
+ -1.393669E-6*T**3+78950*T**(-1); 923.00  Y
+ -14130.185+204.716215*T-34.3088*T*LN(T)+1038.192E25*T**(-9); 3000.00  N
+REF:0 !
+FUNCTION GHSERSI
+ 273.00 -8162.609+137.236859*T-22.8317533*T*LN(T)
+ -1.912904E-3*T**2-0.003552E-6*T**3+176667*T**(-1); 1687.00  Y
+ -9457.642+167.271767*T-27.196*T*LN(T)-4.2037E+30*T**(-9); 3600.00  N
+REF:0 !
+
+$
+$ OTHER FUNCTIONS
+$
+FUNCTION R         
+ 273.00 +8.31451; 6000.00  N !
+FUNCTION GMG2SI 273.00 -92250.0+440.4*T-75.9*T*LN(T)
+   -0.0018*T**2+630000*T**(-1); 6000.00  N
+REF:31 !
+
+$
+$                                                                       LIQUID
+$
+ TYPE-DEF % SEQ * !
+ PHASE LIQUID % 1  1.0 > 
+Random substitutional model. 
+>> 6 !
+    CONSTITUENT LIQUID  : AL,MG,SI: !
+
+PARAMETER G(LIQUID,AL;0)
+ 273.00 +11005.029-11.841867*T+7.934E-20*T**7+GHSERAL#; 700.00  Y
+ +11005.03-11.841867*T+7.9337E-20*T**7+GHSERAL#; 933.47  Y
+ +10482.382-11.253974*T+1.231E+28*T**(-9)+GHSERAL#; 2900.00  N
+REF:0 !
+PARAMETER G(LIQUID,MG;0)
+ 273.00 +8202.243-8.83693*T+GHSERMG#-8.0176E-20*T**7; 923.00  Y
+ +8690.316-9.392158*T+GHSERMG#-1.038192E+28*T**(-9); 6000.00  N
+REF:31 !
+PARAMETER G(LIQUID,SI;0)
+ 273.00 +50696.36-30.099439*T+2.0931E-21*T**7+GHSERSI#; 1687.00  Y
+ +49828.165-29.559068*T+4.2037E+30*T**(-9)+GHSERSI#; 3600.00  N
+REF:0 !
+
+PARAMETER L(LIQUID,AL,MG;0) 273.00 -12000.0+8.566*T; 6000.00  N
+REF:31 !
+PARAMETER L(LIQUID,AL,MG;1) 273.00 +1894.0-3.000*T; 6000.00  N
+REF:31 !
+PARAMETER L(LIQUID,AL,MG;2) 273.00 +2000.0; 6000.00  N
+REF:31 !
+PARAMETER L(LIQUID,AL,SI;0) 273.00 -11655.93-0.92934*T; 6000.00  N
+REF:37 !
+PARAMETER L(LIQUID,AL,SI;1) 273.00 -2873.45+0.2945*T; 6000.00  N
+REF:37 !
+PARAMETER L(LIQUID,AL,SI;2) 273.00 +2520; 6000.00  N
+REF:37 !
+PARAMETER L(LIQUID,MG,SI;0) 273.00 -70055+24.98*T; 6000.00  N
+REF:39 !
+PARAMETER L(LIQUID,MG,SI;1) 273.00 -1300; 6000.00  N
+REF:39 !
+PARAMETER L(LIQUID,MG,SI;2) 273.00 +6272; 6000.00  N
+REF:39 !
+
+PARAMETER L(LIQUID,AL,MG,SI;0) 273.00 +11882; 6000.00  N
+REF:34 !
+PARAMETER L(LIQUID,AL,MG,SI;1) 273.00 -24207; 6000.00  N
+REF:34 !
+PARAMETER L(LIQUID,AL,MG,SI;2) 273.00 -38223; 6000.00  N
+REF:34 !
+
+$
+$                                                                       FCC_A1
+$
+ PHASE FCC_A1  %  2 1   1 > Al-Matrix phase, face-centered cubic >> 6 !
+    CONSTITUENT FCC_A1  : AL%,MG,SI : VA :  !
+
+PARAMETER G(FCC_A1,AL:VA;0) 273.00 +GHSERAL#; 2900.00  N
+REF:0 !
+PARAMETER G(FCC_A1,MG:VA;0) 273.00 +2600-0.90*T+GHSERMG#; 6000.00  N
+REF:0 !
+PARAMETER G(FCC_A1,SI:VA;0) 273.00 +51000-21.8*T+GHSERSI#; 3600.00  N
+REF:0 !
+
+PARAMETER L(FCC_A1,AL,MG:VA;0) 273.00 +1*LDF0ALMG#; 6000.00  N
+REF:41 !
+PARAMETER L(FCC_A1,AL,MG:VA;1) 273.00 +1*LDF1ALMG#; 6000.00  N
+REF:41 !
+PARAMETER L(FCC_A1,AL,MG:VA;2) 273.00 +1*LDF2ALMG#; 6000.00  N
+REF:41 !
+PARAMETER L(FCC_A1,AL,SI:VA;0) 273.00 +1*LDF0ALSI#; 6000.00  N
+REF:41 !
+PARAMETER L(FCC_A1,AL,SI:VA;1) 273.00 +1*LDF1ALSI#; 6000.00  N
+REF:37 !
+PARAMETER L(FCC_A1,AL,SI:VA;2) 273.00 +1*LDF2ALSI#; 6000.00  N
+REF:37 !
+PARAMETER L(FCC_A1,MG,SI:VA;0) 273.00 +1*LDF0SIMG#; 6000.00  N
+REF:41 !
+PARAMETER L(FCC_A1,MG,SI:VA;1) 273.00 +1*LDF1SIMG#; 6000.00  N
+REF:31 !
+PARAMETER L(FCC_A1,MG,SI:VA;2) 273.00 +1*LDF2SIMG#; 6000.00  N
+REF:31 !
+
+$
+$                                                                       SI_DIAMOND_A4
+$
+ PHASE SI_DIAMOND_A4 % 1 1 > 
+Silicon precipitate. Space group Fd3m, prototype: C(diamond) 
+>> 4 !
+    CONSTITUENT SI_DIAMOND_A4  : AL,MG,SI% : !
+PARAMETER G(SI_DIAMOND_A4,AL;0) 273.00 +30.0*T+GHSERAL#; 6000.00  N
+REF:31 !
+PARAMETER G(SI_DIAMOND_A4,MG;0) 273.00 +GHSERMG#; 6000.00  N
+REF:41 !
+PARAMETER G(SI_DIAMOND_A4,SI;0) 273.00 +GHSERSI#; 6000.00  N
+REF:31 !
+PARAMETER L(SI_DIAMOND_A4,AL,SI;0) 273.00 +111417.7-46.1392*T; 6000.00  N
+REF:37 !
+PARAMETER L(SI_DIAMOND_A4,MG,SI;0) 273.00 +65000; 6000.00  N
+REF:41 !
+
+$
+$                                                                       MG2SI_B
+$
+ PHASE MG2SI_B % 2 2 1 > 
+Face-centered cubic equilibrium phase. 
+Incoherent precipitates (plates or cubes) in the overaging regime, 6xxx alloys. [REF:C31,C32] 
+>> 5 !
+    CONSTITUENT MG2SI_B  : MG : SI : !
+PARAMETER G(MG2SI_B,MG:SI;0) 273.00 GMG2SI; 6000.00  N
+REF:31 !
+
+$
+$                                                                       BETA_AL3MG2
+$
+ PHASE BETA_AL3MG2  % 2  89  140 > 
+Cubic (Al,Zn)3Mg2 equilibrium phase, prototype: Al3Mg2.  
+>> 2 !
+    CONSTITUENT BETA_AL3MG2  : MG : AL : !
+PARAMETER G(BETA_AL3MG2,MG:AL;0) 273.00 -246175.0-675.5500*T
+   +89*GHSERMG#+140*GHSERAL#; 6000.00  N
+REF:31 !
+
+$
+$                                                                       E_AL30MG23
+$
+ PHASE E_AL30MG23  %  2  23   30 > 
+Epsilon equilibrium phase, prototype: Co5Cr2Mo3 
+>> 1 !
+    CONSTITUENT E_AL30MG23  : MG : AL :  !
+PARAMETER G(E_AL30MG23,MG:AL;0) 273.00 -52565.4-173.1775*T
+   +23*GHSERMG#+30*GHSERAL#; 6000.00  N
+REF:31 !
+
+$
+$                                                                       G_AL12MG17
+$
+ PHASE G_AL12MG17  %  3  10  24 24 > 
+Gamma equilibrium phase, space group: I43m, prototype: Alpha-Mn. 
+Precipitate in Al-Mg-Zn alloy 
+>> 2 !
+    CONSTITUENT G_AL12MG17  : MG : AL,MG% : AL : !
+PARAMETER G(G_AL12MG17,MG:MG:MG;0) 273.00 +266939.2-174.638*T+58*GHSERMG#; 6000.00  N
+REF:40 !
+PARAMETER G(G_AL12MG17,MG:AL:AL;0) 273.00 +195750-203*T
+   +10*GHSERMG#+48*GHSERAL#; 6000.00  N
+REF:40 !
+PARAMETER G(G_AL12MG17,MG:MG:AL;0) 273.00 -105560-101.5*T
+   +34*GHSERMG#+24*GHSERAL#; 6000.00  N
+REF:40 !
+PARAMETER G(G_AL12MG17,MG:AL:MG;0) 273.00 +568249.2-276.138*T
+   +34*GHSERMG#+24*GHSERAL#; 6000.00  N
+REF:40 !
+PARAMETER L(G_AL12MG17,MG:AL:AL,MG;0) 273.00 +226200-29*T; 6000.00  N
+REF:40 !
+PARAMETER L(G_AL12MG17,MG:MG:AL,MG;0) 273.00 +226200-29*T; 6000.00  N
+REF:40 !
+
+$
+$                                                                       B_PRIME_L
+$
+ PHASE B_PRIME_L % 3 3  9  7 > 
+Metastable B´ phase - low-T type reflecting lowest energy modification from 1st principles. 
+Structure can be related to the hexagonal structure of Q-Phase, with empty Cu-sites. [REF:C11,C37] 
+>> 2 !
+    CONSTITUENT B_PRIME_L  : AL : MG : SI : !
+PARAMETER G(B_PRIME_L,AL:MG:SI;0)  273.00 -140000-10*T+3*GHSERAL#+9*GHSERMG#+7*GHSERSI#; 6000.00  N
+REF:41 !
+
+$
+$                                                                       MGSI_B_P
+$
+ PHASE MGSI_B_P % 2 1.8  1 > 
+Beta´, metastable hexagonal close-packed rod-like Mg-Si precipitates in 6xxx alloys. [REF:C31,C32,C34] 
+>> 5 !
+    CONSTITUENT MGSI_B_P  : MG : SI : !
+
+PARAMETER G(MGSI_B_P,MG:SI;0) 273.00 GMG2SI + 24250 - 40.4*T + 5.9*T*LN(T) - 0.0042*T**2 - 130000*T**(-1); 6000.00 N
+REF:41 !
+
+$
+$                                                                       MG5SI6_B_DP
+$
+ PHASE MG5SI6_B_DP % 2 5  6 > 
+Main metastable hardening phase in 6xxx, monoclinic with space group C2/m. Al-free Mg5Si6.
+Semicoherent needles. [REF:C31,C32,C35].     
+>> 5 !
+    CONSTITUENT MG5SI6_B_DP  : MG : SI : !
+PARAMETER G(MG5SI6_B_DP,MG:SI;0)  273.00 -5000-30*T-0.0096*T**2
+  -1e-7*T**3+5*GHSERMG#+6*GHSERSI#; 6000.00  N
+REF:41 !
+
+$
+$                                                                       U1_PHASE
+$
+ PHASE U1_PHASE % 3 2  1  2 > 
+Needle-like precipitate with trigonal structure observed in 6xxx in the beta´ precipitation regime. [REF:C37] 
+>> 3 !
+    CONSTITUENT U1_PHASE  : AL : MG : SI : !
+PARAMETER G(U1_PHASE,AL:MG:SI;0)  273.00 -5000-10*T-0.0055*T**2
+  +3e-6*T**3+150000*T**(-1)+2*GHSERAL#+GHSERMG#+2*GHSERSI#; 6000.00  N
+REF:41 !
+
+$
+$                                                                       U2_PHASE
+$
+ PHASE U2_PHASE % 3 1  1  1 > 
+Needle-like precipitate with orthorhombic structure in 6xxx in the beta' precipitation regime. [REF:C37] 
+>> 3 !
+    CONSTITUENT U2_PHASE  : AL : MG : SI : !
+PARAMETER G(U2_PHASE,AL:MG:SI;0)  273.00 -14000-3.75*T-0.0015*T**2
+  +7.5e-7*T**3+62500*T**(-1)+1*GHSERAL#+1*GHSERMG#+1*GHSERSI#; 6000.00  N
+REF:41 !
+
+$
+$                                                                       Mobility terms
+$
+PARAMETER MQ(FCC_A1&AL,*) 273.00 -127200+R*T*LN(1.39e-5); 6000.00  N       
+Ref:41 !
+
+PARAMETER MQ(FCC_A1&MG,AL:*) 273.00 -119000+R*T*LN(3.7e-5); 6000.00  N
+Ref:41!
+PARAMETER MQ(FCC_A1&MG,MG:*) 273.00 -112499+R*T*LN(5.7e-5); 6000.00  N
+Ref:41!
+PARAMETER MQ(FCC_A1&MG,MG,AL:*) 273.00 54511; 6000.00  N
+Ref:41!
+PARAMETER MQ(FCC_A1&MG,SI:*) 273.00 -119000+R*T*LN(3.7e-5); 6000.00  N
+Ref:41!
+
+PARAMETER MQ(FCC_A1&SI,AL:*) 273.00 -136400+R*T*LN(2.31e-4); 6000.00  N
+Ref:41 !
+PARAMETER MQ(FCC_A1&SI,MG:*) 273.00 -136400+R*T*LN(2.31e-4); 6000.00  N
+Ref:41 !
+PARAMETER MQ(FCC_A1&SI,SI:*) 273.00 -448400+R*T*LN(154e-4); 6000.00  N
+Ref:41 !
+
+$
+$ References
+$
+
+LIST_OF_REFERENCES
+
+A00201-0    unary                A.T. Dinsdale, SGTE Data of pure elements, CALPHAD, Vol. 15, No. 4, pp 317-425, 1991.
+       31   bin, tern            N. Saunders, COST 507: Thermochemical database for light metal alloys, Vol. 2, pp 23-27, 1998.
+A00166-34   Al-Mg-Si             J. Lacaze and R. Valdes, CALPHAD-type assessment of the Al-Mg-Si system, Monatshefte f. Chemie, Vol. 136, A00169-37   Al-Fe-Si             Z.-K. Liu, Y.A. Chang, Thermodynamic assessment of the Al-Fe-Si system, Metall. Mater. Trans A, Vol. 30A, pp 1081-1095, 1999. 
+A00172-39   Mg-Si-Li             D. Kevorkov, R. Schmid-Fetzer, F. Zhang, Phase equilibria and thermodynamics of the Mg-Si-Li system and remodeling of the Mg-Si system, J. Phase Equilib. Diffusion, Vol. 25, pp 140-151, 2004.
+A00173-40   Al-Mg-Zn             P. Liang et al., Experimental investigation and thermodynamic calculation of the Al-Mg-Zn system, Thermochim. Acta, Vol. 314, pp 87-110, 1998.
+       41                        E. Povoden-Karadeniz et al, Calphad modeling of metastable phases in the Al-Mg-Si system, CALPHAD, Vol. 42 pp 94-104, 1991
+$ ################################################################################################################################################################################################################################################################################
+
+$ References of phase descriptions
+
+       C31 Al-Mg-Si              J.P. Lynch, L.M. Brown, M.H.Jacobs, Microanalysis of age-hardening precipitates in Aluminium-alloys, Acta metall. mater. 30 (1982) 1389.
+C00025-C32 Al-Mg-Si              G.A. Edwards, K. Stiller, G.L. Dunlop, M.J. Couper, The precipitaton sequence in Al-Mg-Si alloys, Acta mater. 46 (1998) 3893-3904.
+C00026-C33 Al-Mg-Si, GP-zones    K. Matsuda, H. Gamada, K. Fujii, Y. Uetani, T. Sato, A. Kamio, S. Ikeno, High-resolution electron microscopy on the structure of Guinier-Preston zones in an Al-1.6mass% Mg2Si alloy, Metall. mater. trans. A 29 (1998) 1161-1167.
+C00027-C34 Mg-Si beta´           R. Vissers, M.A. van Huis, J. Jansen, H.W. Zandbergen, C.D. Marioara, S.J. Andersen, The structure of the beta´ phase in Al-Mg-Si alloys, Acta mater. 55 (2007) 3815-3823.
+C00028-C35 Mg-Si beta´´          H.W. Zandbergen, S.J. Andersen, J. Jansen, Structure determination of Mg5Si6 particles in Al by dynamic electron diffraction studies, Science 277 (1997) 1221-1225.
+       C36 Al-Mg-Si              H.S. Hasting, A.G. Froseth, S.J. Andersen, R. Vissers, J.C. Walmsley, C.D. Marioara, F. Danoix, W. Lefebvre, R. Holmestad, Composition of beta´´ precipitates in Al-Mg-Si alloys by atom probe tomography and first principles calculations, J. appl. phys. 106 (2009) 123527.
+C00029-C37 Al-Mg-Si, U-phases    S.J. Andersen, C.D. Marioara, R. Vissers, A. Froseth, H.W. Zandbergen, The structural relation between precipitates in Al-Mg-Si alloys, the Al-matrix and diamond silicon, with emphasis on the trigonal U1-MgAl2Si2, Mater. sci. eng. A 444 (2007) 157-169.
+
+      11  Smithells Metals Reference Book, Seventh Edition, Butterworth-Heinemann, Oxford, 1999.  
+      32  J. Yao, Y.W. Cui, H. Liu, H. Kou, J. Li, L. Zhou, Computer Coupling of Phase Diagrams and Thermochemistry Vol.32, 602-607, 2008.
+"""

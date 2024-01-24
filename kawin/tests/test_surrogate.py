@@ -1,8 +1,7 @@
 from numpy.testing import assert_allclose
 import numpy as np
 import os
-from kawin.Thermodynamics import BinaryThermodynamics, MulticomponentThermodynamics
-from kawin.Surrogate import BinarySurrogate, MulticomponentSurrogate
+from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics, BinarySurrogate, MulticomponentSurrogate
 from kawin.tests.datasets import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='approximate')

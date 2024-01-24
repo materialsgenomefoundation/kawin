@@ -20,3 +20,15 @@ source = [
 source_pkgs = [
     "kawin"
 ]
+
+[tool.setuptools]
+packages = [
+    "kawin",
+    "kawin.tests",
+    "kawin.diffusion",
+    "kawin.precipitation",
+    "kawin.precipitation.coupling",
+    "kawin.precipitation.non_ideal",
+    "kawin.solver",
+    "kawin.thermo"
+]

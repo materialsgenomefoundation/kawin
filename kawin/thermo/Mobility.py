@@ -52,10 +52,16 @@ class MobilityModel(Model):
             setattr(self, 'MOB_'+name, self.mobility[name])
             setattr(self, 'MQ_'+name, self.symbol_replace(getattr(self, 'MQ_'+name), symbols).xreplace(v.supported_variables_in_databases))
 
+            setattr(self, 'lnM0_'+name, getattr(self, 'MQ_'+name).diff(v.T)/v.R)
+            setattr(self, 'MQa_'+name, v.T*getattr(self, 'MQ_'+name).diff(v.T) - getattr(self, 'MQ_'+name))
+
         for name, value in self.diffusivity.items():
             self.diffusivity[name] = self.symbol_replace(value, symbols).xreplace(v.supported_variables_in_databases)
             setattr(self, 'DIFF_'+name, self.diffusivity[name])
             setattr(self, 'DQ_'+name, self.symbol_replace(getattr(self, 'DQ_'+name), symbols).xreplace(v.supported_variables_in_databases))
+
+            setattr(self, 'lnD0_'+name, getattr(self, 'DQ_'+name).diff(v.T)/v.R)
+            setattr(self, 'DQa_'+name, v.T*getattr(self, 'DQ_'+name).diff(v.T) - getattr(self, 'DQ_'+name))
 
         self.mob_site_fractions = {c: sorted([x for x in self.mobility_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.mobility}
         self.diff_site_fractions = {c: sorted([x for x in self.diffusivity_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.diffusivity}
@@ -295,12 +301,95 @@ def mobility_from_composition_set(composition_set, mobility_callables = None, mo
 
     #return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
     param_keys, param_values = extract_parameters(parameters)
-    if len(param_values) > 0:
+    if len(param_keys) > 0:
         callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float_)
     else:
         callableInput = composition_set.dof
     return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](callableInput) for A in range(len(elements))])
+
+def compute_symbolic_expr_from_composition_set(composition_set, mobility_model, symbol, parameters = {}):
+    '''
+    Computes mobility symbol from equilibrium results using symbolic model
+
+    NOTE: We don't build the callables for activation energy so this is a directly substitution
+          into the symengine model. However, since this function isn't used often, the slower
+          performance of this shouldn't be much of an issue
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    symbol : str
+        Name of symbol as symbol_el in model
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    elements = composition_set.phase_record.nonvacant_elements
+    param_keys, param_values = extract_parameters(parameters)
     
+    symbols = sorted([v.T, v.P, v.N, v.GE]) + mobility_model.site_fractions
+    var_dict = {s:val for s,val in zip(symbols, np.array(composition_set.dof))}
+    if len(param_keys) > 0:
+        for p,val in zip(param_keys, param_values[0]):
+            var_dict[p] = val
+
+    return np.array([getattr(mobility_model, f'{symbol}_{elements[A]}').subs(var_dict).n(53, real=True) for A in range(len(elements))])
+
+def mobility_from_composition_set_symbolic(composition_set, mobility_model, parameters = {}):
+    '''
+    Computes mobility from equilibrium results using symbolic model
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    return compute_symbolic_expr_from_composition_set(composition_set, mobility_model, 'MQ', parameters)
+    
+def activation_energy_from_composition_set(composition_set, mobility_model, parameters = {}):
+    '''
+    Computes activation energy for mobility from equilibrium results
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    return compute_symbolic_expr_from_composition_set(composition_set, mobility_model, 'MQa', parameters)
+
+def prefactor_from_composition_set(composition_set, mobility_model, parameters = {}):
+    '''
+    Computes prefactor term, ln(M0), for mobility from equilibrium results
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    return compute_symbolic_expr_from_composition_set(composition_set, mobility_model, 'lnM0', parameters)
+
 def tracer_diffusivity(composition_set, mobility_callables = None, mobility_correction = None, parameters = {}):
     '''
     Computes tracer diffusivity for given equilibrium results

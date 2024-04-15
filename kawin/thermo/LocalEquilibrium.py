@@ -47,7 +47,11 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
                                pdens=10, model=models, phase_records=phase_records)
             idx_p = np.argmin(calc_p.GM.values.squeeze())
             compset = CompositionSet(phase_records[phase])
+            #For phases with a single site fraction (e.g. stoichiometric at a pure composition),
+            #squeezing will result in a 0D array, so we make sure the site fractions are at least 1D
             site_fractions = np.array(calc_p.Y.isel(points=idx_p).values.squeeze())
+            if len(site_fractions.shape) == 0:
+                site_fractions = np.array([site_fractions])
             compset.update(site_fractions, phase_amt, state_variables)
             composition_sets.append(compset)
     else:

@@ -339,4 +339,8 @@ class HomogenizationModel(DiffusionModel):
         This is done by finding the time interval such that the composition
             change caused by the fluxes will be lower than self.maxCompositionChange
         '''
-        return self.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
+        #Account for dependent element
+        dXdtSum = np.sum(dXdt[0], axis=0)
+        t0 = self.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
+        t1 = self.maxCompositionChange / np.amax(np.abs(dXdtSum[dXdtSum!=0]))
+        return np.amin([t0, t1])

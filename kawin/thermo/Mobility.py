@@ -465,15 +465,24 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     #There are no entries for M_ab if one index is interstitial and the other is substitutional
     mobMatrix = np.zeros((len(elements), len(elements)))
     for a in range(len(elements)):
-        if elements[a] in interstitials:
-            mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
-        else:
-            for b in range(len(elements)):
+        for b in range(len(elements)):
+            if a == b:
+                if elements[a] in interstitials:
+                    mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
+                else:
+                    mobMatrix[a, b] = (1 - U[a]) * mob[b]
+            else:
                 if elements[b] not in interstitials:
-                    if a == b:
-                        mobMatrix[a, b] = (1 - U[a]) * mob[b]
-                    else:
-                        mobMatrix[a, b] = -U[a] * mob[b]
+                    mobMatrix[a, b] = -U[a] * mob[b]
+        # if elements[a] in interstitials:
+        #     mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
+        # else:
+        #     for b in range(len(elements)):
+        #         if elements[b] not in interstitials:
+        #             if a == b:
+        #                 mobMatrix[a, b] = (1 - U[a]) * mob[b]
+        #             else:
+        #                 mobMatrix[a, b] = -U[a] * mob[b]
     #Diffusivity requires dmu_a/dU_b; however, the free energy curvature gives dmu_a/dX_b
     #Assuming that Usum is constant and using chain-rule derivatives,
     #    the conversion from dmu_a/dX_b to dmu_a/dU_b can be done by multiplying the sum(substitutionals)
@@ -552,7 +561,7 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
         free energy hessian will be None if returnHessian is False
     '''
     Dkj, hessian = chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction, returnHessian, parameters)
-    #print('Dkj', Dkj)
+
     elements = list(composition_set.phase_record.nonvacant_elements)
 
     #Find index of reference element
@@ -577,7 +586,7 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
                     d += 1
             c += 1
             d = 0
-
+            
     return Dnkj, hessian
 
 def inverseMobility(chemical_potentials, composition_set, refElement, mobility_callables, mobility_correction = None, returnOther = True, parameters = {}):

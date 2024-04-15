@@ -3,7 +3,7 @@ from pycalphad import Model, Database, calculate, equilibrium, variables as v
 from pycalphad.codegen.callables import build_callables, build_phase_records
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import extract_parameters
-from kawin.thermo.Mobility import MobilityModel, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
+from kawin.thermo.Mobility import MobilityModel, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff, interdiffusivity, interdiffusivity_from_diff
 from kawin.thermo.FreeEnergyHessian import dMudX
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 import matplotlib.pyplot as plt
@@ -557,15 +557,15 @@ class GeneralThermodynamics:
         chemical_potentials = self._parentEq.chemical_potentials
 
         if self.mobCallables[phase] is None:
-            Dnkj, _, _ = inverseMobility_from_diffusivity(chemical_potentials, cs_matrix,
-                                                                            self.elements[0], self.diffCallables[phase],
-                                                                            diffusivity_correction=self.mobility_correction,
-                                                                            parameters = self._parameters)
+            Dnkj = interdiffusivity_from_diff(chemical_potentials, cs_matrix, self.elements[0], 
+                                    self.mobCallables[phase], 
+                                    mobility_correction=self.mobility_correction, 
+                                    parameters=self._parameters)
         else:
-            Dnkj, _, _ = inverseMobility(chemical_potentials, cs_matrix, self.elements[0],
-                                                        self.mobCallables[phase],
-                                                        mobility_correction=self.mobility_correction,
-                                                        parameters=self._parameters)
+            Dnkj, _ = interdiffusivity(chemical_potentials, cs_matrix, self.elements[0], 
+                                    self.mobCallables[phase], 
+                                    mobility_correction=self.mobility_correction, 
+                                    parameters=self._parameters)
 
         if len(x) == 1:
             return Dnkj.ravel()[0]

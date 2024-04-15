@@ -193,5 +193,9 @@ class InterdiffusivityResidual(ResidualFunction):
     def get_likelihood(self, parameters):
         likelihood = calculate_diff_probability(self.diff_data, parameters, self.thermoCache)
         return likelihood
+    
+    def __getstate__(self):
+        print('i am pickled')
+        return self.__dict__
 
 residual_function_registry.register(InterdiffusivityResidual)

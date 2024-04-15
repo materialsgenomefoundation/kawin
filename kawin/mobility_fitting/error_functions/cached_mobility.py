@@ -1,8 +1,7 @@
 import numpy as np
 from pycalphad.core.utils import extract_parameters
 from pycalphad import variables as v
-
-interstitials = ['C', 'N', 'O', 'H', 'B']
+from kawin.thermo.Mobility import interstitials
 
 # ------------------------------------------------------------------
 # For ESPEI assessments
@@ -89,13 +88,6 @@ def mobility_matrix_quick(dof, composition, elements, mob_from_CS, phase_record)
                         mobMatrix[a, b] = -U[a] * mob[b]
     mobMatrix *= Usum
 
-    #for a in range(len(elements)):
-    #    for b in range(len(elements)):
-    #        if a == b:
-    #            mobMatrix[a, b] = (1 - U[a]) * mob[b]
-    #        else:
-    #           mobMatrix[a, b] = -U[a] * mob[b]
-
     return mobMatrix
 
 def chemical_diffusivity_quick(dmudx, mobMatrix, returnHessian = False):
@@ -105,29 +97,3 @@ def chemical_diffusivity_quick(dmudx, mobMatrix, returnHessian = False):
         return Dkj, dmudx
     else:
         return Dkj, None
-
-def interdiffusivity_quick(dmudx, mobMatrix, elements, refElement, mobility_callables = None, mobility_correction = None, returnHessian = False, parameters = {}):
-    Dkj, hessian = chemical_diffusivity_quick(dmudx, mobMatrix, returnHessian)
-
-    refIndex = 0
-    for a in range(len(elements)):
-        if elements[a] == refElement:
-            refIndex = a
-            break
-
-    Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
-    c = 0
-    d = 0
-    for a in range(len(elements)):
-        if a != refIndex:
-            for b in range(len(elements)):
-                if b != refIndex:
-                    if elements[b] in interstitials:
-                        Dnkj[c, d] = Dkj[a, b]
-                    else:
-                        Dnkj[c, d] = Dkj[a, b] - Dkj[a, refIndex]
-                    d += 1
-            c += 1
-            d = 0
-
-    return Dnkj, hessian

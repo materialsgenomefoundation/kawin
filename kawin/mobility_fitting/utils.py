@@ -3,7 +3,7 @@ from kawin.thermo import GeneralThermodynamics
 from pycalphad import Database
 from espei.utils import database_symbols_to_fit
 
-def getUsedDatabaseSymbols(dbname, elements, refElement, phases = None, freeSub = False):
+def get_used_database_symbols(dbname, elements, refElement, phases = None, freeSub = False):
     '''
     Given the database, grab all symbols that pertain only to the given elements and phases
 

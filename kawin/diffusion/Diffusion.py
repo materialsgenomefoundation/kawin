@@ -434,7 +434,7 @@ class DiffusionModel(GenericModel):
         if any(xsum > 1):
             print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[xsum>1]), np.amax(self.z[xsum>1])))
             raise Exception('Some compositions sum up to above 1')
-        self.x[self.x > self.minComposition] = self.x[self.x > self.minComposition] - len(self.allElements) * self.minComposition
+        self.x[self.x > 1-self.minComposition] = self.x[self.x > 1-self.minComposition] - len(self.allElements) * self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
         self.T = self.Tfunc(self.z, 0)
         self.isSetup = True
@@ -457,6 +457,23 @@ class DiffusionModel(GenericModel):
     def getCurrentX(self):
         return self.t, [self.x]
     
+    def correctdXdt(self, dt, x, dXdt):
+        #For undefined fluxes, interpolated between the defined fluxes
+        for i in range(len(dXdt[0])):
+            indices = np.isnan(dXdt[0][i])
+            dXdt[0][i][indices] =  np.interp(self.z[indices], self.z[~indices], dXdt[0][i][~indices])
+
+        #Adjust flux by a scale if it predicts that a composition will go below 0
+        xfull = np.concatenate((np.array([np.sum(x[0],axis=0)]), x[0]), axis=0)
+        dXdtfull = np.concatenate((np.array([np.sum(dXdt[0],axis=0)]), dXdt[0]), axis=0)
+        xpred = dt * dXdtfull
+        alpha = np.ones(xfull.shape)
+        den = xpred - xfull
+        alpha[den != 0] = (0 - xfull[den != 0]) / den[den != 0]
+        alpha[(alpha > 1) | (alpha <= 0)] = 1
+        for i in range(len(dXdt[0])):
+            dXdt[0][i] *= np.amin(alpha, axis=0)
+          
     def getdXdt(self, t, x):
         '''
         dXdt is defined as -dJ/dz
@@ -472,6 +489,8 @@ class DiffusionModel(GenericModel):
         Stores new x and t
         Records new values if recording is enabled
         '''
+        x[0][x[0] > 1-self.minComposition] = 1-3*self.minComposition
+        x[0][x[0] < 3*self.minComposition] = self.minComposition
         self.t = time
         self.x = x[0]
         self.record(self.t)

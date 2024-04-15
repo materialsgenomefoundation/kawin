@@ -4,7 +4,7 @@ import pycalphad
 from pycalphad import Database
 from espei.espei_script import run_espei
 from espei.parameter_selection.fitting_descriptions import ModelFittingDescription
-from kawin.mobility_fitting.fitting_steps import StepQ, StepD0, TracerDiffusivityStep
+from kawin.mobility_fitting.fitting_steps import StepQ, StepD0, StepTracerDiffusivity
 from kawin.thermo.Mobility import MobilityModel
 
 fitting_description = None
@@ -83,7 +83,7 @@ def setup_mobility_fitting_description(elements, fit_to_tracer = False):
     steps = []
     for e in elements:
         if fit_to_tracer:
-            Dstar = type(f'Tracer_{e}', (TracerDiffusivityStep,), {'parameter_name': f'MQ_{e}', 'data_types_read': f'TRACER_DIFF_{e}'})
+            Dstar = type(f'Tracer_{e}', (StepTracerDiffusivity,), {'parameter_name': f'MQ_{e}', 'data_types_read': f'TRACER_DIFF_{e}'})
             steps.append(Dstar)
         else:
             D0 = type(f'D0_{e}', (StepD0,), {'parameter_name': f'MQ_{e}', 'data_types_read': f'TRACER_D0_{e}'})

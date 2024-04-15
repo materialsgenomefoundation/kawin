@@ -6,22 +6,17 @@ import logging
 from collections import OrderedDict
 from typing import Any, Dict, List, NewType, Optional, Tuple, Union
 
-import symengine
 from scipy.stats import norm
 import numpy as np
 import numpy.typing as npt
-from symengine import Symbol
 from tinydb import where
 
-from pycalphad import Database, Model, ReferenceState, variables as v
-from pycalphad.codegen.callables import build_phase_records
-from pycalphad.core.utils import unpack_components, get_pure_elements, filter_phases
+from pycalphad import Database, variables as v
+from pycalphad.core.utils import unpack_components, filter_phases
 
 from espei.datasets import Dataset
 from espei.core_utils import ravel_conditions, get_prop_data, filter_temperatures
-from espei.parameter_selection.redlich_kister import calc_interaction_product
 from espei.phase_models import PhaseModelSpecification
-from espei.shadow_functions import calculate_, update_phase_record_parameters
 from espei.sublattice_tools import canonicalize, recursive_tuplify, tuplify
 from espei.typing import SymbolName
 from espei.utils import database_symbols_to_fit, PickleableTinyDB
@@ -217,11 +212,11 @@ def get_tracer_data(dbf, comps, phases, datasets, model=None, weight_dict=None, 
 
     species_comps = set(unpack_components(dbf, comps))
 
-    # estimated from NIST TRC uncertainties
+    # made up values
     property_std_deviation = {
-        'TRACER_DIFF': 1/weight_dict.get('TRACER_DIFF', 1.0),  # J/mol
-        'TRACER_D0':   1/weight_dict.get('TRACER_D0', 1.0),  # J/K-mol
-        'TRACER_Q':  10000/weight_dict.get('TRACER_Q', 1.0),  # J/K-mol
+        'TRACER_DIFF': 1/weight_dict.get('TRACER_DIFF', 1.0),  # decade
+        'TRACER_D0':   1/weight_dict.get('TRACER_D0', 1.0),  # decade
+        'TRACER_Q':  10000/weight_dict.get('TRACER_Q', 1.0),  # J/mol
     }
     properties = ['TRACER_DIFF', 'TRACER_D0', 'TRACER_Q']
 
@@ -252,7 +247,6 @@ def get_tracer_data(dbf, comps, phases, datasets, model=None, weight_dict=None, 
                 curr_data = filter_sublattice_configurations(curr_data, constituents)
                 curr_data = filter_temperatures(curr_data)
                 calculate_dict = get_prop_samples(curr_data, constituents)
-                output = prop
                 species = sorted(unpack_components(dbf, comps), key=str)
                 data_dict['species'] = species
                 data_dict['elements'] = nonvaelements
@@ -264,14 +258,12 @@ def get_tracer_data(dbf, comps, phases, datasets, model=None, weight_dict=None, 
                 data_dict['calculate_dict'] = calculate_dict
                 data_dict['model'] = model_dict
                 data_dict['symbols'] = symbols_to_fit
-                data_dict['output'] = output
+                data_dict['output'] = prop
                 data_dict['weights'] = np.array(property_std_deviation[prop_base])/np.array(calculate_dict.pop('weights'))
                 all_data_dicts.append(data_dict)
     return all_data_dicts
 
 def compute_fixed_configuration_property_differences(calc_data: FixedConfigurationCalculationData, parameters):
-    phase_name = calc_data['phase_name']
-    output = calc_data['output']
     sample_values = calc_data['calculate_dict']['values']
     x = calc_data['calculate_dict']
 

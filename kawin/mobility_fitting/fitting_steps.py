@@ -2,7 +2,7 @@ from espei.parameter_selection.fitting_steps import AbstractLinearPropertyStep, 
 from pycalphad import Model, variables as v
 import numpy as np
 import symengine
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from numpy.typing import ArrayLike
 from espei.utils import build_sitefractions
 import itertools
@@ -40,8 +40,8 @@ Option 2: Fit mobility directly to tracer diffusivity
 '''
     
 class StepD0(FittingStep):
-    supported_reference_states: [str] = [""]
-    features: [symengine.Expr] = [v.T]
+    supported_reference_states: List[str] = [""]
+    features: List[symengine.Expr] = [v.T]
 
     @staticmethod
     def transform_data(d: ArrayLike, model: Optional[Model] = None) -> ArrayLike:  # np.object_
@@ -53,7 +53,7 @@ class StepD0(FittingStep):
         return symengine.diff(expr, v.T)
     
     @classmethod
-    def shift_reference_state(cls, desired_data: [Dataset], fixed_model: Model, mole_atoms_per_mole_formula_unit: symengine.Expr) -> ArrayLike:  # np.object_
+    def shift_reference_state(cls, desired_data: List[Dataset], fixed_model: Model, mole_atoms_per_mole_formula_unit: symengine.Expr) -> ArrayLike:  # np.object_
         """
         Shift _MIX or _FORM data to a common reference state in per mole-atom units.
 
@@ -109,7 +109,7 @@ class StepD0(FittingStep):
         return total_response
 
     @classmethod
-    def get_response_vector(cls, fixed_model: Model, fixed_portions: [symengine.Basic], data: [Dataset], sample_condition_dicts: [Dict[str, Any]]) -> ArrayLike:  # np.float_
+    def get_response_vector(cls, fixed_model: Model, fixed_portions: List[symengine.Basic], data: List[Dataset], sample_condition_dicts: [Dict[str, Any]]) -> ArrayLike:  # np.float_
         mole_atoms_per_mole_formula_unit = fixed_model._site_ratio_normalization
         # Define site fraction symbols that will be reused
         phase_name = fixed_model.phase_name
@@ -143,7 +143,7 @@ class StepD0(FittingStep):
         return data_qtys
     
 class StepQ(StepD0):
-    features: [symengine.Expr] = [symengine.S.One]
+    features: List[symengine.Expr] = [symengine.S.One]
 
     @staticmethod
     def transform_data(d: ArrayLike, model: Optional[Model] = None) -> ArrayLike:  # np.object_
@@ -154,8 +154,8 @@ class StepQ(StepD0):
         # Fitting to -Q = MQ - T dMQ/dT
         return expr - v.T*symengine.diff(expr, v.T)
     
-class TracerDiffusivityStep(AbstractLinearPropertyStep):
-    features: [symengine.Expr] = [symengine.S.One, v.T]
+class StepTracerDiffusivity(AbstractLinearPropertyStep):
+    features: List[symengine.Expr] = [symengine.S.One, v.T]
     
     @staticmethod
     def transform_data(d: ArrayLike, model: Optional[Model] = None) -> ArrayLike:  # np.object_

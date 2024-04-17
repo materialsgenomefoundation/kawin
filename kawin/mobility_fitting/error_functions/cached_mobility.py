@@ -40,7 +40,7 @@ def compute_symbolic_quick(dof, elements, mobility_model, symbol, parameters = {
         for p,val in zip(param_keys, param_values[0]):
             var_dict[p] = val
 
-    return np.array([getattr(mobility_model, f'{symbol}_{elements[A]}').subs(var_dict).n(53, real=True) for A in range(len(elements))])
+    return np.array([getattr(mobility_model, f'{symbol}_{elements[A]}').subs(var_dict).n(53, real=True) for A in range(len(elements))], dtype=np.float_)
 
 def mobility_from_composition_set_symbolic_quick(dof, elements, mobility_model, parameters = {}):
     return compute_symbolic_quick(dof, elements, mobility_model, 'MQ', parameters)

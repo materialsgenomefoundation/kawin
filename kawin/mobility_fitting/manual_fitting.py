@@ -1,13 +1,16 @@
 import numpy as np
 from pycalphad import Database, Model, variables as v
 from pycalphad.codegen.callables import build_phase_records
-from pycalphad.core.utils import unpack_condition
-from symengine import Piecewise, And
+from symengine import Piecewise, And, Symbol
 from tinydb import where
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from espei.datasets import load_datasets, recursive_glob
+from kawin.mobility_fitting.utils import _vname, find_last_variable
 
 class EquilibriumSiteFractionGenerator:
+    '''
+    Grabs site fraction values from local equilibrium calculations
+    '''
     def __init__(self, database : Database, phase : str):
         self.db = database
         self.phase = phase
@@ -29,6 +32,7 @@ class EquilibriumSiteFractionGenerator:
         return frozenset(comps), comps
 
     def _generate_phase_records(self, components):
+        # Caches models, phase_records and constituents based off active components
         active_comps, comps = self._generate_comps_key(components)
         if active_comps not in self.models:
             self.models[active_comps] = {self.phase: Model(self.db, comps, self.phase)}
@@ -36,11 +40,18 @@ class EquilibriumSiteFractionGenerator:
             self.constituents[active_comps] = [c for cons in self.models[active_comps][self.phase].constituents for c in sorted(list(cons))]
 
     def __call__(self, components, conditions : dict[v.StateVariable: float]) -> dict[v.Species: float]:
+        # Get phase records from active components
         active_comps, comps = self._generate_comps_key(components)
         self._generate_phase_records(components)
 
+        # Override any conditions
         for oc in self._conditions_override:
             conditions[oc] = self._conditions_override[oc]
+
+        # Compute local equilibrium (to avoid miscibility gaps)
+        # Store site fractions
+        #    The first 4 items of CompositionSet.dof refers to v.GE, v.N, v.P and v.T
+        #    The order of the site fractions in CompositionSet.dof should correspond to the order in the pycalphad model
         results, comp_sets = local_equilibrium(self.db, comps, [self.phase], conditions, self.models[active_comps], self.phase_records[active_comps])
         sfg = {c:val for c,val in zip(self.constituents[active_comps], comp_sets[0].dof[4:])}
         for c in self.full_constituents:
@@ -76,26 +87,40 @@ class MobilityTerm:
     def __init__(self, constituent_array : list[list[v.SiteFraction]], order : int = 0):
         self.constituent_array = tuple(constituent_array)
         self.order = order
-        self.expr = None
+        self.expr = 0
 
     def generate_multiplier(self, site_fractions):
+        '''
+        Given site fraction values, return result for xA*xB*(xA-xB)**n
+        
+        Notes
+            This will account for multiple sublattices, but mixing on both sublattices will
+            assume to have the same order polynomial
+            Tertiary contributions are not included yet
+        '''
         val = 1
         for clist in self.constituent_array:
             clist = np.atleast_1d(clist)
             for c in clist:
-                val *= site_fractions.get(c,0)
+                #The wildcards will be treated as the sum for each component on the sublattice
+                #However, since the sum is 1, we can ignore it here
+                if c.species != v.Species('*'):
+                    val *= site_fractions.get(c,0)
             if len(clist) == 2:
                 ordered = sorted(clist)
                 val *= (site_fractions.get(ordered[1],0) - site_fractions.get(ordered[0],0))**self.order
         return val
     
     def create_constituent_array_list(self):
+        '''
+        Create constituent array list compatible with Database.add_parameter
+        '''
         return [[c.species.name for c in np.atleast_1d(clist)] for clist in self.constituent_array]
     
     def __eq__(self, other):
         return self.constituent_array == other.constituent_array and self.order == other.order
 
-def add_mobility_model(database : Database, phase : str, diffusing_species : str, mobility_terms : list[MobilityTerm]):
+def add_mobility_model(database : Database, phase : str, diffusing_species : str, mobility_terms : list[MobilityTerm], symbols : dict[str,float]):
     '''
     Add mobility parameters to database
 
@@ -108,30 +133,32 @@ def add_mobility_model(database : Database, phase : str, diffusing_species : str
     '''
     for mp in mobility_terms:
         database.add_parameter('MQ', phase, mp.create_constituent_array_list(), mp.order, mp.expr, diffusing_species=diffusing_species)
+    for s,val in symbols.items():
+        database.symbols[s] = val
 
 def least_squares_fit(A, b, p=1):
     '''
     Given site fractions and function to generate Redlich-kister terms,
     compute RK coefficients and AICC criteria
     '''
-    A
+    # Fit coefficients using least squares regression
     x = np.linalg.lstsq(A, b, rcond=None)[0]
+
+    # AICC criteria
     k = len(A[0])
+    n = len(A)
     b_pred = np.matmul(A, x)
-    L = np.log(np.sum((b_pred - b)**2) / len(A))
-    aicc = np.array(2*p*k + len(A)*L + (2*(k*p)**2 + 2*k*p) / (len(A) - k*p - 1))
+    rss = np.sum((b_pred-b)**2)
+    pk = p*k
+    aic = 2*pk + n*np.log(rss/n)
+    if pk >= n-1:
+        correction = (2*pk**2 + 2*pk) / (-n + pk + 3)
+    else:
+        correction = (2*pk**2 + 2*pk) / (n - pk - 1)
+    aicc = aic + correction
     return x, aicc
 
-def find_last_variable(database):
-    index = 0
-    vname = 'VV{:04d}'.format(index)
-    while vname in database.symbols:
-        index += 1
-        vname = 'VV{:04d}'.format(index)
-    return vname, index
-
-
-def fit(datasets, database, components, phase, diffusing_species, mobility_test_models, site_fraction_generator, p = 1):
+def fit(datasets, database, components, phase, diffusing_species, Q_test_models, D0_test_models, site_fraction_generator, p = 1):
     '''
     Fit mobility models to datasets
 
@@ -154,7 +181,10 @@ def fit(datasets, database, components, phase, diffusing_species, mobility_test_
     components = list(set(components).union(set(['VA'])))
 
     fitted_mobility_model = []
+    symbols = {}
+    vIndex = find_last_variable(database)
 
+    # Queries for activation energy (Q) and pre-factor (D0)
     q_query = (
         (where('components').test(lambda x: set(x).issubset(components))) & 
         (where('phases').test(lambda x: len(x) == 1 and x[0] == phase)) &
@@ -165,17 +195,24 @@ def fit(datasets, database, components, phase, diffusing_species, mobility_test_
         (where('phases').test(lambda x: len(x) == 1 and x[0] == phase)) &
         (where('output').test(lambda x : 'TRACER_D0' in x and x.endswith(diffusing_species)))
     )
-    q_transform = lambda x : x
-    d0_transform = lambda x : np.log(x)
+    q_transform = lambda x : -x
+    d0_transform = lambda x : 8.314*np.log(x)
+
+    # Data_types will include:
+    #    query - to search for data from datasets
+    #    transform - transforms value to form to fit to (should lead to no extra multiplying factors in the database)
+    #    multiplier - term to multiply by when storing in database
+    #    test_models - list of models to test against
     data_types = {
-        'Q': (q_query, q_transform, -1),
-        'D0': (d0_query, d0_transform, 8.314*v.T)
+        'Q': (q_query, q_transform, 1, Q_test_models),
+        'D0': (d0_query, d0_transform, v.T, D0_test_models)
     }
     
     for data_key, data_val in data_types.items():
-        query, transform, multiplier = data_val
+        query, transform, multiplier, test_models = data_val
         data = datasets.search(query)
 
+        # Collect site fractions and output values from datasets
         site_fractions = []
         Y = []
         for d in data:
@@ -189,6 +226,7 @@ def fit(datasets, database, components, phase, diffusing_species, mobility_test_
 
             conds_list = {key:val.flatten() for key,val in zip(conds_key, conds_grid)}
 
+            # If non-equilibrium data, we could grab the site fractions directly
             if 'solver' in d:
                 for sub_conf, sub_lat in zip(d['solver']['sublattice_configurations'], d['solver']['sublattice_occupancies']):
                     sub_index = 0
@@ -200,41 +238,52 @@ def fit(datasets, database, components, phase, diffusing_species, mobility_test_
                             sf[y] = o
                         sub_index += 1
                     site_fractions.append(sf)
-
+            # If equilibrium data, we need a site_fraction_generator function to
+            # convert composition to site fractions
             else:
-                for i in range(len(Y)):
+                for i in range(len(y_sub)):
                     sf = site_fraction_generator(d['components'], {key:val[i] for key,val in conds_list.items()})
                     site_fractions.append(sf)
 
             Y = np.concatenate((Y, y_sub))
 
+        # Fit models and evaluate AICC
         fitted_models = []
         aiccs = []
-        for mob_model in mobility_test_models:
+        for mob_model in test_models:
             X = [[mi.generate_multiplier(sf) for mi in mob_model] for sf in site_fractions]
             X = np.array(X)
             terms, aicc = least_squares_fit(X, Y, p)
-            fitted_models.append(terms*multiplier)
+            fitted_models.append(terms)
             aiccs.append(aicc)
 
+        # Grab best model based off AICC
         index = np.argmin(aiccs)
-        best_model = mobility_test_models[index]
+        best_model = test_models[index]
         best_fit = fitted_models[index]
 
+        # Store each coefficient in the best model to a list of MobilityTerms
+        # MobilityTerms can be polled for equality, so if a term shows up
+        # again, the coefficient will be added on rather than overriding it
+        
+        # We store the equations as VV00XX + VV00XX*T
+        # and store the symbols VV00XX as piecewise functions separately
         for term, coef in zip(best_model, best_fit):
             if term not in fitted_mobility_model:
                 fitted_mobility_model.append(MobilityTerm(term.constituent_array, term.order))
             
             combined_term = fitted_mobility_model[fitted_mobility_model.index(term)]
-            if combined_term.expr is None:
-                combined_term.expr = 0
-            combined_term.expr += coef
 
+            var_name = _vname(vIndex)
+            symbols[var_name] = Piecewise((coef, And(0 <= v.T, v.T < 10000)), (0, True))
+            combined_term.expr += Symbol(var_name) * multiplier
+            vIndex += 1
+
+    # For each mobility term, convert to piecewise function to be compatible with database
     for f in fitted_mobility_model:
-        f.expr = Piecewise((f.expr, And(0 <= v.T, v.T < 10000)), (0, True))
-        print(f.constituent_array, f.expr)
+        f.expr = Piecewise((f.expr, And(0 <= v.T, v.T < 6000)), (0, True))
 
-    return fitted_mobility_model
+    return fitted_mobility_model, symbols
 
 
 

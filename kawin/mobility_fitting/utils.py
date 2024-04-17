@@ -46,3 +46,18 @@ def get_used_database_symbols(dbname, elements, refElement, phases = None, freeS
     allSyms = database_symbols_to_fit(db)
     usedSyms = sorted(list(usedSyms.intersection(frozenset(allSyms))))
     return usedSyms
+
+def _vname(index):
+    '''
+    Converts index to VV00XX format
+    '''
+    return 'VV{:04d}'.format(index)
+
+def find_last_variable(database):
+    '''
+    Searches database to find the last symbol noted as VV00XX
+    '''
+    index = 0
+    while _vname(index) in database.symbols:
+        index += 1
+    return index

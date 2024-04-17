@@ -34,8 +34,29 @@ class MobilityModel(Model):
         Dictionary of symbols in diffusivity functions for each element
     '''
     def __init__(self, dbe, comps, phase_name, parameters=None):
-        super().__init__(dbe, comps, phase_name, parameters)
+        self.diffusing_species = None
 
+        super().__init__(dbe, comps, phase_name, parameters)
+        self._setup_mobility_models(dbe)
+
+    def set_diffusing_species(self, dbe, diffusing_species):
+        '''
+        Allows user to override diffusing species
+
+        This will rebuild all the models, which is a bit
+        inefficient, but I can't seem to add a parameter to
+        the constructor due to the _dispatch_on function in
+        pycalphad.model.Model
+        '''
+        # diffusing_species is list[v.Species] to be similar to components
+        self.diffusing_species = [v.Species(s) for s in diffusing_species]
+
+        #We only need to rebuild the mobility models since we're just changing
+        #what mobility models we have
+        self.mobility, self.diffusivity = self.build_mobility(dbe)
+        self._setup_mobility_models(dbe)
+
+    def _setup_mobility_models(self, dbe):
         symbols = {Symbol(s): val for s, val in dbe.symbols.items()}
         if self._parameters_arg is not None:
             if isinstance(self._parameters_arg, dict):
@@ -120,6 +141,9 @@ class MobilityModel(Model):
         ----------
         dbe : Database
         '''
+        if self.diffusing_species is None:
+            self.diffusing_species = self.components
+
         phase = dbe.phases[self.phase_name]
         param_search = dbe.search
 
@@ -129,7 +153,7 @@ class MobilityModel(Model):
 
         param_names = ['MF', 'MQ', 'DF', 'DQ']
 
-        for c in self.components:
+        for c in self.diffusing_species:
             if c.name != 'VA':
                 for name in param_names:
                     param_query = (
@@ -162,7 +186,7 @@ class MobilityModel(Model):
                     self.mob_models[p[1]][c.name] += rk
 
         self.checkOrderingContribution(dbe)
-        for c in self.components:
+        for c in self.diffusing_species:
             if c.name != 'VA':
                 #In thermo-calc, the mobility model is defined as exp(sum(MF)/RT) * exp(sum(MQ)/RT) / RT
                 #The diffusivity model is defined either as dilute - exp(sum(DF)/RT) * exp(sum(DQ)/RT)
@@ -203,6 +227,10 @@ class MobilityModel(Model):
         constituents = [sorted(set(c).intersection(self.components)) for c in ordered_phase.constituents]
         disordered_phase = dbe.phases[disordered_phase_name]
         disordered_model = self.__class__(dbe, sorted(self.components), disordered_phase_name)
+        
+        #If diffusing species are different, then set diffusing species for disordered model
+        if set(self.components).symmetric_difference(self.diffusing_species) != 0:
+            disordered_model.set_diffusing_species(dbe, self.diffusing_species)
 
         disordered_subl_constituents = disordered_phase.constituents[0]
         ordered_constituents = ordered_phase.constituents

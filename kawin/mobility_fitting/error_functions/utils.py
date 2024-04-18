@@ -23,6 +23,10 @@ def get_base_std():
 def build_model(db, elements, phase, parameters, diffusing_species):
     param_keys, _ = extract_parameters(parameters)
     model = {phase: Model(db, elements, phase, parameters=param_keys)}
+
+    #Include v.GE to be compatible with kawin
+    #TODO: this may not be necessary since v.GE is only added if the model
+    #      is built in the GeneralThermodynamics module
     model[phase].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
 
     phase_record = build_phase_records(db, elements, [phase], model[phase].state_variables, 

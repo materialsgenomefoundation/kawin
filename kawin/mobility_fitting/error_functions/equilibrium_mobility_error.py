@@ -1,11 +1,18 @@
+"""
+Calculate error due to interdiffusivity, tracer diffusivity, activation energy and diffusion prefactor
+based off equilibrium
+"""
+import logging
 from collections import OrderedDict
-from typing import Sequence, Dict, Union, List, Optional
+from typing import Dict, List, Optional, Union, Sequence
 
+from itertools import product
 import numpy as np
-from pycalphad import Database, variables as v
-from pycalphad.core.utils import filter_phases, unpack_components, unpack_condition, extract_parameters
 from scipy.stats import norm
 import tinydb
+
+from pycalphad import Database, variables as v
+from pycalphad.core.utils import filter_phases, unpack_components, unpack_condition, extract_parameters
 
 from espei.phase_models import PhaseModelSpecification
 from espei.typing import SymbolName
@@ -14,17 +21,22 @@ from espei.error_functions.residual_base import ResidualFunction, residual_funct
 
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import partialdMudX
-from itertools import product
 
 import kawin.mobility_fitting.error_functions.cached_mobility as cmob
 from kawin.mobility_fitting.error_functions.utils import get_output_base_name, get_base_names, build_model, get_base_std
 
+_log = logging.getLogger(__name__)
+
 class EquilibriumMobilityData:
+    """
+    Stores internal values for each dataset needed to compute output
+    """
     def __init__(self, dbf, data, parameters = None, data_weight_dict = None):
         self.parameters = parameters if parameters is not None else {}
         self.parameter_keys = [p for p in self.parameters]
         self.data_weight_dict = data_weight_dict if data_weight_dict is not None else {}
         self.output = get_output_base_name(data['output'])
+        self.reference = data['reference']
 
         pot_conds = OrderedDict([(getattr(v, key), unpack_condition(data['conditions'][key])) for key in sorted(data['conditions'].keys()) if not key.startswith('X_')])
         comp_conds = OrderedDict([(v.X(key[2:]), unpack_condition(data['conditions'][key])) for key in sorted(data['conditions'].keys()) if key.startswith('X_')])
@@ -37,8 +49,10 @@ class EquilibriumMobilityData:
         self.refComp = data.get('ref_el', None)
         if self.refComp is None and 'TRACER' in data['output']:
             self.refComp = [data['output'][len(self.output)+1:]]
-
         self.depComps = data.get('dependent_el', [])
+
+        #Set diffusing species - this is necessary for tracer data of a component at the limit of X->0
+        #  in which case, the dataset will not include the component when building the model
         self.diffusing_species = sorted(list(set(self.refComp) | set(self.depComps) | set(self.elements) - set(['VA'])))
         self.models, self.phase_records, self.mob_models, self.mob_callables = build_model(dbf, self.elements, self.phases[0], parameters, self.diffusing_species)
         self.mobility_correction = {c:1 for c in self.non_va_elements}
@@ -59,6 +73,15 @@ class EquilibriumMobilityData:
         self.weights = (property_std_deviation.get(self.output, 1.0)/data_weight_dict.get(self.output, 1.0)/dataset_weights).flatten()
 
     def _compute_cached_equilibrium(self, dbf):
+        """
+        Computes local equilibrium at each condition and stores results
+        This is to avoid computing equilibrium every time the log probability is calculated
+
+        NOTE: this is only valid if the thermodynamic parameters are fixed
+        TODO: add option to disable this in case the user wants to fit both thermodynamic and mobility parameters (why?)
+
+        Cached data includes: non-vacant elements, temperature, internal degrees of freedom, composition and chemical potential gradient
+        """
         self.cache = {}
 
         keys, values = zip(*self.conditions.items())
@@ -129,11 +152,21 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
         value = data.values[tuple(inds)]
         cs_data = data.cache[tuple(inds)]
 
+        #Compute mobility from cached equilibrium data
         cs_el, cs_T, cs_dof, cs_X, cs_dmudx = cs_data
         mob_from_CS = cmob.mobility_from_composition_set_quick(cs_dof, cs_el, data.mob_callables[data.phases[0]], data.mobility_correction, parameters = paramDict)
 
         refIndex = data.non_va_elements.index(data.refComp[0])
         
+        #NOTE: for interdiffusivity, tracer diffusivity and prefactor, we multiply by the sign of the value
+        #      This is for cases if the computed and desired values are of different signs
+        #      and taking the log of the absolute value will remove this possible difference
+        #
+        #      1) In reality, tracer diffusivity and prefactor should always be positive, so
+        #         this may not be necessary
+        #      2) If the desired interdiffusivity correctly accounts for potential miscibility gaps
+        #         that exists in the database, then the sign of the calculated and desired interdiffusivity
+        #         should be the same
         if data.output == 'INTER_DIFF':
             mobMatrix = cmob.mobility_matrix_quick(cs_dof, cs_X, cs_el, mob_from_CS, data.phase_records[data.phases[0]])
             cd, _ = cmob.chemical_diffusivity_quick(cs_dmudx, mobMatrix)
@@ -159,6 +192,8 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
             diffs.append(Q - value)
 
         wts.append(data.weights[i])
+
+    _log.debug('Output: %s differences: %s, weights: %s, reference: %s', data.output, diffs, wts, data.reference)
 
     return diffs, wts
 
@@ -207,9 +242,5 @@ class EquilibriumMobilityResidual(ResidualFunction):
     def get_likelihood(self, parameters):
         likelihood = calculate_mob_probability(self.mob_data, parameters)
         return likelihood
-    
-    def __getstate__(self):
-        print('i am pickled')
-        return self.__dict__
 
 residual_function_registry.register(EquilibriumMobilityResidual)

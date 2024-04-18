@@ -484,13 +484,13 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
         if composition_set.phase_record.variables[i].species.name in interstitials:
             interstitialTerms[composition_set.phase_record.variables[i].species.name] = composition_set.phase_record.variables[i].sublattice_index
 
-    #For interstitials
+    # For interstitials
     #    M_aa = y_Va * M_a
     #    y_Va is taken from the same sublattice that a is on, where more vacancies on the sublattice implies faster diffusion
-    #For substitutionals
+    # For substitutionals
     #    M_aa = (1-U_a) * U_a * M_a
     #    M_ab = -U_a * U_b * M_b
-    #There are no entries for M_ab if one index is interstitial and the other is substitutional
+    # There are no entries for M_ab if one index is interstitial and the other is substitutional
     mobMatrix = np.zeros((len(elements), len(elements)))
     for a in range(len(elements)):
         for b in range(len(elements)):
@@ -502,28 +502,11 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
             else:
                 if elements[b] not in interstitials:
                     mobMatrix[a, b] = -U[a] * mob[b]
-        # if elements[a] in interstitials:
-        #     mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
-        # else:
-        #     for b in range(len(elements)):
-        #         if elements[b] not in interstitials:
-        #             if a == b:
-        #                 mobMatrix[a, b] = (1 - U[a]) * mob[b]
-        #             else:
-        #                 mobMatrix[a, b] = -U[a] * mob[b]
+
     #Diffusivity requires dmu_a/dU_b; however, the free energy curvature gives dmu_a/dX_b
     #Assuming that Usum is constant and using chain-rule derivatives,
     #    the conversion from dmu_a/dX_b to dmu_a/dU_b can be done by multiplying the sum(substitutionals)
     mobMatrix *= Usum
-
-    #Old way of computing mobility assuming only substitutional elements (so much simpler...)
-    #mob = np.array([X[A] * computedMob[A] for A in range(len(elements))])
-    #for a in range(len(elements)):
-    #    for b in range(len(elements)):
-    #        if a == b:
-    #            mobMatrix[a, b] = (1 - X[a]) * mob[b]
-    #        else:
-    #            mobMatrix[a, b] = -X[a] * mob[b]
 
     return mobMatrix
 

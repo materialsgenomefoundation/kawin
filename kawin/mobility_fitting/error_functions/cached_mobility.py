@@ -97,3 +97,57 @@ def chemical_diffusivity_quick(dmudx, mobMatrix, returnHessian = False):
         return Dkj, dmudx
     else:
         return Dkj, None
+    
+def interdiffusivity_quick(dmudx, mobMatrix, elements, refElement, returnHessian = False):
+    '''
+    Interdiffusivity (D^n_ab)
+
+    D^n_ab = D_ab - D_an (for substitutional element)
+    D^n_ab = D_ab (for interstitial element)
+
+    Parameters
+    ----------
+    chemical_potentials : 1-D ndarray
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    refElement : str
+        Reference element n
+    mobility_callables : dict (optional)
+        Pre-computed mobility callables for each element
+    mobility_correction : dict (optional)
+        Factor to multiply mobility by for each given element (defaults to 1)
+    returnHessian : bool (optional)
+        Whether to return chemical potential derivative (defaults to False)
+
+    Returns
+    -------
+    (matrix of floats, free energy hessian)
+        Each index along an axis correspond to elements in 
+            alphabetical order excluding reference element
+        free energy hessian will be None if returnHessian is False
+    '''
+    Dkj, hessian = chemical_diffusivity_quick(dmudx, mobMatrix, returnHessian)
+
+    #Find index of reference element
+    refIndex = 0
+    for a in range(len(elements)):
+        if elements[a] == refElement:
+            refIndex = a
+            break
+
+    #Build Dnkj, skipping the reference element
+    Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
+    c = 0
+    d = 0
+    for a in range(len(elements)):
+        if a != refIndex:
+            for b in range(len(elements)):
+                if b != refIndex:
+                    if elements[b] in interstitials:
+                        Dnkj[c, d] = Dkj[a, b]
+                    else:
+                        Dnkj[c, d] = Dkj[a, b] - Dkj[a, refIndex]
+                    d += 1
+            c += 1
+            d = 0
+            
+    return Dnkj, hessian

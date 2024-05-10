@@ -168,6 +168,7 @@ class GeneralThermodynamics:
 
             if len(pMob) > 0 or len(pDiff) > 0:
                 self.mobModels[p] = MobilityModel(self.db, self.elements, p, parameters=param_keys)
+                self.mobModels[p].set_diffusing_species(self.db, list(set(self.elements)-{'VA'}))
                 if len(pMob) > 0:
                     self.mobCallables[p] = {}
                     for c in self.phase_records[p].nonvacant_elements:

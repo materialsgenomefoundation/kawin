@@ -365,7 +365,7 @@ def compute_symbolic_expr_from_composition_set(composition_set, mobility_model, 
         for p,val in zip(param_keys, param_values[0]):
             var_dict[p] = val
 
-    return np.array([getattr(mobility_model, f'{symbol}_{elements[A]}').subs(var_dict).n(53, real=True) for A in range(len(elements))])
+    return np.array([getattr(mobility_model, f'{symbol}_{elements[A]}').subs(var_dict).n(53, real=True) for A in range(len(elements))], np.float_)
 
 def mobility_from_composition_set_symbolic(composition_set, mobility_model, parameters = {}):
     '''

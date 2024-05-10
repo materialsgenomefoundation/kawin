@@ -96,8 +96,9 @@ class HomogenizationModel(DiffusionModel):
                 comp.append(cs)
 
         if len(comp) == 0:
+            print(x)
             comp = None
-
+            
         return self.therm.getLocalEq(x, T, 0, self.phases, comp)
 
     def updateCompSets(self, xarray):
@@ -209,7 +210,7 @@ class HomogenizationModel(DiffusionModel):
         '''
         #(p, e, N)
         mob = self.getMobility(xarray)
-        avgMob = 1/np.sum(np.multiply(self.p[:,np.newaxis], 1/mob), axis=0)
+        avgMob = 1/np.sum(np.multiply(self.p[:,np.newaxis], 1/(mob+1e-8)), axis=0)
         return avgMob
 
     def labyrinth(self, xarray):
@@ -289,7 +290,8 @@ class HomogenizationModel(DiffusionModel):
 
         #Get average mobility between nodes
         avgMob = self.mobilityFunction(x)
-        avgMob = 0.5 * (avgMob[:,1:] + avgMob[:,:-1])
+        avgMob = np.exp(0.5 * (np.log(avgMob[:,1:]) + np.log(avgMob[:,:-1])))
+        #avgMob = 0.5 * (avgMob[:,1:] + avgMob[:,:-1])
 
         #Composition between nodes
         avgX = 0.5 * (x[:,1:] + x[:,:-1])

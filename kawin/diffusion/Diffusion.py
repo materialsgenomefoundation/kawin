@@ -464,15 +464,18 @@ class DiffusionModel(GenericModel):
             dXdt[0][i][indices] =  np.interp(self.z[indices], self.z[~indices], dXdt[0][i][~indices])
 
         #Adjust flux by a scale if it predicts that a composition will go below 0
-        xfull = np.concatenate((np.array([np.sum(x[0],axis=0)]), x[0]), axis=0)
-        dXdtfull = np.concatenate((np.array([np.sum(dXdt[0],axis=0)]), dXdt[0]), axis=0)
-        xpred = dt * dXdtfull
+        xfull = np.concatenate((np.array([1-np.sum(x[0],axis=0)]), x[0]), axis=0)
+        dXdtfull = np.concatenate((np.array([-np.sum(dXdt[0],axis=0)]), dXdt[0]), axis=0)
+        xfull[xfull < self.minComposition] = self.minComposition
+        dXdtmin = (self.minComposition - xfull) / dt
         alpha = np.ones(xfull.shape)
-        den = xpred - xfull
-        alpha[den != 0] = (0 - xfull[den != 0]) / den[den != 0]
-        alpha[(alpha > 1) | (alpha <= 0)] = 1
-        for i in range(len(dXdt[0])):
-            dXdt[0][i] *= np.amin(alpha, axis=0)
+        indices = dXdtfull != 0
+        alpha[indices] = dXdtmin[indices] / dXdtfull[indices]
+        alpha[alpha < 0] = 1
+        for i in range(dXdt[0].shape[1]):
+            min_alpha = np.amin(alpha[:,i])
+            dXdt[0][:,i] *= min_alpha
+
           
     def getdXdt(self, t, x):
         '''

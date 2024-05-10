@@ -21,6 +21,7 @@ from espei.error_functions.residual_base import ResidualFunction, residual_funct
 
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import partialdMudX
+from kawin.thermo.Mobility import interstitials
 
 import kawin.mobility_fitting.error_functions.cached_mobility as cmob
 from kawin.mobility_fitting.error_functions.utils import get_output_base_name, get_base_names, build_model, get_base_std
@@ -173,7 +174,10 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
 
             depComp1 = data.non_va_elements.index(data.depComps[0])
             depComp2 = data.non_va_elements.index(data.depComps[1])
-            D = cd[depComp1, depComp2] - cd[depComp1, refIndex]
+            if data.depComps[1] in interstitials:
+                D = cd[depComp1, depComp2]
+            else:
+                D = cd[depComp1, depComp2] - cd[depComp1, refIndex]
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_DIFF':

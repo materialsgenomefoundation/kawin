@@ -124,6 +124,8 @@ def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, *args, **kwar
 
     if not diffModel.isSetup:
         diffModel.setup()
+    else:
+        diffModel.p = diffModel.updateCompSets(diffModel.x)
 
     if plotPhase is not None:
         p = diffModel._getPhaseIndex(plotPhase)

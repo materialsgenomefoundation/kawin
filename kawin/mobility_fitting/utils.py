@@ -1,6 +1,6 @@
 import numpy as np
 from kawin.thermo import GeneralThermodynamics
-from pycalphad import Database
+from pycalphad import Database, variables as v
 from espei.utils import database_symbols_to_fit
 
 def get_used_database_symbols(dbname, elements, refElement, phases = None, freeSub = False):
@@ -46,6 +46,69 @@ def get_used_database_symbols(dbname, elements, refElement, phases = None, freeS
     allSyms = database_symbols_to_fit(db)
     usedSyms = sorted(list(usedSyms.intersection(frozenset(allSyms))))
     return usedSyms
+
+class MobilityTerm:
+    '''
+    Utility class to hold data for a mobility term
+
+    Attributes
+    ----------
+    constituent_array : list[list[str]]
+        Constituent array
+    order : int
+        Redlich-kister polynomial order
+    '''
+    def __init__(self, constituent_array : list[list[v.SiteFraction]], order : int = 0):
+        self.constituent_array = tuple(constituent_array)
+        self.order = order
+        self.expr = 0
+
+    def generate_multiplier(self, site_fractions):
+        '''
+        Given site fraction values, return result for xA*xB*(xA-xB)**n
+        
+        Notes
+            This will account for multiple sublattices, but mixing on both sublattices will
+            assume to have the same order polynomial
+            Tertiary contributions are not included yet
+        '''
+        val = 1
+        for clist in self.constituent_array:
+            clist = np.atleast_1d(clist)
+            for c in clist:
+                #The wildcards will be treated as the sum for each component on the sublattice
+                #However, since the sum is 1, we can ignore it here
+                if c.species != v.Species('*'):
+                    val *= site_fractions.get(c,0)
+            if len(clist) == 2:
+                ordered = sorted(clist)
+                val *= (site_fractions.get(ordered[1],0) - site_fractions.get(ordered[0],0))**self.order
+        return val
+    
+    def create_constituent_array_list(self):
+        '''
+        Create constituent array list compatible with Database.add_parameter
+        '''
+        return [[c.species.name for c in np.atleast_1d(clist)] for clist in self.constituent_array]
+    
+    def __eq__(self, other):
+        return self.constituent_array == other.constituent_array and self.order == other.order
+
+def add_mobility_model(database : Database, phase : str, diffusing_species : str, mobility_terms : list[MobilityTerm], symbols : dict[str,float] = {}):
+    '''
+    Add mobility parameters to database
+
+    Parameters
+    ----------
+    database : Pycalphad database object
+    phase : str
+    diffusing_species : str
+    mobility_terms : list[MobilityParameter]
+    '''
+    for mp in mobility_terms:
+        database.add_parameter('MQ', phase, mp.create_constituent_array_list(), mp.order, mp.expr, diffusing_species=diffusing_species)
+    for s,val in symbols.items():
+        database.symbols[s] = val
 
 def _vname(index):
     '''

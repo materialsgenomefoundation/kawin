@@ -5,7 +5,7 @@ from symengine import Piecewise, And, Symbol
 from tinydb import where
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from espei.datasets import load_datasets, recursive_glob
-from kawin.mobility_fitting.utils import _vname, find_last_variable
+from kawin.mobility_fitting.utils import _vname, find_last_variable, MobilityTerm
 
 class EquilibriumSiteFractionGenerator:
     '''
@@ -72,69 +72,6 @@ class SiteFractionGenerator:
                 composition[key.name[2:]] = val
 
         return self.create_site_fractions(composition)
-
-class MobilityTerm:
-    '''
-    Utility class to hold data for a mobility term
-
-    Attributes
-    ----------
-    constituent_array : list[list[str]]
-        Constituent array
-    order : int
-        Redlich-kister polynomial order
-    '''
-    def __init__(self, constituent_array : list[list[v.SiteFraction]], order : int = 0):
-        self.constituent_array = tuple(constituent_array)
-        self.order = order
-        self.expr = 0
-
-    def generate_multiplier(self, site_fractions):
-        '''
-        Given site fraction values, return result for xA*xB*(xA-xB)**n
-        
-        Notes
-            This will account for multiple sublattices, but mixing on both sublattices will
-            assume to have the same order polynomial
-            Tertiary contributions are not included yet
-        '''
-        val = 1
-        for clist in self.constituent_array:
-            clist = np.atleast_1d(clist)
-            for c in clist:
-                #The wildcards will be treated as the sum for each component on the sublattice
-                #However, since the sum is 1, we can ignore it here
-                if c.species != v.Species('*'):
-                    val *= site_fractions.get(c,0)
-            if len(clist) == 2:
-                ordered = sorted(clist)
-                val *= (site_fractions.get(ordered[1],0) - site_fractions.get(ordered[0],0))**self.order
-        return val
-    
-    def create_constituent_array_list(self):
-        '''
-        Create constituent array list compatible with Database.add_parameter
-        '''
-        return [[c.species.name for c in np.atleast_1d(clist)] for clist in self.constituent_array]
-    
-    def __eq__(self, other):
-        return self.constituent_array == other.constituent_array and self.order == other.order
-
-def add_mobility_model(database : Database, phase : str, diffusing_species : str, mobility_terms : list[MobilityTerm], symbols : dict[str,float]):
-    '''
-    Add mobility parameters to database
-
-    Parameters
-    ----------
-    database : Pycalphad database object
-    phase : str
-    diffusing_species : str
-    mobility_terms : list[MobilityParameter]
-    '''
-    for mp in mobility_terms:
-        database.add_parameter('MQ', phase, mp.create_constituent_array_list(), mp.order, mp.expr, diffusing_species=diffusing_species)
-    for s,val in symbols.items():
-        database.symbols[s] = val
 
 def least_squares_fit(A, b, p=1):
     '''
@@ -275,13 +212,13 @@ def fit(datasets, database, components, phase, diffusing_species, Q_test_models,
             combined_term = fitted_mobility_model[fitted_mobility_model.index(term)]
 
             var_name = _vname(vIndex)
-            symbols[var_name] = Piecewise((coef, And(0 <= v.T, v.T < 10000)), (0, True))
+            symbols[var_name] = Piecewise((coef, And(1.0 <= v.T, v.T < 10000)), (0, True))
             combined_term.expr += Symbol(var_name) * multiplier
             vIndex += 1
 
     # For each mobility term, convert to piecewise function to be compatible with database
     for f in fitted_mobility_model:
-        f.expr = Piecewise((f.expr, And(0 <= v.T, v.T < 6000)), (0, True))
+        f.expr = Piecewise((f.expr, And(1.0 <= v.T, v.T < 6000)), (0, True))
 
     return fitted_mobility_model, symbols
 

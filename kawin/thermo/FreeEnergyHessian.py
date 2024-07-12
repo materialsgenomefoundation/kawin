@@ -1,6 +1,6 @@
 import numpy as np
 from pycalphad import Model, variables as v
-from pycalphad.codegen.callables import build_callables
+#from pycalphad.codegen.callables import build_callables
 
 setattr(v, 'GE', v.StateVariable('GE'))
 

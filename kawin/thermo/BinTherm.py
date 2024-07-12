@@ -160,8 +160,11 @@ class BinaryThermodynamics (GeneralThermodynamics):
 
         #Compute equilibrium at guess composition
         cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: gExtra}
+        #eq = equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond, model=self.models,
+        #                phase_records={self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]},
+        #                calc_opts = {'pdens': self.pDens})
         eq = equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond, model=self.models,
-                        phase_records={self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]},
+                        phase_records=self.phase_records,
                         calc_opts = {'pdens': self.pDens})
 
         xParentArray = np.zeros(len(gExtra))
@@ -236,9 +239,12 @@ class BinaryThermodynamics (GeneralThermodynamics):
             gExtra = np.array([gExtra])
 
         #Compute equilibrium at guess composition
-        cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: self.gOffset}
+        cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: self.gOffset, v.N: 1}
+        #eq = equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond, model=self.models,
+        #                phase_records={self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]},
+        #                calc_opts = {'pdens': self.pDens})
         eq = equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond, model=self.models,
-                        phase_records={self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]},
+                        phase_records=self.phase_records,
                         calc_opts = {'pdens': self.pDens})
 
         gm = eq.GM.values.ravel()

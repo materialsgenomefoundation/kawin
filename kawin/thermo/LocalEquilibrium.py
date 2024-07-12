@@ -28,10 +28,13 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
     '''
     # Broadcasting conditions not supported
     cur_conds = {str(k): float(v) for k, v in conds.items()}
-    if 'GE' in cur_conds:
-        state_variables = np.array([cur_conds['GE'], cur_conds['N'], cur_conds['P'], cur_conds['T']], dtype=np.float64)
+    cur_conds = {k: v for k, v in conds.items()}
+
+    # State variables are in alphabetical order
+    if v.GE in cur_conds:
+        state_variables = np.array([cur_conds[v.GE], cur_conds[v.N], cur_conds[v.P], cur_conds[v.T]], dtype=np.float64)
     else:
-        state_variables = np.array([0, cur_conds['N'], cur_conds['P'], cur_conds['T']], dtype=np.float64)
+        state_variables = np.array([0, cur_conds[v.N], cur_conds[v.P], cur_conds[v.T]], dtype=np.float64)
     if composition_sets is None:
         # Note: filter_phases() not called, so all specified phases must be valid
         composition_sets = []
@@ -43,7 +46,7 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
         for phase in phases:
             # arbitrary guess
             phase_amt = 1./len(phases)
-            calc_p = calculate(dbf, comps, phase, T=cur_conds['T'], P=cur_conds['P'], N=cur_conds['N'], GE=cur_conds['GE'],
+            calc_p = calculate(dbf, comps, phase, T=cur_conds[v.T], P=cur_conds[v.P], N=cur_conds[v.N], GE=cur_conds[v.GE],
                                pdens=10, model=models, phase_records=phase_records)
             idx_p = np.argmin(calc_p.GM.values.squeeze())
             compset = CompositionSet(phase_records[phase])

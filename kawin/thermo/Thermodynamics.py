@@ -1,6 +1,8 @@
 import numpy as np
 from pycalphad import Model, Database, calculate, equilibrium, variables as v
-from pycalphad.codegen.callables import build_callables, build_phase_records
+#from pycalphad.codegen.callables import build_callables, build_phase_records
+#from pycalphad.codegen.callables import build_phase_records
+from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import extract_parameters
 from kawin.thermo.Mobility import MobilityModel, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
@@ -10,7 +12,18 @@ import matplotlib.pyplot as plt
 import copy
 from tinydb import where
 
-setattr(v, 'GE', v.StateVariable('GE'))
+#setattr(v, 'GE', v.StateVariable('GE'))
+class ExtraFreeEnergyType(v.IndependentPotential):
+    implementation_units = 'joules'
+    display_units = 'joules'
+    display_name = 'Extra Gibbs Free Energy'
+
+    def __init__(self):
+        super().__init__('GE')
+    def __reduce__(self):
+        return self.__class__, ()
+    
+setattr(v, 'GE', v.IndependentPotential('GE'))
 
 class ExtraGibbsModel(Model):
     '''
@@ -126,19 +139,28 @@ class GeneralThermodynamics:
             self.models[self.phases[i]] = ExtraGibbsModel(self.db, self.elements, self.phases[i], parameters=param_keys)
             self.models[self.phases[i]].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
 
-        self.phase_records = build_phase_records(self.db, self.elements, self.phases,
-                                                 self.models[self.phases[0]].state_variables,
-                                                 self.models, build_gradients=True, build_hessians=True,
-                                                 parameters=self._parameters)
+        self.phase_records = PhaseRecordFactory(self.db, self.elements, 
+                                                       self.models[self.phases[0]].state_variables, 
+                                                       self.models, parameters=self._parameters)
+
+        #self.phase_records = build_phase_records(self.db, self.elements, self.phases,
+        #                                         self.models[self.phases[0]].state_variables,
+        #                                         self.models, build_gradients=True, build_hessians=True,
+        #                                         parameters=self._parameters)
 
         self.OCMphase_records = {}
         for i in range(1, len(self.phases)):
             if self.orderedPhase[self.phases[i]]:
-                self.OCMphase_records[self.phases[i]] = build_phase_records(self.db, self.elements, [self.phases[i]],
-                                                                            self.models[self.phases[0]].state_variables,
-                                                                            {self.phases[i]: self.models[self.phases[i]]},
-                                                                            output='OCM', build_gradients=False, build_hessians=False, 
-                                                                            parameters=self._parameters)
+                self.OCMphase_records[self.phases[i]] = self.phase_records.get_phase_property(self.phases[i], 
+                                                                                              'OCM', 
+                                                                                              include_grad=False, 
+                                                                                              include_hess=False)
+
+                #self.OCMphase_records[self.phases[i]] = build_phase_records(self.db, self.elements, [self.phases[i]],
+                #                                                            self.models[self.phases[0]].state_variables,
+                #                                                            {self.phases[i]: self.models[self.phases[i]]},
+                #                                                            output='OCM', build_gradients=False, build_hessians=False, 
+                #                                                            parameters=self._parameters)
                 
     def _buildMobilityModels(self):
         '''
@@ -148,6 +170,9 @@ class GeneralThermodynamics:
         self.mobCallables = {p: None for p in self.phases}
         self.diffCallables = {p: None for p in self.phases}
         param_keys, _ = extract_parameters(self._parameters)
+        phase_mob_params = {}
+        phase_diff_params = {}
+        self.mobModels = {}
         for p in self.phases:
             #Get mobility/diffusivity of phase p if exists
             param_search = self.db.search
@@ -162,26 +187,62 @@ class GeneralThermodynamics:
                 (where('parameter_type') == 'DQ') | \
                 (where('parameter_type') == 'DF')
             )
+            phase_mob_params[p] = param_search(param_query_mob)
+            phase_diff_params[p] = param_search(param_query_diff)
 
-            pMob = param_search(param_query_mob)
-            pDiff = param_search(param_query_diff)
-
-            if len(pMob) > 0 or len(pDiff) > 0:
+            if len(phase_mob_params[p]) > 0 or len(phase_diff_params[p]) > 0:
                 self.mobModels[p] = MobilityModel(self.db, self.elements, p, parameters=param_keys)
-                if len(pMob) > 0:
-                    self.mobCallables[p] = {}
-                    for c in self.phase_records[p].nonvacant_elements:
-                        bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
-                                            parameter_symbols=self._parameters, output='MOB_'+c, build_gradients=False, build_hessians=False,
-                                            additional_statevars=[v.T, v.P, v.N, v.GE])
-                        self.mobCallables[p][c] = bcp['MOB_'+c]['callables'][p]
-                else:
-                    self.diffCallables[p] = {}
-                    for c in self.phase_records[p].nonvacant_elements:
-                        bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
-                                            parameter_symbols=self._parameters, output='DIFF_'+c, build_gradients=False, build_hessians=False,
-                                            additional_statevars=[v.T, v.P, v.N, v.GE])
-                        self.diffCallables[p][c] = bcp['DIFF_'+c]['callables'][p]
+                self.mobModels[p].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
+
+        mob_phases = list(self.mobModels.keys())
+        self.mob_phase_records = PhaseRecordFactory(self.db, self.elements, 
+                                                       self.mobModels[mob_phases[0]].state_variables, 
+                                                       self.mobModels, parameters=self._parameters)
+
+        for p in self.mobModels:
+            if len(phase_mob_params[p]) > 0:
+                self.mobCallables[p] = {c: self.mob_phase_records.get_phase_property(p, 'MOB_'+c, include_grad=False, include_hess=False).func for c in self.phase_records[p].nonvacant_elements}
+            if len(phase_diff_params[p]) > 0:
+                self.diffCallables[p] = {c: self.mob_phase_records.get_phase_property(p, 'DIFF_'+c, include_grad=False, include_hess=False).func for c in self.phase_records[p].nonvacant_elements}
+
+        # for p in self.phases:
+        #     #Get mobility/diffusivity of phase p if exists
+        #     param_search = self.db.search
+        #     param_query_mob = (
+        #         (where('phase_name') == p) & \
+        #         (where('parameter_type') == 'MQ') | \
+        #         (where('parameter_type') == 'MF')
+        #     )
+
+        #     param_query_diff = (
+        #         (where('phase_name') == p) & \
+        #         (where('parameter_type') == 'DQ') | \
+        #         (where('parameter_type') == 'DF')
+        #     )
+
+        #     pMob = param_search(param_query_mob)
+        #     pDiff = param_search(param_query_diff)
+
+        #     if len(pMob) > 0 or len(pDiff) > 0:
+        #         self.mobModels[p] = MobilityModel(self.db, self.elements, p, parameters=param_keys)
+        #         if len(pMob) > 0:
+        #             self.mobCallables[p] = {}
+        #             for c in self.phase_records[p].nonvacant_elements:
+        #                 #bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
+        #                 #                    parameter_symbols=self._parameters, output='MOB_'+c, build_gradients=False, build_hessians=False,
+        #                 #                    additional_statevars=[v.T, v.P, v.N, v.GE])
+        #                 #self.mobCallables[p][c] = bcp['MOB_'+c]['callables'][p]
+
+        #                 self.mobCallables[p][c] = self.phase_records.get_phase_property(p, 'MOB_'+c, include_grad=False, include_hess=False)
+        #         else:
+        #             self.diffCallables[p] = {}
+        #             for c in self.phase_records[p].nonvacant_elements:
+        #                 #bcp = build_callables(self.db, self.elements, [p], {p: self.mobModels[p]},
+        #                 #                    parameter_symbols=self._parameters, output='DIFF_'+c, build_gradients=False, build_hessians=False,
+        #                 #                    additional_statevars=[v.T, v.P, v.N, v.GE])
+        #                 #self.diffCallables[p][c] = bcp['DIFF_'+c]['callables'][p]
+
+        #                 self.diffCallables[p][c] = self.phase_records.get_phase_property(p, 'DIFF_'+c, include_grad=False, include_hess=False)
 
         #This applies to all phases since this is typically reflective of quenched-in vacancies
         self.mobility_correction = {A: 1 for A in self.elements}
@@ -203,7 +264,7 @@ class GeneralThermodynamics:
 
         param_keys, param_values = extract_parameters(self._parameters)
         for p in self.phases:
-            self.phase_records[p].parameters[:] = np.asarray(param_values, dtype=np.float_)
+            self.phase_records[p].parameters[:] = np.asarray(param_values, dtype=np.float64)
 
     def _forceDisorder(self, phase):
         '''
@@ -427,8 +488,12 @@ class GeneralThermodynamics:
 
         cond = self._getConditions(x, T, gExtra+self.gOffset)
 
+        #eq = equilibrium(self.db, self.elements, phases, cond, model=self.models, 
+        #                 phase_records=phaseRec, 
+        #                 calc_opts={'pdens': self.pDens})
+        
         eq = equilibrium(self.db, self.elements, phases, cond, model=self.models, 
-                         phase_records=phaseRec, 
+                         phase_records=self.phase_records, 
                          calc_opts={'pdens': self.pDens})
         return eq
 
@@ -1299,7 +1364,7 @@ class GeneralThermodynamics:
         if self._pointsPrec[precPhase] is None or self._prevTemperature != T:
             self._pointsPrec[precPhase] = calculate(self.db, self.elements, precPhase, P = 101325, T = T, GE=self.gOffset, pdens = self.sampling_pDens, model=self.models, output='GM', phase_records=self.phase_records)
             if self.orderedPhase[precPhase]:
-                self._orderingPoints[precPhase] = calculate(self.db, self.elements, precPhase, P = 101325, T = T, GE=self.gOffset, pdens = self.sampling_pDens, model=self.models, output='OCM', phase_records=self.OCMphase_records[precPhase])
+                self._orderingPoints[precPhase] = calculate(self.db, self.elements, precPhase, P = 101325, T = T, GE=self.gOffset, pdens = self.sampling_pDens, model=self.models, output='OCM', phase_records=self.phase_records)
             self._prevTemperature = T
 
         #Get value of chemical potential hyperplane at composition of sampled points

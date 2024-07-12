@@ -492,9 +492,26 @@ class GeneralThermodynamics:
         #                 phase_records=phaseRec, 
         #                 calc_opts={'pdens': self.pDens})
         
-        eq = equilibrium(self.db, self.elements, phases, cond, model=self.models, 
-                         phase_records=self.phase_records, 
+        #print(phases, {p: self.models[p] for p in phases})
+        #sub_models = {p: self.models[p] for p in phases}
+        #sub_phase_records = PhaseRecordFactory(self.db, self.elements, 
+        #                                               sub_models[phases[0]].state_variables, 
+        #                                               sub_models, parameters=self._parameters)
+        #eq = equilibrium(self.db, self.elements, phases, cond, model=sub_models, 
+        #                 phase_records=sub_phase_records, 
+        #                 calc_opts={'pdens': self.pDens})
+        
+        # Phases, models and phase records should match in the list of phases
+        # Here, I create a model dictionary of the relevant phases
+        # Then, I hijack the models in the phase records with this sublist
+        # After equilibrium, restore the original model list
+        sub_models = {p: self.models[p] for p in phases}
+        self.phase_records.models = sub_models
+        eq = equilibrium(self.db, self.elements, phases, cond, model=sub_models,
+                         phase_records=self.phase_records,
                          calc_opts={'pdens': self.pDens})
+        self.phase_records.models = self.models
+
         return eq
 
     def getLocalEq(self, x, T, gExtra = 0, precPhase = None, composition_sets = None):

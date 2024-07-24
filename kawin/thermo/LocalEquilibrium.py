@@ -1,6 +1,5 @@
 from pycalphad.core.solver import Solver
 from pycalphad.core.composition_set import CompositionSet
-from pycalphad.codegen.callables import build_phase_records
 from pycalphad import calculate, variables as v
 import numpy as np
 

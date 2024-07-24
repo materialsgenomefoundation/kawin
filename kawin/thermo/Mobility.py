@@ -6,8 +6,6 @@ from pycalphad.io.tdb import get_supported_variables
 from symengine import exp, Symbol, Add
 from kawin.thermo.FreeEnergyHessian import partialdMudX, dMudX
 
-setattr(v, 'GE', v.StateVariable('GE'))
-
 #List of interstitial elements
 # When calculating interdiffusivity, we do not require reference element
 # When calculating the mobility factor, we have an additional vacancy term to multiply by

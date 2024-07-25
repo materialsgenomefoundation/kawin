@@ -84,21 +84,10 @@ class HomogenizationModel(DiffusionModel):
         '''
         Calculates equilibrium and returns a CompositionSet
         '''
-        eq = self.therm.getEq(x, T, 0, self.phases)
-        state_variables = np.array([0, 1, 101325, T], dtype=np.float64)
-        stable_phases = eq.Phase.values.ravel()
-        phase_amounts = eq.NP.values.ravel()
-        comp = []
-        for p in stable_phases:
-            if p != '':
-                idx = np.where(stable_phases == p)[0]
-                cs, misc = self.therm._createCompositionSet(eq, state_variables, p, phase_amounts, idx)
-                comp.append(cs)
-
-        if len(comp) == 0:
-            comp = None
-
-        return self.therm.getLocalEq(x, T, 0, self.phases, comp)
+        wks = self.therm.getEq(x, T, 0, self.phases)
+        chemical_potentials = np.squeeze(wks.eq.MU)
+        composition_sets = wks.get_composition_sets()
+        return chemical_potentials, composition_sets
 
     def updateCompSets(self, xarray):
         '''
@@ -127,18 +116,14 @@ class HomogenizationModel(DiffusionModel):
             if self.cache:
                 hashValue = self._getHash(xarray[:,i], self.T[i])
                 if hashValue not in self.hashTable:
-                    result, comp = self._newEqCalc(xarray[:,i], self.T[i])
-                    #result, comp = self.therm.getLocalEq(xarray[:,i], self.T, 0, self.phases, self.compSets[i])
-                    self.hashTable[hashValue] = (result, comp, None)
+                    chemical_potentials, comp = self._newEqCalc(xarray[:,i], self.T[i])
+                    self.hashTable[hashValue] = (chemical_potentials, comp, None)
                 else:
-                    result, comp, _ = self.hashTable[hashValue]
-                results, self.compSets[i] = copy.copy(result), copy.copy(comp)
+                    chemical_potentials, comp, _ = self.hashTable[hashValue]
+                chemical_potentials, self.compSets[i] = copy.copy(chemical_potentials), copy.copy(comp)
             else:
-                if self.compSets[i] is None:
-                    results, self.compSets[i] = self._newEqCalc(xarray[:,i], self.T[i])
-                else:
-                    results, self.compSets[i] = self.therm.getLocalEq(xarray[:,i], self.T[i], 0, self.phases, self.compSets[i])
-            self.mu[:,i] = results.chemical_potentials[self.unsortIndices]
+                chemical_potentials, self.compSets[i] = self._newEqCalc(xarray[:,i], self.T[i])
+            self.mu[:,i] = chemical_potentials[self.unsortIndices]
             cs_phases = [cs.phase_record.phase_name for cs in self.compSets[i]]
             for p in range(len(cs_phases)):
                 parray[self._getPhaseIndex(cs_phases[p]), i] = self.compSets[i][p].NP

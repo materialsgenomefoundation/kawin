@@ -309,18 +309,18 @@ def test_homogenization_dxdt():
     dt = m.getDt(dxdt)
     
     #Index 5
-    ind5, vals5 = 5, np.array([-1.592463e-9, 1.211067e-9])
+    ind5, vals5 = 5, np.array([-1.581478e-9, 1.212876e-9])
 
     #Index 10
-    ind10, vals10 = 10, np.array([-9.751858e-10, 1.702190e-9])
+    ind10, vals10 = 10, np.array([-9.722631e-10, 1.703447e-9])
 
     #Index 15
-    ind15, vals15 = 15, np.array([-4.728854e-10, 8.590127e-10])
+    ind15, vals15 = 15, np.array([-4.720562e-10, 8.600518e-10])
     
     assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 61865.352193, rtol=1e-3)
+    assert_allclose(dt, 62271.050081, rtol=1e-3)
 
 
 

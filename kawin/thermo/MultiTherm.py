@@ -503,5 +503,5 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
         '''
-        dg, xb = self.getDrivingForce(x, T, precPhase, returnComp = True, training = training)
+        dg, xb = self.getDrivingForce(x, T, precPhase, training = training)
         return self.curvatureFactor(x, T, precPhase, training = training, searchDir=xb)

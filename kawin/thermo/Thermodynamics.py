@@ -628,7 +628,7 @@ class GeneralThermodynamics:
 
         return Dtrace
 
-    def getDrivingForce(self, x, T, precPhase = None, returnComp = False, training = False):
+    def getDrivingForce(self, x, T, precPhase = None, training = False):
         '''
         Gets driving force using method defined upon initialization
 
@@ -644,8 +644,6 @@ class GeneralThermodynamics:
             Must be same length as x if x is array or 2D array
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
         training : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
@@ -654,22 +652,22 @@ class GeneralThermodynamics:
         -------
         (driving force, precipitate composition)
         Driving force is positive if precipitate can form
-        Precipitate composition will be None if driving force is negative or returnComp is False
+        Precipitate composition will be None if driving force is negative
         '''
         if hasattr(T, '__len__'):
             dgArray = []
             compArray = []
             for i in range(len(T)):
-                dg, comp = self._drivingForce(x[i], T[i], precPhase, returnComp, training)
+                dg, comp = self._drivingForce(x[i], T[i], precPhase, training)
                 dgArray.append(dg)
                 compArray.append(comp)
             dgArray = np.array(dgArray)
             compArray = np.array(compArray)
             return dgArray, compArray
         else:
-            return self._drivingForce(x, T, precPhase, returnComp, training)
+            return self._drivingForce(x, T, precPhase, training)
 
-    def _getDrivingForceSampling(self, x, T, precPhase = None, returnComp = False, training = False):
+    def _getDrivingForceSampling(self, x, T, precPhase = None, training = False):
         '''
         Gets driving force for nucleation by sampling
 
@@ -691,8 +689,7 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
+
         training : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
@@ -701,7 +698,7 @@ class GeneralThermodynamics:
         -------
         (driving force, precipitate composition)
         Driving force is positive if precipitate can form
-        Precipitate composition will be None if driving force is negative or returnComp is False
+        Precipitate composition will be None if driving force is negative
         '''
         precPhase = self.phases[1] if precPhase is None else precPhase
 
@@ -719,19 +716,16 @@ class GeneralThermodynamics:
         if training:
             self._matrix_cs = None
 
-        if returnComp:
-            sortIndices = np.argsort(self.elements[:-1])
-            unsortIndices = np.argsort(sortIndices)
-            beta_x = np.array(prec_cs.X, dtype=np.float64)
-            beta_x = beta_x[unsortIndices]
-            if len(x) == 1:
-                return dg, beta_x[1:][0]
-            else:
-                return dg, beta_x[1:]
+        sortIndices = np.argsort(self.elements[:-1])
+        unsortIndices = np.argsort(sortIndices)
+        beta_x = np.array(prec_cs.X, dtype=np.float64)
+        beta_x = beta_x[unsortIndices]
+        if len(x) == 1:
+            return dg, beta_x[1:][0]
         else:
-            return dg, None
+            return dg, beta_x[1:]
 
-    def _getDrivingForceApprox(self, x, T, precPhase = None, returnComp = False, training = False):
+    def _getDrivingForceApprox(self, x, T, precPhase = None, training = False):
         '''
         Approximate method of driving force calculation
         Assumes equilibrium composition of precipitate phase
@@ -756,8 +750,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
         training : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
@@ -766,7 +758,7 @@ class GeneralThermodynamics:
         -------
         (driving force, precipitate composition)
         Driving force is positive if precipitate can form
-        Precipitate composition will be None if driving force is negative or returnComp is False
+        Precipitate composition will be None if driving force is negative
         '''
         if precPhase is None:
             precPhase = self.phases[1]
@@ -776,7 +768,7 @@ class GeneralThermodynamics:
 
         cs_results = self._getCompositionSetsForDF(x, T, cond, precPhase, training=training)
         if cs_results is None:
-            return self._getDrivingForceSampling(x, T, precPhase, returnComp, training=training)
+            return self._getDrivingForceSampling(x, T, precPhase, training=training)
         
         chemical_potentials, cs_matrix, cs_precip = cs_results
         sortedElements = sorted(list(set(self.elements) - {'VA'}))
@@ -805,15 +797,12 @@ class GeneralThermodynamics:
         #Remove reference element
         xP = np.delete(xP, refIndex)
 
-        if returnComp:
-            if len(x) == 1:
-                return dg.ravel()[0], xP[unsortIndices][0]
-            else:
-                return dg.ravel()[0], xP[unsortIndices]
+        if len(x) == 1:
+            return dg.ravel()[0], xP[unsortIndices][0]
         else:
-            return dg.ravel()[0], None
+            return dg.ravel()[0], xP[unsortIndices]
 
-    def _getDrivingForceCurvature(self, x, T, precPhase = None, returnComp = False, training = False):
+    def _getDrivingForceCurvature(self, x, T, precPhase = None, training = False):
         '''
         Gets driving force from curvature of free energy function
         Assumes small saturation
@@ -838,8 +827,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
         training : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
@@ -848,7 +835,7 @@ class GeneralThermodynamics:
         -------
         (driving force, precipitate composition)
         Driving force is positive if precipitate can form
-        Precipitate composition will be None if driving force is negative or returnComp is False
+        Precipitate composition will be None if driving force is negative
         '''
         if precPhase is None:
             precPhase = self.phases[1]
@@ -858,7 +845,7 @@ class GeneralThermodynamics:
 
         cs_results = self._getCompositionSetsForDF(x, T, cond, precPhase, training=training)
         if cs_results is None:
-            return self._getDrivingForceSampling(x, T, precPhase, returnComp, training=training)
+            return self._getDrivingForceSampling(x, T, precPhase, training=training)
         
         chemical_potentials, cs_matrix, cs_precip = cs_results
         sortedElements = sorted(list(set(self.elements) - {'VA'}))
@@ -880,15 +867,12 @@ class GeneralThermodynamics:
 
         dg = np.matmul(xD, np.matmul(dMudxParent, xBar.T))
 
-        if returnComp:
-            if len(x) == 1:
-                return dg.ravel()[0], xP[unsortIndices][0]
-            else:
-                return dg.ravel()[0], xP[unsortIndices]
+        if len(x) == 1:
+            return dg.ravel()[0], xP[unsortIndices][0]
         else:
-            return dg.ravel()[0], None
+            return dg.ravel()[0], xP[unsortIndices]
 
-    def _getDrivingForceTangent(self, x, T, precPhase = None, returnComp = False, training = False):
+    def _getDrivingForceTangent(self, x, T, precPhase = None, training = False):
         '''
         Gets driving force from parallel tangent calculation
 
@@ -912,8 +896,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
         training : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
@@ -922,7 +904,7 @@ class GeneralThermodynamics:
         -------
         (driving force, precipitate composition)
         Driving force is positive if precipitate can form
-        Precipitate composition will be None if driving force is negative or returnComp is False
+        Precipitate composition will be None if driving force is negative
         '''
         if precPhase is None:
             precPhase = self.phases[1]
@@ -979,7 +961,7 @@ class GeneralThermodynamics:
         mat_comps = np.array(comp_sets[0].X)
         if np.allclose(prec_comps, mat_comps, 1e-6):
             self._compset_cache_df[precPhase] = None
-            return self._getDrivingForceSampling(x, T, precPhase, returnComp, training=training)
+            return self._getDrivingForceSampling(x, T, precPhase, training=training)
 
         self._compset_cache_df[precPhase] = _prec_cs
 
@@ -995,13 +977,10 @@ class GeneralThermodynamics:
         unsortIndices = np.argsort(sortIndices)
         xb = xb[unsortIndices]
 
-        if returnComp:
-            if len(x) == 1:
-                return dg, xb[1:][0]
-            else:
-                return dg, xb[1:]
+        if len(x) == 1:
+            return dg, xb[1:][0]
         else:
-            return dg, None
+            return dg, xb[1:]
     
     def _getCompositionSetsForDF(self, x, T, cond, precPhase = None, training = False):
         '''
@@ -1017,8 +996,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
         training : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
@@ -1056,8 +1033,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
 
         Returns
         -------
@@ -1123,8 +1098,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
 
         Returns
         -------
@@ -1175,8 +1148,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-        returnComp : bool (optional)
-            Whether to return composition of precipitate (defaults to False)
         training : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other

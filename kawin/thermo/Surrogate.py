@@ -85,7 +85,7 @@ class BinarySurrogate:
         
         #If no driving force or interfacial composition function is supplied, then use function from thermodynamics class
         if drivingForce is None:
-            self.drivingForceFunction = lambda x, T, returnComp=False, training = True: self.binTherm.getDrivingForce(x, T, self.precPhase, returnComp, training)
+            self.drivingForceFunction = lambda x, T, training = True: self.binTherm.getDrivingForce(x, T, self.precPhase, training)
         else:
             self.drivingForceFunction = drivingForce
         
@@ -209,7 +209,7 @@ class BinarySurrogate:
         n = 0   #Index for precCompIndices (needs to correspond to indices self.drivingForce array)
         for t in temperature:
             for x in comps:
-                dG, xP = self.drivingForceFunction(x, t, returnComp = True)
+                dG, xP = self.drivingForceFunction(x, t)
 
                 #If driving force can be obtained (generally True)
                 if dG is not None:
@@ -305,7 +305,7 @@ class BinarySurrogate:
         
         self._createDGSurrogate()            
         
-    def getDrivingForce(self, x, T, returnComp = False):
+    def getDrivingForce(self, x, T):
         '''
         Gets driving force from surrogate models
         
@@ -315,15 +315,13 @@ class BinarySurrogate:
             Composition
         T : float or array of floats
             Temperature, must be same length as x
-        returnComp : bool (optional)
-            Returns precipitate composition if True (defaults to False)
         
         Returns
         -------
         (driving force, precipitate composition)
         Both will be same shape as x and T
         Positive driving force means that precipitate will form
-        precipitate composition will be None if returnComp is False
+        precipitate composition will be None if dG is negative
         '''
         if self.TDGscale is None:
             raise Exception("Driving force has not been trained.")
@@ -337,27 +335,14 @@ class BinarySurrogate:
         if self.linearDG:
             dG = self.SurrogateDrivingForce(x / self.XDGscale, T / self.TDGscale)
             
-            if returnComp:
-                xP = self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale)
-                return dG, xP
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
+            xP = self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale)
+            return dG, xP
                 
         else:
             dG = self.SurrogateDrivingForce(x, T / self.TDGscale)
             
-            if returnComp:
-                xP = self.SurrogatePrecComp(x, T / self.TDGscale)
-
-                return dG, xP
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
+            xP = self.SurrogatePrecComp(x, T / self.TDGscale)
+            return dG, xP
         
     def trainInterfacialComposition(self, temperature, freeEnergy, function='linear', epsilon=1, smooth=0, scale = 'linear'):
         '''
@@ -463,7 +448,7 @@ class BinarySurrogate:
         for t in temperature:
             for x in self.uniqueXPrec:
                 #Driving force calcs can be interpreted as the maximum free energy that can be contributed by the Gibbs-Thomson effect
-                dG, _ = self.drivingForceFunction(x, t, returnComp = False)
+                dG, _ = self.drivingForceFunction(x, t)
 
                 #if driving force can be obtained (generally True)
                 if dG is not None:
@@ -911,9 +896,7 @@ class MulticomponentSurrogate:
         
         #Grab driving force and curvature function from thermodynamics class if not supplied
         if drivingForce is None:
-            #self.drivingForceFunction = self.therm.getDrivingForce
-            self.drivingForceFunction = lambda x, T, returnComp=False, training = True: self.therm.getDrivingForce(x, T, self.precPhase, returnComp, training)
-            #self.drivingForceFunction = lambda x, T, returnComp=False: self.therm.drivingForceFromCurvature(x, T, self.precPhase, returnComp)
+            self.drivingForceFunction = lambda x, T, training = True: self.therm.getDrivingForce(x, T, self.precPhase, training)
         else:
             self.drivingForceFunction = drivingForce
 
@@ -1040,7 +1023,7 @@ class MulticomponentSurrogate:
         n = 0   #Index for precCompIndices (needs to correspond to indices self.drivingForce array)
         for t in temperature:
             for x in comps:
-                dG, xP = self.drivingForceFunction(x, t, returnComp = True)
+                dG, xP = self.drivingForceFunction(x, t)
                 
                 #If driving force can be obtained (generally True)
                 if dG is not None:
@@ -1150,7 +1133,7 @@ class MulticomponentSurrogate:
         
         self._createDGSurrogate()
         
-    def getDrivingForce(self, x, T, returnComp = False):
+    def getDrivingForce(self, x, T):
         '''
         Gets driving force from surrogate models
         
@@ -1178,24 +1161,12 @@ class MulticomponentSurrogate:
         if self.linearDG:
             dG = self.SurrogateDrivingForce(*(x / self.XDGscale), T / self.TDGscale)
             
-            if returnComp:
-                return dG, self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale).T
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
+            return dG, self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale).T
             
         else:
             dG = self.SurrogateDrivingForce(x, T / self.TDGscale)
             
-            if returnComp:
-                return dG, self.SurrogatePrecComp(x, T / self.TDGscale)
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
+            return dG, self.SurrogatePrecComp(x, T / self.TDGscale)
 
     def trainCurvature(self, comps, temperature, function='linear', epsilon=1, smooth=0, scale='linear'):
         '''

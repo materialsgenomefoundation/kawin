@@ -790,7 +790,7 @@ class PrecipitateBase(GenericModel):
             Defaults to True
         '''
         index = self.phaseIndex(phase)
-        self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache, returnComp = True)
+        self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache)
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)

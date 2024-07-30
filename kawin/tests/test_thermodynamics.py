@@ -47,8 +47,8 @@ def test_DG_binary_output():
     methods = ['sampling', 'approximate', 'curvature', 'tangent']
     for m in methods:
         AlZrTherm.setDrivingForceMethod(m)
-        dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, returnComp=True, training = True)
-        dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], returnComp=True, training = True)
+        dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, training = True)
+        dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], training = True)
 
         assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
         assert np.isscalar(xP) or (type(xP) == np.ndarray and xP.ndim == 0)
@@ -76,8 +76,8 @@ def test_DG_ternary_output():
     methods = ['sampling', 'approximate', 'curvature', 'tangent']
     for m in methods:
         NiCrAlTherm.setDrivingForceMethod(m)
-        dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, returnComp=True, training = True)
-        dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], returnComp=True, training = True)
+        dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
+        dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], training = True)
         assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
         assert xP.ndim == 1 and len(xP) == 2
         assert hasattr(dgarray, '__len__')

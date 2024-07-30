@@ -60,7 +60,12 @@ class GeneralThermodynamics:
         if isinstance(database, str):
             database = Database(database)
         self.db = database
+
         self.elements = copy.copy(elements)
+        if 'VA' not in self.elements:
+            self.elements.append('VA')
+        self._isBinary = len(self.elements) == 3
+
         if parameters is None:
             self._parameters = {}
         else:
@@ -69,41 +74,36 @@ class GeneralThermodynamics:
             else:
                 self._parameters = parameters
 
-        if 'VA' not in self.elements:
-            self.elements.append('VA')
-
         if type(phases) == str:  # check if a single phase was passed as a string instead of a list of phases.
             phases = [phases]
         self.phases = phases
 
         self._buildThermoModels()
 
-        #Amount of points to sample per degree of freedom
-        # sampling_pDens is for when using sampling method in driving force calculations
-        # pDens is for equilibrium calculations
-        self.sampling_pDens = 2000
-        self.pDens = 500
+        self.sampling_pDens = 2000      # Sampling density for driving force sampling method
+        self.pDens = 500                # Sampling density for equilibrium
 
-        #Stored variables of last time the class was used
-        #This is so that these can be used again if the temperature has not changed since last usage
-        self._prevTemperature = None
+        self.setDrivingForceMethod(drivingForceMethod)
+        self._buildMobilityModels()
+        self.clearCache()
 
-        #Pertains to parent phase (composition, sampled points, equilibrium calculations)
-        
+    def clearCache(self):
+        '''
+        Removes any cached data
+        This is intended for surrogate training, where the cached data
+        will be removed incase
+        '''
+        self._compset_cache = {}
+        self._compset_cache_df = {}
+        self._prev_conds = {}
+        self._parentEq = (None, None)
 
         #Pertains to precipitate phases (sampled points)
         self._pointsPrec = {self.phases[i]: None for i in range(1, len(self.phases))}
         self._orderingPoints = {self.phases[i]: None for i in range(1, len(self.phases))}
 
-        self.setDrivingForceMethod(drivingForceMethod)
-
-        self._buildMobilityModels()
-
-        #Cached results
-        self._compset_cache = {}
-        self._compset_cache_df = {}
-        self._prev_conds = {}
-        self._parentEq = (None, None)
+        #This is so that these can be used again if the temperature has not changed since last usage
+        self._prevTemperature = None
 
     def _buildThermoModels(self):
         '''
@@ -227,16 +227,6 @@ class GeneralThermodynamics:
                 newP[entry] = p[entry]
             newP['phase_name'] = newPhase
             self.db._parameters.insert(newP)
-
-    def clearCache(self):
-        '''
-        Removes any cached data
-        This is intended for surrogate training, where the cached data
-        will be removed incase
-        '''
-        self._compset_cache = {}
-        self._compset_cache_df = {}
-        self._matrix_cs = None
 
     def setDrivingForceMethod(self, drivingForceMethod):
         '''
@@ -494,13 +484,12 @@ class GeneralThermodynamics:
             For multicomponent - matrix or array of matrices
         '''
         dnkj = []
-
-        if hasattr(T, '__len__'):
-            for i in range(len(T)):
-                dnkj.append(self._interdiffusivitySingle(x[i], T[i], removeCache, phase))
-            return np.array(dnkj)
-        else:
-            return self._interdiffusivitySingle(x, T, removeCache, phase)
+        x = np.atleast_2d(x)
+        if self._isBinary:
+            x = x.T
+        T = np.atleast_1d(T)
+        dnkj = [self._interdiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
+        return np.squeeze(dnkj)
 
     def _interdiffusivitySingle(self, x, T, removeCache = True, phase = None):
         '''
@@ -521,9 +510,6 @@ class GeneralThermodynamics:
         '''
         phase = self.phases[0] if phase is None else phase
 
-        x = self._process_x(x)
-        cond = self._getConditions(x, T, 0)
-
         comp_sets = None if removeCache else self._parentEq[1]
         self._parentEq = self.getLocalEq(x, T, 0, [phase], composition_sets=comp_sets)
         result, comp_sets = self._parentEq
@@ -542,15 +528,12 @@ class GeneralThermodynamics:
                                          mobility_correction=self.mobility_correction,
                                          parameters=self._parameters)
 
-        if len(x) == 1:
-            return Dnkj.ravel()[0]
-        else:
+        if not self._isBinary:
             sortIndices = np.argsort(self.elements[1:-1])
             unsortIndices = np.argsort(sortIndices)
             Dnkj = Dnkj[unsortIndices,:]
             Dnkj = Dnkj[:,unsortIndices]
-            return Dnkj
-
+        return np.squeeze(Dnkj)
 
     def getTracerDiffusivity(self, x, T, removeCache = True, phase = None):
         '''
@@ -575,13 +558,12 @@ class GeneralThermodynamics:
         tracer diffusivity - will return array if T is an array
         '''
         td = []
-
-        if hasattr(T, '__len__'):
-            for i in range(len(T)):
-                td.append(self._tracerDiffusivitySingle(x[i], T[i], removeCache, phase))
-            return np.array(td)
-        else:
-            return self._tracerDiffusivitySingle(x, T, removeCache, phase)
+        x = np.atleast_2d(x)
+        if self._isBinary:
+            x = x.T
+        T = np.atleast_1d(T)
+        td = [self._tracerDiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
+        return np.squeeze(td)
 
     def _tracerDiffusivitySingle(self, x, T, removeCache = True, phase = None):
         '''
@@ -603,8 +585,6 @@ class GeneralThermodynamics:
         if phase is None:
             phase = self.phases[0]
 
-        cond = self._getConditions(x, T, 0)
-
         comp_sets = None if removeCache else self._parentEq[1]
         self._parentEq = self.getLocalEq(x, T, 0, [phase], composition_sets=comp_sets)
         result, comp_sets = self._parentEq
@@ -623,7 +603,6 @@ class GeneralThermodynamics:
 
         sortIndices = np.argsort(self.elements[:-1])
         unsortIndices = np.argsort(sortIndices)
-
         Dtrace = Dtrace[unsortIndices]
 
         return Dtrace
@@ -654,18 +633,12 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        if hasattr(T, '__len__'):
-            dgArray = []
-            compArray = []
-            for i in range(len(T)):
-                dg, comp = self._drivingForce(x[i], T[i], precPhase, training)
-                dgArray.append(dg)
-                compArray.append(comp)
-            dgArray = np.array(dgArray)
-            compArray = np.array(compArray)
-            return dgArray, compArray
-        else:
-            return self._drivingForce(x, T, precPhase, training)
+        x = np.atleast_2d(x)
+        if self._isBinary:
+            x = x.T
+        T = np.atleast_1d(T)
+        dgArray, compArray = zip(*[self._drivingForce(xi, Ti, precPhase, training) for xi, Ti in zip(x, T)])
+        return np.squeeze(dgArray), np.squeeze(compArray)
 
     def _getDrivingForceSampling(self, x, T, precPhase = None, training = False):
         '''

@@ -676,7 +676,6 @@ class GeneralThermodynamics:
         precPhase = self.phases[1] if precPhase is None else precPhase
 
         #Calculate equilibrium with only the parent phase -------------------------------------------------------------------------------------------
-        x = self._process_x(x)
         cond = self._getConditions(x, T, 0)
 
         cs_results = self._getPrecCompositionSetSamplingDF(x, T, cond, precPhase, training)
@@ -693,10 +692,8 @@ class GeneralThermodynamics:
         unsortIndices = np.argsort(sortIndices)
         beta_x = np.array(prec_cs.X, dtype=np.float64)
         beta_x = beta_x[unsortIndices]
-        if len(x) == 1:
-            return dg, beta_x[1:][0]
-        else:
-            return dg, beta_x[1:]
+
+        return np.squeeze(dg), np.squeeze(beta_x[1:])
 
     def _getDrivingForceApprox(self, x, T, precPhase = None, training = False):
         '''
@@ -736,7 +733,6 @@ class GeneralThermodynamics:
         if precPhase is None:
             precPhase = self.phases[1]
 
-        x = self._process_x(x)
         cond = self._getConditions(x, T, 0)
 
         cs_results = self._getCompositionSetsForDF(x, T, cond, precPhase, training=training)
@@ -770,10 +766,7 @@ class GeneralThermodynamics:
         #Remove reference element
         xP = np.delete(xP, refIndex)
 
-        if len(x) == 1:
-            return dg.ravel()[0], xP[unsortIndices][0]
-        else:
-            return dg.ravel()[0], xP[unsortIndices]
+        return np.squeeze(dg), np.squeeze(xP[unsortIndices])
 
     def _getDrivingForceCurvature(self, x, T, precPhase = None, training = False):
         '''
@@ -840,10 +833,7 @@ class GeneralThermodynamics:
 
         dg = np.matmul(xD, np.matmul(dMudxParent, xBar.T))
 
-        if len(x) == 1:
-            return dg.ravel()[0], xP[unsortIndices][0]
-        else:
-            return dg.ravel()[0], xP[unsortIndices]
+        return np.squeeze(dg), np.squeeze(xP[unsortIndices])
 
     def _getDrivingForceTangent(self, x, T, precPhase = None, training = False):
         '''
@@ -882,7 +872,6 @@ class GeneralThermodynamics:
         if precPhase is None:
             precPhase = self.phases[1]
 
-        x = self._process_x(x)
         cond = self._getConditions(x, T, self.gOffset)
 
         if self._compset_cache_df.get(precPhase, None) is None or training:
@@ -950,10 +939,7 @@ class GeneralThermodynamics:
         unsortIndices = np.argsort(sortIndices)
         xb = xb[unsortIndices]
 
-        if len(x) == 1:
-            return dg, xb[1:][0]
-        else:
-            return dg, xb[1:]
+        return np.squeeze(dg), np.squeeze(xb[1:])
     
     def _getCompositionSetsForDF(self, x, T, cond, precPhase = None, training = False):
         '''

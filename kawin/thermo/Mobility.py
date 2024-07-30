@@ -2,10 +2,9 @@ from tinydb import where
 import numpy as np
 from pycalphad import Model, variables as v
 from pycalphad.core.utils import wrap_symbol, extract_parameters
+from pycalphad.io.tdb import get_supported_variables
 from symengine import exp, Symbol, Add
 from kawin.thermo.FreeEnergyHessian import partialdMudX, dMudX
-
-setattr(v, 'GE', v.StateVariable('GE'))
 
 #List of interstitial elements
 # When calculating interdiffusivity, we do not require reference element
@@ -48,14 +47,14 @@ class MobilityModel(Model):
         #Replace symbols with database symbols for mobility and exponential term
         #Also store a copy of the mobility/diffusivity as MOB_A or DIFF_A
         for name, value in self.mobility.items():
-            self.mobility[name] = self.symbol_replace(value, symbols).xreplace(v.supported_variables_in_databases)
+            self.mobility[name] = self.symbol_replace(value, symbols).xreplace(get_supported_variables())
             setattr(self, 'MOB_'+name, self.mobility[name])
-            setattr(self, 'MQ_'+name, self.symbol_replace(getattr(self, 'MQ_'+name), symbols).xreplace(v.supported_variables_in_databases))
+            setattr(self, 'MQ_'+name, self.symbol_replace(getattr(self, 'MQ_'+name), symbols).xreplace(get_supported_variables()))
 
         for name, value in self.diffusivity.items():
-            self.diffusivity[name] = self.symbol_replace(value, symbols).xreplace(v.supported_variables_in_databases)
+            self.diffusivity[name] = self.symbol_replace(value, symbols).xreplace(get_supported_variables())
             setattr(self, 'DIFF_'+name, self.diffusivity[name])
-            setattr(self, 'DQ_'+name, self.symbol_replace(getattr(self, 'DQ_'+name), symbols).xreplace(v.supported_variables_in_databases))
+            setattr(self, 'DQ_'+name, self.symbol_replace(getattr(self, 'DQ_'+name), symbols).xreplace(get_supported_variables()))
 
         self.mob_site_fractions = {c: sorted([x for x in self.mobility_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.mobility}
         self.diff_site_fractions = {c: sorted([x for x in self.diffusivity_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.diffusivity}
@@ -296,7 +295,7 @@ def mobility_from_composition_set(composition_set, mobility_callables = None, mo
     #return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
     param_keys, param_values = extract_parameters(parameters)
     if len(param_values) > 0:
-        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float_)
+        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
     else:
         callableInput = composition_set.dof
     return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](callableInput) for A in range(len(elements))])
@@ -559,7 +558,7 @@ def tracer_diffusivity_from_diff(composition_set, diffusivity_callables = None, 
 
     param_keys, param_values = extract_parameters(parameters)
     if len(param_values) > 0:
-        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float_)
+        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
     else:
         callableInput = composition_set.dof
     return np.array([diffusivity_correction[elements[A]] * diffusivity_callables[elements[A]](callableInput) for A in range(len(elements))])
@@ -599,7 +598,7 @@ def interdiffusivity_from_diff(composition_set, refElement, diffusivity_callable
 
     param_keys, param_values = extract_parameters(parameters)
     if len(param_values) > 0:
-        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float_)
+        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
     else:
         callableInput = composition_set.dof
     Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
@@ -607,7 +606,7 @@ def interdiffusivity_from_diff(composition_set, refElement, diffusivity_callable
     for a in range(len(elements) - 1):
         if elements[eleIndex] == refElement:
             eleIndex += 1
-
+            
         #Daa = diffusivity_correction[elements[eleIndex]] * diffusivity_callables[elements[eleIndex]](composition_set.dof)
         Daa = diffusivity_correction[elements[eleIndex]] * diffusivity_callables[elements[eleIndex]](callableInput)
         Dnkj[a, a] = Daa

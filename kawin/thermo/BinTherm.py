@@ -108,25 +108,13 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if hasattr(gExtra, '__len__'):
-            if not hasattr(T, '__len__'):
-                caArray, cbArray = self._interfacialComposition(T, gExtra, precPhase)
-            else:
-                #If T is also an array, then iterate through T and gExtra
-                #Otherwise, pycalphad will create a cartesian product of the two
-                caArray = []
-                cbArray = []
-                for i in range(len(gExtra)):
-                    ca, cb = self._interfacialComposition(T[i], gExtra[i], precPhase)
-                    caArray.append(ca)
-                    cbArray.append(cb)
-                caArray = np.array(caArray)
-                cbArray = np.array(cbArray)
-
-            return caArray, cbArray
+        gExtra = np.atleast_1d(gExtra)
+        T = np.atleast_1d(T)
+        if len(T) == 1:
+            caArray, cbArray = self._interfacialComposition(T[0], gExtra, precPhase)
         else:
-            return self._interfacialComposition(T, gExtra, precPhase)
-
+            caArray, cbArray = zip(*[self._interfacialComposition(T[i], gExtra[i], precPhase) for i in range(len(T))])
+        return np.squeeze(caArray), np.squeeze(cbArray)
 
     def _interfacialCompositionFromEq(self, T, gExtra = 0, precPhase = None):
         '''

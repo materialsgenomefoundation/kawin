@@ -13,9 +13,9 @@ from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
 from kawin.thermo.Mobility import MobilityModel, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
 
-DrivingForceCache = namedtuple('DrivingForceCache', 
-                               ['conditions', 'matrix_eq', 'precipitate_eq', 'samples', 'ordered_samples'],
-                               defaults=(None, None, None, None, None))
+SampledPointsCache = namedtuple('SampledPointsCache', 
+                               ['temperature', 'samples', 'ordered_samples'],
+                               defaults=(None, None, None))
 
 class ExtraFreeEnergyType(v.IndependentPotential):
     implementation_units = 'joules'
@@ -101,7 +101,6 @@ class GeneralThermodynamics:
         This is intended for surrogate training, where the cached data
         will be removed incase
         '''
-        self._compset_cache = {}
         self._compset_cache_df = {}
         self._matrix_cs = None
         self._points_cache = {}          #Stored samples for precipitate phases at defined temperature
@@ -643,10 +642,9 @@ class GeneralThermodynamics:
     
     def _resetDrivingForceCache(self, phase, removeCache):
         if removeCache:
-            self._compset_cache[phase] = None
             self._compset_cache_df[phase] = None
             self._matrix_cs = None
-            self._points_cache[phase] = None
+            self._points_cache[phase] = SampledPointsCache()
 
     def _getDrivingForceSampling(self, x, T, precPhase = None, removeCache = False):
         '''
@@ -805,8 +803,8 @@ class GeneralThermodynamics:
             return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache)
         
         chemical_potentials, cs_matrix, cs_precip = cs_results
-        sortedElements = sorted(list(set(self.elements) - {'VA'}))
-        refIndex = sortedElements.index(self.elements[0])
+        non_va_elements = list(cs_matrix.phase_record.nonvacant_elements)
+        refIndex = non_va_elements.index(self.elements[0])
         x_matrix = np.array(cs_matrix.X, dtype=np.float64)
         x_precip = np.array(cs_precip.X, dtype=np.float64)
 
@@ -1085,13 +1083,11 @@ class GeneralThermodynamics:
         #Sample precipitate phase and get driving force differences at all points -------------------------------------------------------------------
         #Sample points of precipitate phase
         phases, sub_models = self._setupSubModels([precPhase])
-        sample_data = self._points_cache.get(precPhase, None)
-        if sample_data is None:
-            sample_data = {}
+        sample_data = self._points_cache.get(precPhase, SampledPointsCache())
+        prevT = sample_data.temperature
+        precPoints = sample_data.samples
+        orderedPoints = sample_data.ordered_samples
 
-        prevT = sample_data.get('T', None)
-        precPoints = sample_data.get('precipitate_points', None)
-        orderedPoints = sample_data.get('ordered_points', None)
         if precPoints is None or prevT != T:
             precPoints = calculate(self.db, self.elements, phases[0], 
                                    pdens=self.sampling_pDens, model=sub_models, output='GM', 
@@ -1100,7 +1096,7 @@ class GeneralThermodynamics:
                 orderedPoints = calculate(self.db, self.elements, phases[0], 
                                           pdens=self.sampling_pDens, model=sub_models, output='OCM', 
                                           phase_records=self.phase_records, to_xarray=False, **str_cond)
-            self._points_cache[precPhase] = {'T': T, 'precipitate_points': precPoints, 'ordered_points': orderedPoints}
+            self._points_cache[precPhase] = SampledPointsCache(temperature=T, samples=precPoints, ordered_samples=orderedPoints)
 
         #For phases at fixed composition, there will only be 1 set of site fractions
         #So we force composition and site fractions to be 2D

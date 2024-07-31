@@ -40,6 +40,10 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         self._prevCa = {p: None for p in phases[1:]}
         self._prevCb = {p: None for p in phases[1:]}
 
+    def clearCache(self):
+        super().clearCache()
+        self._compset_cache_curvature = {}
+
     def getInterfacialComposition(self, x, T, gExtra = 0, precPhase = None):
         '''
         Gets interfacial composition by calculating equilibrum with Gibbs-Thomson effect
@@ -67,22 +71,13 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if hasattr(gExtra, '__len__'):
-            if not hasattr(T, '__len__'):
-                T = T * np.ones(len(gExtra))
-
-            caArray = []
-            cbArray = []
-            for i in range(len(gExtra)):
-                ca, cb = self._interfacialComposition(x, T[i], gExtra[i], precPhase)
-                caArray.append(ca)
-                cbArray.append(cb)
-            caArray = np.array(caArray)
-            cbArray = np.array(cbArray)
-            return caArray, cbArray
-        else:
-            return self._interfacialComposition(x, T, gExtra, precPhase)
-
+        gExtra = np.atleast_1d(gExtra)
+        T = np.atleast_1d(T)
+        if len(T) == 1:
+            T = T*np.ones(gExtra.shape, dtype=np.float64)
+        
+        caArray, cbArray = zip(*[self._interfacialComposition(x, T[i], gExtra[i], precPhase) for i in range(len(gExtra))])
+        return np.squeeze(caArray), np.squeeze(cbArray)
 
     def _interfacialComposition(self, x, T, gExtra = 0, precPhase = None):
         '''
@@ -105,15 +100,14 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if precPhase is None:
-            precPhase = self.phases[1]
+        precPhase = self.phases[1] if precPhase is None else precPhase
 
         wks = self.getEq(x, T, gExtra, precPhase)
         mu = np.squeeze(wks.eq.MU)
 
         #Check for convergence, return None if not converged
         if np.any(np.isnan(mu)):
-            return None, None
+            return -1*np.ones(len(self.elements[:-1]), dtype=np.float64), -1*np.ones(len(self.elements[:-1]), dtype=np.float64)
         
         cs_list = wks.get_composition_sets()
         ph = [cs.phase_record.phase_name for cs in cs_list]
@@ -123,20 +117,16 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             sortIndices = np.argsort(self.elements[:-1])
             unsortIndices = np.argsort(sortIndices)
 
-            mu = mu[unsortIndices]
-
             cs_matrix = cs_list[ph.index(self.phases[0])]
             xM = np.array(cs_matrix.X, dtype=np.float64)
-            xM = xM[unsortIndices]
 
             cs_precip = cs_list[ph.index(precPhase)]
             xP = np.array(cs_precip.X, dtype=np.float64)
-            xP = xP[unsortIndices]
 
-            return xM, xP
+            return xM[unsortIndices], xP[unsortIndices]
 
-        return None, None
-
+        return -1*np.ones(len(self.elements[:-1]), dtype=np.float64), -1*np.ones(len(self.elements[:-1]), dtype=np.float64)
+    
     def _curvatureFactorFromEq(self, chemical_potentials, composition_sets, precPhase=None):
         '''
         Curvature factor (from Phillipes and Voorhees - 2013)
@@ -171,11 +161,10 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         Will return (None, None, None, None, None, None) if single phase
         '''
-        if precPhase is None:
-            precPhase = self.phases[1]
+        precPhase = self.phases[1] if precPhase is None else precPhase
 
-        ele = list(composition_sets[0].phase_record.nonvacant_elements)
-        refIndex = ele.index(self.elements[0])
+        non_va_elements = list(composition_sets[0].phase_record.nonvacant_elements)
+        refIndex = non_va_elements.index(self.elements[0])
 
         ph = [cs.phase_record.phase_name for cs in composition_sets]
 
@@ -269,18 +258,12 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         Will return (None, None, None, None, None, None) if single phase
         '''
-        if precPhase is None:
-            precPhase = self.phases[1]
-        if not hasattr(x, '__len__'):
-            x = [x]
-
-        #Remove first element if x lists composition of all elements
-        if len(x) == len(self.elements) - 1:
-            x = x[1:]
+        precPhase = self.phases[1] if precPhase is None else precPhase
+        x = self._process_x(x)
         cond = self._getConditions(x, T, 0)
 
         #Perform equilibrium from scratch if cache not set or when training surrogate
-        if self._compset_cache.get(precPhase, None) is None or removeCache:
+        if self._compset_cache_curvature.get(precPhase, None) is None or removeCache:
             cs_results = self._getCompositionSetsForCurvature(x, T, precPhase)
             if cs_results is None:
                 return None
@@ -290,8 +273,8 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             phases, sub_models = self._setupSubModels(precPhase)
             result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
                                                          sub_models, self.phase_records,
-                                                         composition_sets=self._compset_cache[precPhase])
-            self._compset_cache[precPhase] = composition_sets
+                                                         composition_sets=self._compset_cache_curvature[precPhase])
+            self._compset_cache_curvature[precPhase] = composition_sets
             chemical_potentials = result.chemical_potentials
 
         #Check if input equilibrium has converged
@@ -332,7 +315,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                     currX = 0.5*currX + 0.5*np.array(x)
 
                 #More than likely, this is not needed, but just in case
-                #MaxIt is 15, which refers to a 6e-5 difference in test composition between the 14th and 15th iteration
+                #MaxIt is 15, which refers to a maximum of 6e-5 difference in test composition between the 14th and 15th iteration
                 #    Which is probably more than enough to find a two-phase region
                 currIt += 1
                 if currIt > maxIt:
@@ -374,10 +357,8 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         matrix and precipitate composition will be array or 2D array based
             off shape of R
         '''
-        if hasattr(R, '__len__'):
-            R = np.array(R)
-        if hasattr(gExtra, '__len__'):
-            gExtra = np.array(gExtra)
+        R = np.atleast_1d(R)
+        gExtra = np.atleast_1d(gExtra)
 
         curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
@@ -385,42 +366,24 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
     
         dc, mc, gba, beta, ca, cb = curv_results
 
-        #dc, mc, gba, beta, ca, cb = self.curvatureFactor(x, T, precPhase, training, searchDir)
-        #if dc is None:
-        #    return None, None, None, None, None
-
         Rdiff = (dG - gExtra)
-
         gr = (mc / R) * Rdiff
 
-        if hasattr(Rdiff, '__len__'):
-            calpha = np.zeros((len(Rdiff), len(self.elements[1:-1])))
-            dca = np.zeros((len(Rdiff), len(self.elements[1:-1])))
-            cbeta = np.zeros((len(Rdiff), len(self.elements[1:-1])))
-            for i in range(len(self.elements[1:-1])):
-                calpha[:,i] = x[i] - dc[i] * Rdiff
-                dca[:,i] = calpha[:,i] - ca[i]
+        calpha = np.zeros((len(Rdiff), len(self.elements[1:-1])))
+        dca = np.zeros((len(Rdiff), len(self.elements[1:-1])))
+        cbeta = np.zeros((len(Rdiff), len(self.elements[1:-1])))
+        for i in range(len(self.elements[1:-1])):
+            calpha[:,i] = x[i] - dc[i] * Rdiff
+            dca[:,i] = calpha[:,i] - ca[i]
 
-            dcb = np.matmul(gba, dca.T)
-            for i in range(len(self.elements[1:-1])):
-                cbeta[:,i] = cb[i] + dcb[i,:]
+        dcb = np.matmul(gba, dca.T)
+        for i in range(len(self.elements[1:-1])):
+            cbeta[:,i] = cb[i] + dcb[i,:]
 
-            calpha[calpha < 0] = 0
-            calpha[calpha > 1] = 1
-            cbeta[cbeta < 0] = 0
-            cbeta[cbeta > 1] = 1
+        calpha = np.clip(calpha, 0, 1)
+        cbeta = np.clip(cbeta, 0, 1)
 
-            return gr, calpha, cbeta, ca, cb
-        else:
-            calpha = x - dc * Rdiff
-            cbeta = cb + np.matmul(gba, (calpha - ca)).flatten()
-
-            calpha[calpha < 0] = 0
-            calpha[calpha > 1] = 1
-            cbeta[cbeta < 0] = 0
-            cbeta[cbeta > 1] = 1
-
-            return gr, calpha, cbeta, ca, cb
+        return np.squeeze(gr), np.squeeze(calpha), np.squeeze(cbeta), np.squeeze(ca), np.squeeze(cb)
 
     def impingementFactor(self, x, T, precPhase = None, removeCache = False):
         '''
@@ -469,18 +432,18 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         
         if len(cs_list_precip) == 0:
             composition_sets = [cs_list_matrix[0]]
-            self._compset_cache[precPhase] = None
+            self._compset_cache_curvature[precPhase] = None
         else:
             miscMatrix = len(cs_list_matrix) > 1
             miscPrec = len(cs_list_precip) > 1
-            self._compset_cache[precPhase] = composition_sets
+            self._compset_cache_curvature[precPhase] = composition_sets
 
             if miscMatrix or miscPrec:
                 phases, sub_models = self._setupSubModels(precPhase)
                 result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
                                                         sub_models, self.phase_records,
-                                                        composition_sets=self._compset_cache[precPhase])
-                self._compset_cache[precPhase] = composition_sets
+                                                        composition_sets=self._compset_cache_curvature[precPhase])
+                self._compset_cache_curvature[precPhase] = composition_sets
                 chemical_potentials = result.chemical_potentials
 
         return chemical_potentials, composition_sets

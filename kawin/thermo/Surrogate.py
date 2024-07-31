@@ -1038,7 +1038,7 @@ class MulticomponentSurrogate:
                         self.precCompIndices.append(n)
                         
                         xMeq, xPeq = self.interfacialCompositionFunction(x, t, 0)
-                        if xMeq is not None:
+                        if any(xMeq == -1):
                             self.drivingForce.append(0)
                             self.dGcoords.append(np.concatenate((xMeq[1:], [t])))
                             n += 1

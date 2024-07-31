@@ -85,7 +85,7 @@ class BinarySurrogate:
         
         #If no driving force or interfacial composition function is supplied, then use function from thermodynamics class
         if drivingForce is None:
-            self.drivingForceFunction = lambda x, T, training = True: self.binTherm.getDrivingForce(x, T, self.precPhase, training)
+            self.drivingForceFunction = lambda x, T, removeCache = True: self.binTherm.getDrivingForce(x, T, self.precPhase, removeCache)
         else:
             self.drivingForceFunction = drivingForce
         
@@ -896,7 +896,7 @@ class MulticomponentSurrogate:
         
         #Grab driving force and curvature function from thermodynamics class if not supplied
         if drivingForce is None:
-            self.drivingForceFunction = lambda x, T, training = True: self.therm.getDrivingForce(x, T, self.precPhase, training)
+            self.drivingForceFunction = lambda x, T, removeCache = True: self.therm.getDrivingForce(x, T, self.precPhase, removeCache)
         else:
             self.drivingForceFunction = drivingForce
 
@@ -910,7 +910,7 @@ class MulticomponentSurrogate:
         if curvature is None:
             #self.curvature = self.therm.curvatureFactor
             #self.curvature = lambda x, T, training = True: self.therm.curvatureFactor(x, T, self.precPhase, training)
-            self.curvature = lambda x, T, training = True: self.therm._curvatureWithSearch(x, T, self.precPhase, training)
+            self.curvature = lambda x, T, removeCache = True: self.therm._curvatureWithSearch(x, T, self.precPhase, removeCache)
         else:
             self.curvature = curvature
 

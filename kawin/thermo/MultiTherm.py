@@ -239,7 +239,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         else:
             return None
 
-    def curvatureFactor(self, x, T, precPhase = None, training = False, searchDir = None):
+    def curvatureFactor(self, x, T, precPhase = None, removeCache = False, searchDir = None):
         '''
         Curvature factor (from Phillipes and Voorhees - 2013) from composition and temperature
         This is the same as curvatureFactorEq, but will calculate equilibrium from x and T first
@@ -254,7 +254,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Precipitate phase (defaults to first precipitate in list)
         searchDir : None or array
             If two-phase equilibrium is not present, then move x towards this composition to find two-phase equilibria
-        training : bool (optional)
+        removeCache : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
 
@@ -280,7 +280,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         cond = self._getConditions(x, T, 0)
 
         #Perform equilibrium from scratch if cache not set or when training surrogate
-        if self._compset_cache.get(precPhase, None) is None or training:
+        if self._compset_cache.get(precPhase, None) is None or removeCache:
             cs_results = self._getCompositionSetsForCurvature(x, T, precPhase)
             if cs_results is None:
                 return None
@@ -296,7 +296,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         #Check if input equilibrium has converged
         if np.any(np.isnan(chemical_potentials)):
-            if training:
+            if removeCache:
                 return None
             else:
                 print('Warning: equilibrum was not able to be solved for, using results of previous calculation')
@@ -343,7 +343,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         else:
             return None
 
-    def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, precPhase = None, training = False, searchDir = None):
+    def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, precPhase = None, removeCache = False, searchDir = None):
         '''
         Returns growth rate and interfacial compostion given Gibbs-Thomson contribution
 
@@ -363,7 +363,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Precipitate phase (defaults to first precipitate in list)
         searchDir : None or array
             If two-phase equilibrium is not present, then move x towards this composition to find a two-phase region
-        training : bool (optional)
+        removeCache : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
 
@@ -379,7 +379,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         if hasattr(gExtra, '__len__'):
             gExtra = np.array(gExtra)
 
-        curv_results = self.curvatureFactor(x, T, precPhase, training, searchDir)
+        curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
             return None, None, None, None, None
     
@@ -422,7 +422,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
             return gr, calpha, cbeta, ca, cb
 
-    def impingementFactor(self, x, T, precPhase = None, training = False):
+    def impingementFactor(self, x, T, precPhase = None, removeCache = False):
         '''
         Returns impingement factor for nucleation rate calculations
 
@@ -434,11 +434,11 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Temperature
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
-        training : bool (optional)
+        removeCache : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
         '''
-        curv_results = self.curvatureFactor(x, T, precPhase, training)
+        curv_results = self.curvatureFactor(x, T, precPhase, removeCache)
         if curv_results is None:
             return self._prevBeta[precPhase]
         dc, mc, gba, beta, ca, cb = curv_results
@@ -485,7 +485,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         return chemical_potentials, composition_sets
     
-    def _curvatureWithSearch(self, x, T, precPhase = None, training = True):
+    def _curvatureWithSearch(self, x, T, precPhase = None, removeCache = True):
         '''
         Performs driving force calculation to get xb, which can be used to find
         curvature factors when driving force is negative. Main use is for the surrogate model
@@ -503,5 +503,5 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
         '''
-        dg, xb = self.getDrivingForce(x, T, precPhase, training = training)
-        return self.curvatureFactor(x, T, precPhase, training = training, searchDir=xb)
+        dg, xb = self.getDrivingForce(x, T, precPhase, removeCache = removeCache)
+        return self.curvatureFactor(x, T, precPhase, removeCache = removeCache, searchDir=xb)

@@ -31,7 +31,7 @@ def test_Surr_binary_DG_output():
     surr.trainDrivingForce(xtrain, T, scale='log')
 
     dg, xP = surr.getDrivingForce(xtrain[3], 673.15)
-    dgT, xPT = AlZrTherm.getDrivingForce(xtrain[3], 673.15, training = True)
+    dgT, xPT = AlZrTherm.getDrivingForce(xtrain[3], 673.15, removeCache = True)
     dgarray, xParray = surr.getDrivingForce([0.004, 0.005], [673.15, 683.15])
 
     assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
@@ -168,7 +168,7 @@ def test_Surr_ternary_DG_output():
     surr.trainDrivingForce(x, T)
 
     dg, xP = surr.getDrivingForce(x[5], 1073.15)
-    dgT, xPT = NiCrAlTherm.getDrivingForce(x[5], 1073.15, training = True)
+    dgT, xPT = NiCrAlTherm.getDrivingForce(x[5], 1073.15, removeCache = True)
     dgarray, xParray = surr.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15])
 
     assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
@@ -196,7 +196,7 @@ def test_Surr_ternary_IC_output():
     surr.trainCurvature(x, T)
 
     g, ca, cb, caEQ, cbEQ = surr.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000)
-    gT, caT, cbT, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000, training = True)
+    gT, caT, cbT, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000, removeCache = True)
     garray, caarray, cbarray, caEQarray, cbEQarray = surr.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500])
 
     assert np.isscalar(g) or (type(g) == np.ndarray and g.ndim == 0)

@@ -34,7 +34,7 @@ def test_DG_binary():
 
     Driving force value was updated due to switch from approximate to tangent method
     '''
-    dg, _ = AlZrTherm.getDrivingForce(0.004, 673.15, training = True)
+    dg, _ = AlZrTherm.getDrivingForce(0.004, 673.15, removeCache = True)
     assert_allclose(dg, 6346.930428, atol=0, rtol=1e-3)
 
 def test_DG_binary_output():
@@ -47,8 +47,8 @@ def test_DG_binary_output():
     methods = ['sampling', 'approximate', 'curvature', 'tangent']
     for m in methods:
         AlZrTherm.setDrivingForceMethod(m)
-        dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, training = True)
-        dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], training = True)
+        dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, removeCache = True)
+        dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], removeCache = True)
 
         assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
         assert np.isscalar(xP) or (type(xP) == np.ndarray and xP.ndim == 0)
@@ -63,7 +63,7 @@ def test_DG_ternary():
 
     Driving force value was updated due to switch from approximate to tangent method
     '''
-    dg, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
+    dg, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, removeCache = True)
     assert_allclose(dg, 265.779087, atol=0, rtol=1e-3)
 
 def test_DG_ternary_output():
@@ -76,8 +76,8 @@ def test_DG_ternary_output():
     methods = ['sampling', 'approximate', 'curvature', 'tangent']
     for m in methods:
         NiCrAlTherm.setDrivingForceMethod(m)
-        dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
-        dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], training = True)
+        dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, removeCache = True)
+        dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], removeCache = True)
         assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
         assert xP.ndim == 1 and len(xP) == 2
         assert hasattr(dgarray, '__len__')
@@ -92,9 +92,9 @@ def test_DG_ternary_order():
         Input elements as [Ni, Al, Cr] should require composition to be [Al, Cr]
         Input elements as [Al, Cr, Ni] should require composition to be [Cr, Ni]
     '''
-    dg1, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
-    dg2, _ = NiAlCrTherm.getDrivingForce([0.1, 0.08], 1073.15, training = True)
-    dg3, _ = AlCrNiTherm.getDrivingForce([0.08, 0.82], 1073.15, training = True)
+    dg1, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, removeCache = True)
+    dg2, _ = NiAlCrTherm.getDrivingForce([0.1, 0.08], 1073.15, removeCache = True)
+    dg3, _ = AlCrNiTherm.getDrivingForce([0.08, 0.82], 1073.15, removeCache = True)
     assert_allclose(dg1, dg2, atol=0, rtol=1e-3)
     assert_allclose(dg2, dg3, atol=0, rtol=1e-3)
 
@@ -191,9 +191,9 @@ def test_Curv_ternary():
     '''
     Checks that order of elements does not matter for curvature calculations
     '''
-    n1, d1, g1, b1, ca1, cb1 = NiCrAlTherm.curvatureFactor([0.08, 0.1], 1073.15, training = True)
-    n2, d2, g2, b2, ca2, cb2 = NiAlCrTherm.curvatureFactor([0.1, 0.08], 1073.15, training = True)
-    n3, d3, g3, b3, ca3, cb3 = AlCrNiTherm.curvatureFactor([0.08, 0.82], 1073.15, training = True)
+    n1, d1, g1, b1, ca1, cb1 = NiCrAlTherm.curvatureFactor([0.08, 0.1], 1073.15, removeCache = True)
+    n2, d2, g2, b2, ca2, cb2 = NiAlCrTherm.curvatureFactor([0.1, 0.08], 1073.15, removeCache = True)
+    n3, d3, g3, b3, ca3, cb3 = AlCrNiTherm.curvatureFactor([0.08, 0.82], 1073.15, removeCache = True)
 
     n2[[0,1]] = n2[[1,0]]
     g2[[0,1],:] = g2[[1,0],:]
@@ -222,9 +222,9 @@ def test_IC_ternary():
     Ignore equilibrium compositions since growth and interfacial compositions depend on them anyways
         If growth and interfacial compositions are correct, then equilibrium compositions are also correct
     '''
-    g1, ca1, cb1, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
-    g2, ca2, cb2, _, _ = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, training = True)
-    g3, ca3, cb3, _, _ = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, training = True)
+    g1, ca1, cb1, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    g2, ca2, cb2, _, _ = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    g3, ca3, cb3, _, _ = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, removeCache = True)
 
     #Change ca2,cb2 from [AL, CR] to [CR, AL]
     ca2[[0,1]] = ca2[[1,0]]
@@ -250,8 +250,8 @@ def test_IC_ternary_output():
         (array, scalar, scalar, scalar, scalar) -> (scalar, array, array)
         (array, scalar, scalar, array, array) -> (array, 2D array, 2D array)
     '''
-    g, ca, cb, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
-    garray, caarray, cbarray, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], training = True)
+    g, ca, cb, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    garray, caarray, cbarray, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], removeCache = True)
 
     assert np.isscalar(g) or (type(g) == np.ndarray and g.ndim == 0)
     assert hasattr(ca, '__len__') and len(ca) == 2

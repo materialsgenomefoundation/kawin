@@ -302,8 +302,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 
             chemical_potentials, cs_matrix, cs_precip = eq_results
 
-        if removeCache:
-            self._compset_cache_curvature[precPhase] = None
+        self._compset_cache_curvature[precPhase] = None if removeCache else [cs_matrix, cs_precip]
         return self._curvatureFactorFromEq(chemical_potentials, cs_matrix, cs_precip, precPhase)
         
     def _searchForTwoPhaseEq(self, x, T, precPhase, searchDir = None):

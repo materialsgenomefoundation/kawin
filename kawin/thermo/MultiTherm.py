@@ -163,20 +163,20 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         Parameters
         ----------
         chemical_potentials : 1-D float64 array
-        composition_sets : List[pycalphad.composition_set.CompositionSet]
+        cs_matrix : CompositionSet
+        cs_precip : CompositionSet
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
 
         Returns
         -------
-        {D-1 dCbar / dCbar^T M-1 dCbar} - for calculating interfacial composition of matrix
-        {1 / dCbar^T M-1 dCbar} - for calculating growth rate
-        {Gb^-1 Ga} - for calculating precipitate composition
-        beta - Impingement rate
-        Ca - interfacial composition of matrix phase
-        Cb - interfacial composition of precipitate phase
-
-        Will return (None, None, None, None, None, None) if single phase
+        CurvatureOutput object
+            {D-1 dCbar / dCbar^T M-1 dCbar} - for calculating interfacial composition of matrix
+            {1 / dCbar^T M-1 dCbar} - for calculating growth rate
+            {Gb^-1 Ga} - for calculating precipitate composition
+            beta - Impingement rate
+            Ca - interfacial composition of matrix phase
+            Cb - interfacial composition of precipitate phase
         '''
         precPhase = self.phases[1] if precPhase is None else precPhase
         non_va_elements = list(cs_matrix.phase_record.nonvacant_elements)
@@ -273,7 +273,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Ca - interfacial composition of matrix phase
             Cb - interfacial composition of precipitate phase
 
-        Will return (None, None, None, None, None, None) if single phase
+        Will return None if single phase
         '''
         # If equilibrium is invalid, then we return the previous values if available
         # Else, we return None
@@ -370,10 +370,11 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         Returns
         -------
-        (growth rate, matrix composition, precipitate composition, equilibrium matrix comp, equilibrium precipitate comp)
-        growth rate will be float or array based off shape of R
-        matrix and precipitate composition will be array or 2D array based
-            off shape of R
+        GrowthRateOutput object
+            (growth rate, matrix composition, precipitate composition, equilibrium matrix comp, equilibrium precipitate comp)
+            growth rate will be float or array based off shape of R
+            matrix and precipitate composition will be array or 2D array based
+                off shape of R
         '''
         x = self._process_x(x)
         R = np.atleast_1d(R)
@@ -421,6 +422,10 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         removeCache : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
+
+        Returns
+        -------
+        beta - impingement factor
         '''
         curv_results = self.curvatureFactor(x, T, precPhase, removeCache)
         if curv_results is None:
@@ -441,7 +446,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Temperature
         precPhase : str (optional)
             Precipitate phase (defaults to first precipitate in list)
-        training : bool (optional)
+        removeCache : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other
         '''

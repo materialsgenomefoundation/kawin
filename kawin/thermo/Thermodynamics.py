@@ -115,8 +115,8 @@ class GeneralThermodynamics:
             For usage in a diffusion model, this won't affect anything
 
         For each precipitate phase, it checks whether the phase has an order/disorder contribution
-            If so, then it checks if the disorder contribution comes from the parent phase (ex. gamma and gamma prime in Ni alloys)
-            An ordering contribution phase record will be created to allow separated between the parent and the ordered phase
+            If so and if the disordered contribution is the parent phase (ex. gamma and gamma prime in Ni alloys),
+            then we add an new phase to the database that is only the disordered contribution as DIS_<phase name>
         '''
         self.orderedPhase = {self.phases[i]: False for i in range(1, len(self.phases))}
         for i in range(1, len(self.phases)):
@@ -237,7 +237,7 @@ class GeneralThermodynamics:
         Parameters
         ----------
         drivingForceMethod - str
-            Options are ['approximate', 'sampling', 'curvature']
+            Options are ['approximate', 'sampling', 'curvature', 'tangent']
         '''
         if drivingForceMethod == 'approximate':
             self._drivingForce = self._getDrivingForceApprox
@@ -284,7 +284,7 @@ class GeneralThermodynamics:
 
         mobility : dict
             Dictionary of functions for each element (including reference)
-            Each function takes in (v.T, v.P, v.N, v.GE, site fractions) and returns mobility
+            Each function takes in (v.GE, v.N, v.P, v.T, site fractions) and returns mobility
 
         Optional - only required for multicomponent systems where
             mobility terms are not defined in the TDB database
@@ -297,7 +297,7 @@ class GeneralThermodynamics:
 
         diffusivity : dict
             Dictionary of functions for each element (including reference)
-            Each function takes in (v.T, v.P, v.N, v.GE, site fractions) and returns diffusivity
+            Each function takes in (v.GE, v.N, v.P, v.T, site fractions) and returns diffusivity
 
         Optional - only required for multicomponent systems where
             diffusivity terms are not defined in the TDB database
@@ -343,8 +343,8 @@ class GeneralThermodynamics:
             Composition (excluding reference element)
         T : float
             Temperature
-        gExtra : float
-            Gibbs free energy to add to phase
+        gExtra : float (optional)
+            Gibbs free energy to add to phase. Defaults to 0
         '''
         x = self._process_x(x)
         cond = {v.X(self.elements[i+1]): x[i] for i in range(len(x))}
@@ -397,9 +397,9 @@ class GeneralThermodynamics:
             Precipitate phase (default is first precipitate)
             Options:
                 None - first precipitate phase in phase list
-                str - specific precipitate phase by name
+                str  - specific precipitate phase by name
                 list - all phases by name in list
-                -1 - no precipitate phase
+                -1   - no precipitate phase
 
         Returns
         -------
@@ -436,9 +436,13 @@ class GeneralThermodynamics:
             Precipitate phase (default is first precipitate)
             Options:
                 None - first precipitate phase in phase list
-                str - specific precipitate phase by name
+                str  - specific precipitate phase by name
                 list - all phases by name in list
-                -1 - no precipitate phase
+                -1   - no precipitate phase
+        composition_sets : list[CompositionSet] or None
+            Composition sets to use in equilibrium, this will override
+            the phase list and use only the supplied composition sets
+            If None, then composition sets are generated for each phase
 
         Returns
         -------
@@ -467,8 +471,8 @@ class GeneralThermodynamics:
             If array, must be same length as x
                 For multicomponent systems, must be same length as 0th axis
         removeCache : boolean
-            If True, recalculates equilibrium to get interdiffusivity (default)
-            If False, will use calculation from driving force calcs (if available) to compute diffusivity
+            Removes cached composition set if True, this will require a global
+            equilibrium calculation if called again
         phase : str
             Phase to compute diffusivity for (defaults to first or matrix phase)
             This only needs to be used for multiphase diffusion simulations
@@ -550,6 +554,8 @@ class GeneralThermodynamics:
             If array, must be same length as x
                 For multicomponent systems, must be same length as 0th axis
         removeCache : boolean
+            Removes cached composition set if True, this will require a global
+            equilibrium calculation if called again
         phase : str
 
         Returns
@@ -668,7 +674,6 @@ class GeneralThermodynamics:
             Temperature in K
         precPhase : str (optional)
             Precipitate phase to consider (default is first precipitate phase in list)
-
         removeCache : bool (optional)
             If True, this will not cache any equilibrium
             This is used for training since training points may not be near each other

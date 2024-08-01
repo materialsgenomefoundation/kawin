@@ -222,9 +222,14 @@ def test_IC_ternary():
     Ignore equilibrium compositions since growth and interfacial compositions depend on them anyways
         If growth and interfacial compositions are correct, then equilibrium compositions are also correct
     '''
-    g1, ca1, cb1, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
-    g2, ca2, cb2, _, _ = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, removeCache = True)
-    g3, ca3, cb3, _, _ = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    growth1 = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    growth2 = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    growth3 = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    #g3, ca3, cb3, _, _ = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, removeCache = True)
+
+    g1, ca1, cb1 = growth1.growth_rate, growth1.c_alpha, growth1.c_beta
+    g2, ca2, cb2 = growth2.growth_rate, growth2.c_alpha, growth2.c_beta
+    g3, ca3, cb3 = growth3.growth_rate, growth3.c_alpha, growth3.c_beta
 
     #Change ca2,cb2 from [AL, CR] to [CR, AL]
     ca2[[0,1]] = ca2[[1,0]]
@@ -250,8 +255,11 @@ def test_IC_ternary_output():
         (array, scalar, scalar, scalar, scalar) -> (scalar, array, array)
         (array, scalar, scalar, array, array) -> (array, 2D array, 2D array)
     '''
-    g, ca, cb, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
-    garray, caarray, cbarray, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], removeCache = True)
+    growth = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    growth_array= NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], removeCache = True)
+
+    g, ca, cb = growth.growth_rate, growth.c_alpha, growth.c_beta
+    garray, caarray, cbarray = growth_array.growth_rate, growth_array.c_alpha, growth_array.c_beta
 
     assert np.isscalar(g) or (type(g) == np.ndarray and g.ndim == 0)
     assert hasattr(ca, '__len__') and len(ca) == 2

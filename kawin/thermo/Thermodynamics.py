@@ -735,10 +735,7 @@ class GeneralThermodynamics:
         Precipitate composition will be None if driving force is negative
         '''
         precPhase = self.phases[1] if precPhase is None else precPhase
-
-        cond = self._getConditions(x, T, 0)
-
-        cs_results = self._getCompositionSetsForDF(x, T, cond, precPhase)
+        cs_results = self._getCompositionSetsForDF(x, T, precPhase)
         if cs_results is None:
             return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache)
         chemical_potentials, cs_matrix, cs_precip = cs_results
@@ -794,11 +791,9 @@ class GeneralThermodynamics:
         Precipitate composition will be None if driving force is negative
         '''
         precPhase = self.phases[1] if precPhase is None else precPhase
-
         x = self._process_x(x)
-        cond = self._getConditions(x, T, 0)
 
-        cs_results = self._getCompositionSetsForDF(x, T, cond, precPhase)
+        cs_results = self._getCompositionSetsForDF(x, T, precPhase)
         if cs_results is None:
             return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache)
         
@@ -911,7 +906,7 @@ class GeneralThermodynamics:
         self._resetDrivingForceCache(precPhase, removeCache)
         return np.squeeze(dg), np.squeeze(xb[unsortIndices[1:]])
     
-    def _getCompositionSetsForDF(self, x, T, cond, precPhase = None):
+    def _getCompositionSetsForDF(self, x, T, precPhase = None):
         '''
         Wrapper for getting composition set from x and T by either global equilibrium or local from a cached composition set
 
@@ -932,12 +927,19 @@ class GeneralThermodynamics:
         cs_matrix - composition set of matrix phase
         cs_precip - composition set of precipitate phase
         '''
-        if self._compset_cache_df.get(precPhase, None) is None:
-            return self._getCompositionSetsEq(x, T, cond, precPhase)
+        eq_results = self._getCompositionSetsEq(x, T, precPhase, self._compset_cache_df)
+        if eq_results is None:
+            self._compset_cache_df[precPhase] = None
+            return None
         else:
-            return self._getCompositionSetsCache(x, T, cond, precPhase)
+            chemical_potentials, cs_matrix, cs_precip = eq_results
+            if cs_matrix is None or cs_precip is None:
+                self._compset_cache_df[precPhase] = None
+                return None
+            self._compset_cache_df[precPhase] = [cs_matrix, cs_precip]
+            return chemical_potentials, cs_matrix, cs_precip
     
-    def _getCompositionSetsEq(self, x, T, cond, precPhase = None):
+    def _getCompositionSetsEq(self, x, T, precPhase = None, cached_composition_sets = {}):
         '''
         Gets composition set from x and T by global equilibrium
 
@@ -966,84 +968,49 @@ class GeneralThermodynamics:
         cs_matrix - composition set of matrix phase
         cs_precip - composition set of precipitate phase
         '''
-        #Create cache of composition set if not done so already or if training a surrogate
-        #Training points for surrogates may be far apart, so starting from a previous
-        #   composition set could give a bad starting position for the minimizer
-        #Calculate equilibrium ----------------------------------------------------------------------------------------------------------------------
-        wks = self.getEq(x, T, 0, precPhase)
-        cs_list_matrix = [cs for cs in wks.get_composition_sets() if cs.phase_record.phase_name == self.phases[0]]
-        cs_list_precip = [cs for cs in wks.get_composition_sets() if cs.phase_record.phase_name == precPhase]
-        chemical_potentials = np.squeeze(wks.eq.MU)
-
-        if len(cs_list_matrix) == 0 or any(np.isnan(chemical_potentials)):
-            return None
+        # Takes list of composition sets and gets matrix composition, precipitate composition,
+        # and whether there is a miscibility gap
+        # If matrix or precipitate is unstable, then the composition set will be None
+        def _process_composition_sets(composition_sets):
+            cs_list_matrix = [cs for cs in composition_sets if cs.phase_record.phase_name == self.phases[0]]
+            cs_list_precip = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase]
+            cs_matrix = None if len(cs_list_matrix) == 0 else cs_list_matrix[0]
+            cs_precip = None if len(cs_list_precip) == 0 else cs_list_precip[0]
+            miscibility_gap = len(cs_list_matrix) > 1 or len(cs_list_precip) > 1
+            return cs_matrix, cs_precip, miscibility_gap
         
-        if len(cs_list_precip) > 0:
-            miscMatrix = len(cs_list_matrix) > 1
-            miscPrec = len(cs_list_precip) > 1
-            cs_matrix = cs_list_matrix[0]
-            cs_precip = cs_list_precip[0]
-            composition_sets = [cs_matrix, cs_precip]
-
-            if miscMatrix or miscPrec:
-                phases, sub_models = self._setupSubModels([self.phases[0], precPhase])
-                result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
-                                                             sub_models, self.phase_records,
-                                                             composition_sets=composition_sets)
-                chemical_potentials = result.chemical_potentials
-                
-                cs_matrix = [cs for cs in composition_sets if cs.phase_record.phase_name == self.phases[0]][0]
-                cs_precip = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase][0]
-        else:
-            return None
-        
-        self._compset_cache_df[precPhase] = [cs_matrix, cs_precip]
-        return chemical_potentials, cs_matrix, cs_precip
-    
-    def _getCompositionSetsCache(self, x, T, cond, precPhase = None):
-        '''
-        Gets composition set from x and T by global equilibrium
-
-        Steps
-            1. Compute local equilibrium at x and T using previous composition sets
-            2. Get composition sets and update cache
-                If equilibrium did not converge, then return None
-            3. Return values
-
-        Parameters
-        ----------
-        x : float or array
-            Composition of minor element in bulk matrix phase
-            Use float for binary systems
-            Use array for multicomponent systems
-        T : float
-            Temperature in K
-        precPhase : str (optional)
-            Precipitate phase to consider (default is first precipitate phase in list)
-
-        Returns
-        -------
-        chemical_potentials
-        cs_matrix - composition set of matrix phase
-        cs_precip - composition set of precipitate phase
-        x_precip - composition of precipitate phase
-        '''
-        phases, sub_models = self._setupSubModels([self.phases[0], precPhase])
-        result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
+        # Updates a list of composition sets with new conditions
+        # Return chemical potential, matrix comp set, precipitate comp set, and whether there is a miscibility gap
+        def _update_composition_sets(composition_sets):
+            cond = self._getConditions(x, T)
+            phases, sub_models = self._setupSubModels([self.phases[0], precPhase])
+            result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
                                                          sub_models, self.phase_records,
-                                                         composition_sets=self._compset_cache_df[precPhase])
-        chemical_potentials = result.chemical_potentials
-        if any(np.isnan(chemical_potentials)):
-            return None
+                                                         composition_sets=composition_sets)
+            cs_matrix, cs_precip, miscibility_gap = _process_composition_sets(composition_sets)
+            return result.chemical_potentials, cs_matrix, cs_precip, miscibility_gap
         
-        ph = [cs.phase_record.phase_name for cs in composition_sets if cs.NP > 0]
-        if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
-            cs_precip = [cs for cs in composition_sets if cs.phase_record.phase_name == precPhase][0]
-            cs_matrix = [cs for cs in composition_sets if cs.phase_record.phase_name == self.phases[0]][0]
+        # If no cache exists, then compute global equilibrium, else, update cached composition sets
+        if cached_composition_sets.get(precPhase, None) is None:
+            wks = self.getEq(x, T, 0, precPhase)
+            cs_matrix, cs_precip, miscibility_gap = _process_composition_sets(wks.get_composition_sets())
+            chemical_potentials = np.squeeze(wks.eq.MU)
         else:
-            return None
+            chemical_potentials, cs_matrix, cs_precip, miscibility_gap = _update_composition_sets(cached_composition_sets[precPhase])
         
-        self._compset_cache_df[precPhase] = [cs_matrix, cs_precip]
+        # If invalid equilibrium, then return None to denote that we cannot use this calculation
+        if any(np.isnan(chemical_potentials)):
+                return None
+        
+        # If the matrix or precipitate is unstable, then we return everything as usual
+        # This is in case we want to attempt to find a condition where the two phases are stable
+        if cs_matrix is None or cs_precip is None:
+            return chemical_potentials, cs_matrix, cs_precip
+        
+        # Check for miscibility gaps, if so, then compute local equilibrium with a single comp set of matrix and precipitate
+        if miscibility_gap:
+            chemical_potentials, cs_matrix, cs_precip, miscibility_gap = _update_composition_sets([cs_matrix, cs_precip])
+        
         return chemical_potentials, cs_matrix, cs_precip
     
     def _getPrecCompositionSetSamplingDF(self, x, T, matrix_chem_pot, precPhase = None):

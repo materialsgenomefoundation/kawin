@@ -295,10 +295,11 @@ class PrecipitateModel (PrecipitateBase):
             #Set first index of eq composition
             for p in range(len(self.phases)):
                 #Use arbitrary dg, R and gE since only the eq compositions are needed here
-                _, _, _, xEqAlpha, xEqBeta = self.interfacialComposition[p](self.xComp[self.n], self.temperature[self.n], 0, 1, 0)
-                if xEqAlpha is not None:
-                    self.xEqAlpha[self.n,p] = xEqAlpha
-                    self.xEqBeta[self.n,p] = xEqBeta
+                growth_result = self.interfacialComposition[p](self.xComp[self.n], self.temperature[self.n], 0, 1, 0)
+                if growth_result is not None:
+                    _, _, _, c_eq_alpha, c_eq_beta = growth_result
+                    self.xEqAlpha[self.n,p] = c_eq_alpha
+                    self.xEqBeta[self.n,p] = c_eq_beta
         
         x = [self.PBM[p].PSD for p in range(len(self.phases))]
         self._calcDrivingForce(self.time[self.n], x)
@@ -630,13 +631,12 @@ class PrecipitateModel (PrecipitateBase):
             growthRate = np.zeros(self.PBM[p].bins + 1)
             return growthRate, xEqAlpha, xEqBeta
 
-
-        growth, xAlpha, xBeta, xEqAlpha, xEqBeta = self.interfacialComposition[p](xComp, T, dGs[p] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]), searchDir = self._precBetaTemp[p])
+        growth_result = self.interfacialComposition[p](xComp, T, dGs[p] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]), searchDir = self._precBetaTemp[p])
 
         #If two-phase equilibrium not found, two possibilities - precipitates are unstable or equilibrium calculations didn't converge
         #We try to avoid this as much as possible to where if precipitates are unstable, then attempt to get a growth rate from the nearest composition on the phase boundary
         #And if equilibrium calculations didn't converge, try to use the previous calculations assuming the new composition is close to the previous
-        if growth is None:
+        if growth_result is None:
             #If driving force is negative, then precipitates are unstable
             if dGs[p] < 0:
                 #Completely reset the PBM, including bounds and number of bins
@@ -652,6 +652,7 @@ class PrecipitateModel (PrecipitateBase):
             else:
                 growthRate = self.growth[p]
         else:
+            growth, xAlpha, xBeta, xEqAlpha, xEqBeta = growth_result
             #Update interfacial composition for each precipitate size
             self.PSDXalpha[p] = xAlpha
             self.PSDXbeta[p] = xBeta

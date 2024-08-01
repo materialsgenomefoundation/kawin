@@ -30,17 +30,11 @@ class BinaryThermodynamics (GeneralThermodynamics):
     '''
     def __init__(self, database, elements, phases, drivingForceMethod = 'tangent', interfacialCompMethod = 'equilibrium', parameters = None):
         super().__init__(database, elements, phases, drivingForceMethod, parameters)
-
-        if self.elements[1] < self.elements[0]:
-            self.reverse = True
-        else:
-            self.reverse = False
+        self.reverse = self.elements[1] < self.elements[0]
 
         #Guess composition for when finding tieline
         self._guessComposition = {self.phases[i]: (0, 1, 0.1) for i in range(1, len(self.phases))}
-
         self.setInterfacialMethod(interfacialCompMethod)
-
 
     def setInterfacialMethod(self, interfacialCompMethod):
         '''

@@ -1423,7 +1423,7 @@ class MulticomponentSurrogate:
                                 c_eq_alpha=np.squeeze(curv_results.c_eq_alpha), 
                                 c_eq_beta=np.squeeze(curv_results.c_eq_beta))
 
-    def impingementFactor(self, x, T):
+    def impingementFactor(self, x, T, searchDir = None):
         '''
         Calculates impingement factor for nucleation rate calculations
 

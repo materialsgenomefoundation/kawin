@@ -798,7 +798,7 @@ class PrecipitateBase(GenericModel):
                 self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
             self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache, searchDir = None: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, removeCache = False, searchDir = searchDir)
-            self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, removeCache = False)
+            self._betaFuncs[index] = lambda x, T, removeCache = removeCache, searchDir = None: therm.impingementFactor(x, T, precPhase=phase, removeCache = False, searchDir = searchDir)
 
     def setSurrogate(self, surr, phase = None):
         '''
@@ -1147,7 +1147,7 @@ class PrecipitateBase(GenericModel):
         else:
             xComp = self._currY[self.COMPOSITION][0]
             T = self._currY[self.TEMPERATURE][0]
-            beta = self._betaFuncs[p](xComp, T)
+            beta = self._betaFuncs[p](xComp, T, searchDir = self._precBetaTemp[p])
             if beta is None:
                 return self.betas[p]
             else:

@@ -277,20 +277,20 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         '''
         # If equilibrium is invalid, then we return the previous values if available
         # Else, we return None
-        def _process_invalid_eq():
+        def _process_invalid_eq(calc_source):
             if removeCache:
                 self._compset_cache_curvature[precPhase] = None
             if self._compset_cache_curvature.get(precPhase) is None:
                 return None
             else:
-                print('Warning: equilibrum was not able to be solved for, using results of previous calculation')
+                print(f'Warning: {calc_source} equilibrum was not able to be solved for, using results of previous calculation')
                 return self._curvature_outputs[precPhase]
             
         # Get composition sets for equilibrium between matrix and precipitate
         precPhase = self.phases[1] if precPhase is None else precPhase
         eq_results = self._getCompositionSetsEq(x, T, precPhase, self._compset_cache_curvature)
         if eq_results is None:
-            return _process_invalid_eq()
+            return _process_invalid_eq('cached')
         
         chemical_potentials, cs_matrix, cs_precip = eq_results
 
@@ -298,7 +298,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         if cs_matrix is None or cs_precip is None:
             eq_results = self._searchForTwoPhaseEq(x, T, precPhase, searchDir)
             if eq_results is None:
-                return _process_invalid_eq()
+                return _process_invalid_eq('search')
                 
             chemical_potentials, cs_matrix, cs_precip = eq_results
 
@@ -407,7 +407,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                                 c_eq_alpha=np.squeeze(curv_results.c_eq_alpha), 
                                 c_eq_beta=np.squeeze(curv_results.c_eq_beta))
 
-    def impingementFactor(self, x, T, precPhase = None, removeCache = False):
+    def impingementFactor(self, x, T, precPhase = None, removeCache = False, searchDir = None):
         '''
         Returns impingement factor for nucleation rate calculations
 
@@ -427,7 +427,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         -------
         beta - impingement factor
         '''
-        curv_results = self.curvatureFactor(x, T, precPhase, removeCache)
+        curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
             return self._curvature_outputs[precPhase].beta
         return curv_results.beta

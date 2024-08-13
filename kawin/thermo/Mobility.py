@@ -260,6 +260,14 @@ class MobilityModel(Model):
             self.mob_models['DF'][c] = self._partitioned_expr(disordered_model.mob_models['DF'][c], ordered_diffF, variable_rename_dict, molefraction_dict)
 
         return
+    
+def _get_mobility_arguments(composition_set, parameters):
+    param_keys, param_values = extract_parameters(parameters)
+    if len(param_values) > 0:
+        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
+    else:
+        callableInput = composition_set.dof
+    return callableInput
 
 def mobility_from_composition_set(composition_set, mobility_callables = None, mobility_correction = None, parameters = {}):
     '''
@@ -292,12 +300,7 @@ def mobility_from_composition_set(composition_set, mobility_callables = None, mo
             if A not in mobility_correction:
                 mobility_correction[A] = 1
 
-    #return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
-    param_keys, param_values = extract_parameters(parameters)
-    if len(param_values) > 0:
-        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
-    else:
-        callableInput = composition_set.dof
+    callableInput = _get_mobility_arguments(composition_set, parameters)
     return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](callableInput) for A in range(len(elements))])
     
 def tracer_diffusivity(composition_set, mobility_callables = None, mobility_correction = None, parameters = {}):
@@ -389,15 +392,6 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     #    the conversion from dmu_a/dX_b to dmu_a/dU_b can be done by multiplying the sum(substitutionals)
     mobMatrix *= Usum
 
-    #Old way of computing mobility assuming only substitutional elements (so much simpler...)
-    #mob = np.array([X[A] * computedMob[A] for A in range(len(elements))])
-    #for a in range(len(elements)):
-    #    for b in range(len(elements)):
-    #        if a == b:
-    #            mobMatrix[a, b] = (1 - X[a]) * mob[b]
-    #        else:
-    #            mobMatrix[a, b] = -X[a] * mob[b]
-
     return mobMatrix
 
 def chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction = None, returnHessian = False, parameters = {}):
@@ -424,9 +418,7 @@ def chemical_diffusivity(chemical_potentials, composition_set, mobility_callable
         free energy hessian will be None if returnHessian is False
     '''
     dmudx = partialdMudX(chemical_potentials, composition_set)
-    #print('dmudx', dmudx)
     mobMatrix = mobility_matrix(composition_set, mobility_callables, mobility_correction, parameters)
-    #print('mobMatrix', mobMatrix)
     Dkj = np.matmul(mobMatrix, dmudx)
     
     if returnHessian:
@@ -462,17 +454,10 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
         free energy hessian will be None if returnHessian is False
     '''
     Dkj, hessian = chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction, returnHessian, parameters)
-    #print('Dkj', Dkj)
     elements = list(composition_set.phase_record.nonvacant_elements)
 
-    #Find index of reference element
-    refIndex = 0
-    for a in range(len(elements)):
-        if elements[a] == refElement:
-            refIndex = a
-            break
-
     #Build Dnkj, skipping the reference element
+    refIndex = elements.index(refElement)
     Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
     c = 0
     d = 0
@@ -517,7 +502,6 @@ def inverseMobility(chemical_potentials, composition_set, refElement, mobility_c
     '''
     Dnkj, _ = interdiffusivity(chemical_potentials, composition_set, refElement, mobility_callables, mobility_correction, False, parameters)
     totalH = dMudX(chemical_potentials, composition_set, refElement)
-    #print('totalH', totalH)
     if returnOther:
         return Dnkj, totalH, np.matmul(totalH, np.linalg.inv(Dnkj))
     else:
@@ -554,13 +538,7 @@ def tracer_diffusivity_from_diff(composition_set, diffusivity_callables = None, 
             if A not in diffusivity_correction:
                 diffusivity_correction[A] = 1
 
-    #return np.array([diffusivity_correction[elements[A]] * diffusivity_callables[elements[A]](composition_set.dof) for A in range(len(elements))])
-
-    param_keys, param_values = extract_parameters(parameters)
-    if len(param_values) > 0:
-        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
-    else:
-        callableInput = composition_set.dof
+    callableInput = _get_mobility_arguments(composition_set, parameters)
     return np.array([diffusivity_correction[elements[A]] * diffusivity_callables[elements[A]](callableInput) for A in range(len(elements))])
 
 def interdiffusivity_from_diff(composition_set, refElement, diffusivity_callables, diffusivity_correction = None, parameters = {}):
@@ -596,21 +574,15 @@ def interdiffusivity_from_diff(composition_set, refElement, diffusivity_callable
             if A not in diffusivity_correction:
                 diffusivity_correction[A] = 1
 
-    param_keys, param_values = extract_parameters(parameters)
-    if len(param_values) > 0:
-        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
-    else:
-        callableInput = composition_set.dof
+    callableInput = _get_mobility_arguments(composition_set, parameters)
     Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
     eleIndex = 0
     for a in range(len(elements) - 1):
         if elements[eleIndex] == refElement:
             eleIndex += 1
             
-        #Daa = diffusivity_correction[elements[eleIndex]] * diffusivity_callables[elements[eleIndex]](composition_set.dof)
         Daa = diffusivity_correction[elements[eleIndex]] * diffusivity_callables[elements[eleIndex]](callableInput)
         Dnkj[a, a] = Daa
-
         eleIndex += 1
 
     return Dnkj

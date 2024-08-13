@@ -8,6 +8,7 @@ from pycalphad import Workspace, Model, Database, calculate, variables as v
 from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import extract_parameters
+from pycalphad.property_framework import IsolatedPhase
 
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
@@ -85,6 +86,7 @@ class GeneralThermodynamics:
         if type(phases) == str:  # check if a single phase was passed as a string instead of a list of phases.
             phases = [phases]
         self.phases = phases
+        self.phase_sampling_conditions = {p: None for p in self.phases}
 
         self._buildThermoModels()
 
@@ -1046,7 +1048,7 @@ class GeneralThermodynamics:
         Returns
         -------
         driving force - max free energy difference
-        precipitate composition - corresponds to max driving force
+        precipitate composition set - corresponds to max driving force
         '''
         orderTol = -1e-8
         state_cond = {v.GE: self.gOffset, v.N: 1, v.P: 101325, v.T: T}
@@ -1063,7 +1065,8 @@ class GeneralThermodynamics:
         if precPoints is None or prevT != T:
             precPoints = calculate(self.db, self.elements, phases[0], 
                                    pdens=self.sampling_pDens, model=sub_models, output='GM', 
-                                   phase_records=self.phase_records, to_xarray=False, **str_cond)
+                                   phase_records=self.phase_records, conditions=self.phase_sampling_conditions.get(precPhase, None), 
+                                   to_xarray=False, **str_cond)
             if self.orderedPhase[precPhase]:
                 orderedPoints = calculate(self.db, self.elements, phases[0], 
                                           pdens=self.sampling_pDens, model=sub_models, output='OCM', 
@@ -1074,13 +1077,14 @@ class GeneralThermodynamics:
         #So we force composition and site fractions to be 2D
         precComp = np.atleast_2d(np.squeeze(precPoints.X))
         y = np.atleast_2d(np.squeeze(precPoints.Y))
+        gm = np.atleast_1d(np.squeeze(precPoints.GM))
         mu = np.atleast_2d(matrix_chem_pot)
 
         #Difference between the chemical potential hyperplane and the free energy of the samples
         #   Chemical potential hyperplane is the free energy on the plane at the composition of the samples
         #The max driving force is the same as when the chemical potentials of the two phases are parallel
         mult = precComp * mu
-        diff = np.sum(mult, axis=1) - np.squeeze(precPoints.GM)
+        diff = np.sum(mult, axis=1) - np.squeeze(gm)
             
         #Find maximum driving force and corresponding composition -----------------------------------------------------------------------------------
         #For phases with order/disorder transition, a filter is applied such that it will only use points that are below the disordered energy surface

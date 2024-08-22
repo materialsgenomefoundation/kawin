@@ -8,7 +8,6 @@ from pycalphad import Workspace, Model, Database, calculate, variables as v
 from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import extract_parameters
-from pycalphad.property_framework import IsolatedPhase
 
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
@@ -101,7 +100,7 @@ class GeneralThermodynamics:
         '''
         Removes any cached data
         This is intended for surrogate training, where the cached data
-        will be removed incase
+        will be removed
         '''
         self._compset_cache_df = {}
         self._matrix_cs = None

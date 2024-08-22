@@ -1,6 +1,7 @@
 from numpy.testing import assert_allclose
 import numpy as np
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel
+from kawin.diffusion.DiffusionProperties import compute_mobility
 from kawin.thermo import GeneralThermodynamics
 from kawin.tests.datasets import *
 
@@ -76,8 +77,9 @@ def test_HomogenizationMobility():
     homogenizationBinary.setThermodynamics(NiCrTherm)
     homogenizationBinary.setTemperature(1073)
     homogenizationBinary.setup()
+    homogenizationBinary.T = homogenizationBinary.Tfunc(homogenizationBinary.z, 0)
 
-    mobBinary = homogenizationBinary.getMobility(homogenizationBinary.x)
+    mobBinary, _, _ = compute_mobility(NiCrTherm, homogenizationBinary.x.T, homogenizationBinary.T)
 
     homogenizationTernary.reset()
     homogenizationTernary.setCompositionStep(0.2, 0.4, 0, 'CR')
@@ -85,11 +87,12 @@ def test_HomogenizationMobility():
     homogenizationTernary.setThermodynamics(NiCrAlTherm)
     homogenizationTernary.setTemperature(1073)
     homogenizationTernary.setup()
+    homogenizationTernary.T = homogenizationTernary.Tfunc(homogenizationTernary.z, 0)
 
-    mobTernary = homogenizationTernary.getMobility(homogenizationTernary.x)
+    mobTernary, _, _ = compute_mobility(NiCrAlTherm, homogenizationTernary.x.T, homogenizationTernary.T)
 
-    assert(mobBinary.shape == (len(homogenizationBinary.phases),2,N))
-    assert(mobTernary.shape == (len(homogenizationTernary.phases),3,N))
+    assert(mobBinary.shape == (N,len(homogenizationBinary.phases),2))
+    assert(mobTernary.shape == (N,len(homogenizationTernary.phases),3))
 
 def test_homogenizationSinglePhaseMobility():
     '''
@@ -103,8 +106,11 @@ def test_homogenizationSinglePhaseMobility():
     homogenizationTernary.setThermodynamics(NiCrAlTherm)
     homogenizationTernary.setTemperature(1073)
     homogenizationTernary.setup()
+    homogenizationTernary.T = homogenizationTernary.Tfunc(homogenizationTernary.z, 0)
 
-    mob = homogenizationTernary.getMobility(homogenizationTernary.x)
+    mob, phaseFracs, chemPot = compute_mobility(NiCrAlTherm, homogenizationTernary.x.T, homogenizationTernary.T)
+    mob = mob.transpose(1,2,0)
+    phaseFracs = phaseFracs.T
 
     mobFuncs = ['wiener upper', 'wiener lower', 'hashin upper', 'hashin lower', 'lab']
     mobs = []
@@ -112,7 +118,7 @@ def test_homogenizationSinglePhaseMobility():
         homogenizationTernary.clearCache()
         homogenizationTernary.setup()
         homogenizationTernary.setMobilityFunction(f)
-        mobs.append(homogenizationTernary.mobilityFunction(homogenizationTernary.x))
+        mobs.append(homogenizationTernary.mobilityFunction(mob.transpose(2,0,1), phaseFracs.T, labyrinth_factor=homogenizationTernary.labFactor).T)
         assert(np.allclose(mobs[-1][:,0], mob[0,:,0], atol=0, rtol=1e-3))
 
 def test_homogenization_wiener_upper():
@@ -129,9 +135,15 @@ def test_homogenization_wiener_upper():
     homogenizationTernary.setup()
     homogenizationTernary.setMobilityFunction('wiener upper')
 
-    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
-    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
-    assert(np.allclose(mob[:,-1], [2.025338e-22, 5.106062e-22, 8.524977e-23], atol=0, rtol=1e-3))
+    mobArray, phaseFracs, chemPot = compute_mobility(NiCrAlTherm, homogenizationTernary.x.T, homogenizationTernary.T)
+    mobArray = mobArray.transpose(1,2,0)
+    phaseFracs = phaseFracs.T
+
+    mob = homogenizationTernary.mobilityFunction(mobArray.transpose(2,0,1), phaseFracs.T, labyrinth_factor=homogenizationTernary.labFactor).T
+    assert_allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
+    # These values are changed due to a correction in how the mobility for each phase is computed
+    # Before, the mobilities were multiplied by the overall composition rather than the phase composition
+    assert_allclose(mob[:,-1], [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
 
 def test_homogenization_wiener_lower():
     '''
@@ -147,9 +159,15 @@ def test_homogenization_wiener_lower():
     homogenizationTernary.setup()
     homogenizationTernary.setMobilityFunction('wiener lower')
 
-    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
-    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
-    assert(np.allclose(mob[:,-1], [1.527894e-21, 3.851959e-21, 6.431152e-22], atol=0, rtol=1e-3))
+    mobArray, phaseFracs, chemPot = compute_mobility(NiCrAlTherm, homogenizationTernary.x.T, homogenizationTernary.T)
+    mobArray = mobArray.transpose(1,2,0)
+    phaseFracs = phaseFracs.T
+
+    mob = homogenizationTernary.mobilityFunction(mobArray.transpose(2,0,1), phaseFracs.T, labyrinth_factor=homogenizationTernary.labFactor).T
+    assert_allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
+    # These values are changed due to a correction in how the mobility for each phase is computed
+    # Before, the mobilities were multiplied by the overall composition rather than the phase composition
+    assert_allclose(mob[:,-1], [4.090531e-21, 1.068474e-21, 1.756032e-21], atol=0, rtol=1e-3)
 
 def test_homogenization_hashin_upper():
     '''
@@ -165,9 +183,15 @@ def test_homogenization_hashin_upper():
     homogenizationTernary.setup()
     homogenizationTernary.setMobilityFunction('hashin upper')
 
-    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
-    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
-    assert(np.allclose(mob[:,-1], [1.536725e-22, 3.874223e-22, 6.468323e-23], atol=0, rtol=1e-3))
+    mobArray, phaseFracs, chemPot = compute_mobility(NiCrAlTherm, homogenizationTernary.x.T, homogenizationTernary.T)
+    mobArray = mobArray.transpose(1,2,0)
+    phaseFracs = phaseFracs.T
+
+    mob = homogenizationTernary.mobilityFunction(mobArray.transpose(2,0,1), phaseFracs.T, labyrinth_factor=homogenizationTernary.labFactor).T
+    assert_allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
+    # These values are changed due to a correction in how the mobility for each phase is computed
+    # Before, the mobilities were multiplied by the overall composition rather than the phase composition
+    assert_allclose(mob[:,-1], [4.114414e-22, 1.074712e-22, 1.766285e-22], atol=0, rtol=1e-3)
 
 def test_homogenization_hashin_lower():
     '''
@@ -183,9 +207,15 @@ def test_homogenization_hashin_lower():
     homogenizationTernary.setup()
     homogenizationTernary.setMobilityFunction('hashin lower')
 
-    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
-    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
-    assert(np.allclose(mob[:,-1], [3.471117e-21, 8.751001e-21, 1.461049e-21], atol=0, rtol=1e-3))
+    mobArray, phaseFracs, chemPot = compute_mobility(NiCrAlTherm, homogenizationTernary.x.T, homogenizationTernary.T)
+    mobArray = mobArray.transpose(1,2,0)
+    phaseFracs = phaseFracs.T
+
+    mob = homogenizationTernary.mobilityFunction(mobArray.transpose(2,0,1), phaseFracs.T, labyrinth_factor=homogenizationTernary.labFactor).T
+    assert_allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
+    # These values are changed due to a correction in how the mobility for each phase is computed
+    # Before, the mobilities were multiplied by the overall composition rather than the phase composition
+    assert_allclose(mob[:,-1], [9.292913e-21, 2.427370e-21, 3.989373e-21], atol=0, rtol=1e-3)
 
 def test_homogenization_lab():
     '''
@@ -201,9 +231,15 @@ def test_homogenization_lab():
     homogenizationTernary.setup()
     homogenizationTernary.setMobilityFunction('lab')
 
-    mob = homogenizationTernary.mobilityFunction(homogenizationTernary.x)
-    assert(np.allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3))
-    assert(np.allclose(mob[:,-1], [2.025338e-22, 5.106062e-22, 8.524977e-23], atol=0, rtol=1e-3))
+    mobArray, phaseFracs, chemPot = compute_mobility(NiCrAlTherm, homogenizationTernary.x.T, homogenizationTernary.T)
+    mobArray = mobArray.transpose(1,2,0)
+    phaseFracs = phaseFracs.T
+
+    mob = homogenizationTernary.mobilityFunction(mobArray.transpose(2,0,1), phaseFracs.T, labyrinth_factor=homogenizationTernary.labFactor).T
+    assert_allclose(mob[:,0], [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
+    # These values are changed due to a correction in how the mobility for each phase is computed
+    # Before, the mobilities were multiplied by the overall composition rather than the phase composition
+    assert_allclose(mob[:,-1], [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
 
 def test_single_phase_dxdt():
     '''
@@ -307,20 +343,23 @@ def test_homogenization_dxdt():
     t, x = m.getCurrentX()
     dxdt = m.getdXdt(t, x)
     dt = m.getDt(dxdt)
+
+    # The dxdt values are changed due to a correction in how the mobility for each phase is computed
+    # Before, the mobilities were multiplied by the overall composition rather than the phase composition
     
     #Index 5
-    ind5, vals5 = 5, np.array([-1.581478e-9, 1.212876e-9])
+    ind5, vals5 = 5, np.array([-1.480029e-9, 1.193852e-9])
 
     #Index 10
-    ind10, vals10 = 10, np.array([-9.722631e-10, 1.703447e-9])
+    ind10, vals10 = 10, np.array([-9.453766e-10, 1.681638e-9])
 
     #Index 15
-    ind15, vals15 = 15, np.array([-4.720562e-10, 8.600518e-10])
+    ind15, vals15 = 15, np.array([-3.441800e-10, 6.905748e-10])
     
     assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 62271.050081, rtol=1e-3)
+    assert_allclose(dt, 65415.110254, rtol=1e-3)
 
 
 

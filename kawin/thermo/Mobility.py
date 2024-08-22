@@ -12,6 +12,21 @@ from kawin.thermo.FreeEnergyHessian import partialdMudX, dMudX
 #As a list here, hopefully this should be editable by a user outside of this module - may have to edit __init__.py
 interstitials = ['C', 'N', 'O', 'H', 'B']
 
+def x_to_u_frac(x_frac, elements, interstitial_list, return_usum = False):
+    '''
+    Converts mole fraction to u-fraction
+    U-fraction - defined as U_a = X_a / sum(substitutionals)
+
+    U-fraction is used for diffusivity in a volume-fixed frame, where interstitials do
+    not contribute to the overall volume
+    '''
+    Usum = np.sum([x_frac[A] for A in range(len(elements)) if elements[A] not in interstitial_list])
+    u_frac = x_frac / Usum
+    if return_usum:
+        return u_frac, Usum
+    else:
+        return u_frac
+
 class MobilityModel(Model):
     '''
     Handles mobility and diffusivity data from .tdb files
@@ -347,10 +362,7 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     '''
     elements = list(composition_set.phase_record.nonvacant_elements)
     X = composition_set.X
-
-    #U-fraction - defined as U_a = X_a / sum(substitutionals)
-    Usum = np.sum([X[A] for A in range(len(elements)) if elements[A] not in interstitials])
-    U = X / Usum
+    U, Usum = x_to_u_frac(X, elements, interstitials, return_usum=True)
 
     #Multiply mobility by U-fraction for ease of use when constructing the mobility matrix
     computedMob = mobility_from_composition_set(composition_set, mobility_callables, mobility_correction, parameters)

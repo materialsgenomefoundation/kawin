@@ -1,13 +1,14 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.thermo.Mobility import mobility_from_composition_set
+from kawin.thermo.Mobility import mobility_from_composition_set, interstitials, x_to_u_frac
+from kawin.diffusion.DiffusionProperties import compute_mobility, wiener_lower, wiener_upper, hashin_shtrikman_lower, hashin_shtrikman_upper, labyrinth
 import copy
 
 class HomogenizationModel(DiffusionModel):
     def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], record = True):
         super().__init__(zlim, N, elements, phases, record)
 
-        self.mobilityFunction = self.wienerUpper
+        self.mobilityFunction = wiener_upper
         self.defaultMob = 0
         self.eps = 0.05
 
@@ -39,20 +40,15 @@ class HomogenizationModel(DiffusionModel):
         #np.finfo(dtype).max - largest representable value
         #np.finfo(dtype).tiny - smallest positive usable value
         if 'upper' in function and 'wiener' in function:
-            self.mobilityFunction = self.wienerUpper
-            self.defaultMob = np.finfo(np.float64).tiny
+            self.mobilityFunction = wiener_upper
         elif 'lower' in function and 'wiener' in function:
-            self.mobilityFunction = self.wienerLower
-            self.defaultMob = np.finfo(np.float64).max
+            self.mobilityFunction = wiener_lower
         elif 'upper' in function and 'hashin' in function:
-            self.mobilityFunction = self.hashin_shtrikmanUpper
-            self.defaultMob = np.finfo(np.float64).tiny
+            self.mobilityFunction = hashin_shtrikman_upper
         elif 'lower' in function and 'hashin' in function:
-            self.mobilityFunction = self.hashin_shtrikmanLower
-            self.defaultMob = np.finfo(np.float64).max
+            self.mobilityFunction = hashin_shtrikman_lower
         elif 'lab' in function:
-            self.mobilityFunction = self.labyrinth
-            self.defaultMob = np.finfo(np.float64).tiny
+            self.mobilityFunction = labyrinth
 
     def setLabyrinthFactor(self, n):
         '''
@@ -64,11 +60,7 @@ class HomogenizationModel(DiffusionModel):
             Either 1 or 2
             Note: n = 1 will the same as the weiner upper bounds
         '''
-        if n < 1:
-            n = 1
-        if n > 2:
-            n = 2
-        self.labFactor = n
+        self.labFactor = np.clip(n, 1, 2)
 
     def setup(self):
         '''
@@ -77,17 +69,7 @@ class HomogenizationModel(DiffusionModel):
         This also includes getting the CompositionSets for each node
         '''
         super().setup()
-        #self.midX = 0.5 * (self.x[:,1:] + self.x[:,:-1])
-        self.p = self.updateCompSets(self.x)
-
-    def _newEqCalc(self, x, T):
-        '''
-        Calculates equilibrium and returns a CompositionSet
-        '''
-        wks = self.therm.getEq(x, T, 0, self.phases)
-        chemical_potentials = np.squeeze(wks.eq.MU)
-        composition_sets = wks.get_composition_sets()
-        return chemical_potentials, composition_sets
+        self.updateCompSets(self.x)
 
     def updateCompSets(self, xarray):
         '''
@@ -111,145 +93,10 @@ class HomogenizationModel(DiffusionModel):
             Phase fractions for each node
             p is number of phases
         '''
-        parray = np.zeros((len(self.phases), xarray.shape[1]))
-        for i in range(parray.shape[1]):
-            if self.cache:
-                hashValue = self._getHash(xarray[:,i], self.T[i])
-                if hashValue not in self.hashTable:
-                    chemical_potentials, comp = self._newEqCalc(xarray[:,i], self.T[i])
-                    self.hashTable[hashValue] = (chemical_potentials, comp, None)
-                else:
-                    chemical_potentials, comp, _ = self.hashTable[hashValue]
-                chemical_potentials, self.compSets[i] = copy.copy(chemical_potentials), copy.copy(comp)
-            else:
-                chemical_potentials, self.compSets[i] = self._newEqCalc(xarray[:,i], self.T[i])
-            self.mu[:,i] = chemical_potentials[self.unsortIndices]
-            cs_phases = [cs.phase_record.phase_name for cs in self.compSets[i]]
-            for p in range(len(cs_phases)):
-                parray[self._getPhaseIndex(cs_phases[p]), i] = self.compSets[i][p].NP
-        
-        return parray
-
-    def getMobility(self, xarray):
-        '''
-        Gets mobility of all phases
-
-        Returns
-        -------
-        (p, e+1, N) array - p is number of phases, e is number of elements, N is number of nodes
-        '''
-        mob = self.defaultMob * np.ones((len(self.phases), len(self.elements)+1, xarray.shape[1]))
-        for i in range(xarray.shape[1]):
-            if self.cache:
-                hashValue = self._getHash(xarray[:,i], self.T[i])
-                _, _, mTemp = self.hashTable[hashValue]
-            else:
-                mTemp = None
-            if mTemp is None or not self.cache:
-                maxPhaseAmount = 0
-                maxPhaseIndex = 0
-                for p in range(len(self.phases)):
-                    if self.p[p,i] > 0:
-                        if self.p[p,i] > maxPhaseAmount:
-                            maxPhaseAmount = self.p[p,i]
-                            maxPhaseIndex = p
-                        if self.phases[p] in self.therm.mobCallables and self.therm.mobCallables[self.phases[p]] is not None:
-                            #print(self.phases, self.phases[p], xarray[:,i], self.p[:,i], i, self.compSets[i])
-                            compset = [cs for cs in self.compSets[i] if cs.phase_record.phase_name == self.phases[p]][0]
-                            mob[p,:,i] = mobility_from_composition_set(compset, self.therm.mobCallables[self.phases[p]], self.therm.mobility_correction)[self.unsortIndices]
-                            mob[p,:,i] *= np.concatenate(([1-np.sum(xarray[:,i])], xarray[:,i]))
-                        else:
-                            mob[p,:,i] = -1
-                for p in range(len(self.phases)):
-                    if any(mob[p,:,i] == -1) and not all(mob[p,:,i] == -1):
-                        mob[p,:,i] = mob[maxPhaseIndex,:,i]
-                    if all(mob[p,:,i] == -1):
-                        mob[p,:,i] = self.defaultMob
-                if self.cache:
-                    self.hashTable[hashValue] = (self.hashTable[hashValue][0], self.hashTable[hashValue][1], copy.copy(mob[:,:,i]))
-            else:
-                mob[:,:,i] = mTemp
-
-        return mob
-
-    def wienerUpper(self, xarray):
-        '''
-        Upper wiener bounds for average mobility
-
-        Returns
-        -------
-        (e+1, N) mobility array - e is number of elements, N is number of nodes
-        '''
-        mob = self.getMobility(xarray)
-        avgMob = np.sum(np.multiply(self.p[:,np.newaxis], mob), axis=0)
-        return avgMob
-
-    def wienerLower(self, xarray):
-        '''
-        Lower wiener bounds for average mobility
-
-        Returns
-        -------
-        (e+1, N) mobility array - e is number of elements, N is number of nodes
-        '''
-        #(p, e, N)
-        mob = self.getMobility(xarray)
-        avgMob = 1/np.sum(np.multiply(self.p[:,np.newaxis], 1/mob), axis=0)
-        return avgMob
-
-    def labyrinth(self, xarray):
-        '''
-        Labyrinth mobility
-
-        Returns
-        -------
-        (e+1, N) mobility array - e is number of elements, N is number of nodes
-        '''
-        mob = self.getMobility(xarray)
-        avgMob = np.sum(np.multiply(np.power(self.p[:,np.newaxis], self.labFactor), mob), axis=0)
-        return avgMob
-
-    def hashin_shtrikmanUpper(self, xarray):
-        '''
-        Upper hashin shtrikman bounds for average mobility
-
-        Returns
-        -------
-        (e+1, N) mobility array - e is number of elements, N is number of nodes
-        '''
-        #self.p                                 #(p,N)
-        mob = self.getMobility(xarray)          #(p,e+1,N)
-        maxMob = np.amax(mob, axis=0)           #(e+1,N)
-
-        # 1 / ((1 / mPhi - mAlpha) + 1 / (3mAlpha)) = 3mAlpha * (mPhi - mAlpha) / (2mAlpha + mPhi)
-        Ak = 3 * maxMob * (mob - maxMob) / (2*maxMob + mob)
-        Ak = Ak * self.p[:,np.newaxis]
-        Ak = np.sum(Ak, axis=0)
-        avgMob = maxMob + Ak / (1 - Ak / (3*maxMob))
-        return avgMob
-
-    def hashin_shtrikmanLower(self, xarray):
-        '''
-        Lower hashin shtrikman bounds for average mobility
-
-        Returns
-        -------
-        (e, N) mobility array - e is number of elements, N is number of nodes
-        '''
-        #self.p                                 #(p,N)
-        mob = self.getMobility(xarray)          #(p,e+1,N)
-        minMob = np.amin(mob, axis=0)           #(e+1,N)
-
-        #This prevents an infinite mobility which could cause the time interval to be 0
-        minMob[minMob == np.inf] = 0
-
-        # 1 / ((1 / mPhi - mAlpha) + 1 / (3mAlpha)) = 3mAlpha * (mPhi - mAlpha) / (2mAlpha + mPhi)
-        Ak = 3 * minMob * (mob - minMob) / (2*minMob + mob)
-
-        Ak = Ak * self.p[:,np.newaxis]
-        Ak = np.sum(Ak, axis=0)
-        avgMob = minMob + Ak / (1 - Ak / (3*minMob))
-        return avgMob
+        mob, phase_fracs, chemical_potentials = compute_mobility(self.therm, xarray.T, self.T, self.hashTable, self._getHash)
+        self.p = phase_fracs.T
+        self.mu = chemical_potentials.T
+        self.mob = mob.transpose((1,2,0))
     
     def _getFluxes(self, t, x_curr):
         '''
@@ -270,11 +117,14 @@ class HomogenizationModel(DiffusionModel):
         '''
         x = x_curr[0]
         self.T = self.Tfunc(self.z, t)
-        self.p = self.updateCompSets(x)
+        self.updateCompSets(x)
+        #self.p = self.updateCompSets(x)
 
         #Get average mobility between nodes
-        avgMob = self.mobilityFunction(x)
-        avgMob = 0.5 * (avgMob[:,1:] + avgMob[:,:-1])
+        avgMob = self.mobilityFunction(self.mob.transpose(2,0,1), self.p.T, labyrinth_factor = self.labFactor).T
+        #avgMob = 0.5 * (avgMob[:,1:] + avgMob[:,:-1])
+        logMob = np.log(avgMob)
+        avgMob = np.exp(0.5*(logMob[:,1:] + logMob[:,:-1]))
 
         #Composition between nodes
         avgX = 0.5 * (x[:,1:] + x[:,:-1])

@@ -25,19 +25,14 @@ class SinglePhaseModel(DiffusionModel):
         '''
         #Calculate diffusivity at cell centers
         x = x_curr[0]
-        T = self.Tfunc(self.z, t)
-        if len(self.elements) == 1:
-            d = np.zeros(self.N)
-        else:
-            d = np.zeros((self.N, len(self.elements), len(self.elements)))
-        if self.cache:
-            for i in range(self.N):
-                hashValue = self._getHash(x[:,i], T[i])
-                if hashValue not in self.hashTable:
-                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(x[:,i], T[i], phase=self.phases[0])
-                d[i] = self.hashTable[hashValue]
-        else:
-            d = self.therm.getInterdiffusivity(x.T, T, phase=self.phases[0])
+        T = self.parameters.temperature(self.z, t)
+        d = np.zeros(self.N) if len(self.elements) == 1 else np.zeros((self.N, len(self.elements), len(self.elements)))
+        for i in range(self.N):
+            inter_diff = self.parameters.hash_table.retrieveFromHashTable(x[:,i], T[i])
+            if inter_diff is None:
+                inter_diff = self.therm.getInterdiffusivity(x[:,i], T[i], phase=self.phases[0])
+                self.parameters.hash_table.addToHashTable(x[:,i], T[i], inter_diff)
+            d[i] = inter_diff
         
         #Get diffusivity and composition gradient at cell boundaries
         dmid = (d[1:] + d[:-1]) / 2
@@ -52,9 +47,7 @@ class SinglePhaseModel(DiffusionModel):
             fluxes[:,1:-1] = -np.matmul(dmid, np.transpose(dxdz, (2,1,0)))[:,:,0].T
 
         #Boundary condition
-        for e in range(len(self.elements)):
-            fluxes[e,0] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else fluxes[e,1]
-            fluxes[e,-1] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else fluxes[e,-2]
+        self.parameters.boundary_conditions.apply_boundary_conditions_to_fluxes(fluxes)
 
         #Time step from von Neumann analysis (using 0.4 instead of 0.5 to be safe)
         self._currdt = 0.4 * self.dz**2 / np.amax(np.abs(dmid))

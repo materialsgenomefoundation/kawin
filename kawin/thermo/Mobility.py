@@ -20,12 +20,13 @@ def x_to_u_frac(x_frac, elements, interstitial_list, return_usum = False):
     U-fraction is used for diffusivity in a volume-fixed frame, where interstitials do
     not contribute to the overall volume
     '''
-    Usum = np.sum([x_frac[A] for A in range(len(elements)) if elements[A] not in interstitial_list])
-    u_frac = x_frac / Usum
+    x_frac = np.atleast_2d(x_frac)
+    Usum = np.sum([x_frac[:,A] for A in range(len(elements)) if elements[A] not in interstitial_list], axis=0)
+    u_frac = x_frac / Usum[:,np.newaxis]
     if return_usum:
-        return u_frac, Usum
+        return np.squeeze(u_frac), Usum
     else:
-        return u_frac
+        return np.squeeze(u_frac)
 
 class MobilityModel(Model):
     '''

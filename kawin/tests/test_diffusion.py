@@ -1,7 +1,7 @@
 from numpy.testing import assert_allclose
 import numpy as np
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel
-from kawin.diffusion.DiffusionParameters import compute_homogenization_function, compute_mobility, DiffusionParameters
+from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction, computeMobility, DiffusionParameters
 from kawin.thermo import GeneralThermodynamics
 from kawin.tests.datasets import *
 
@@ -25,18 +25,18 @@ def test_CompositionInput():
     base diffusion model class, so any model can be used here
     '''
     singleModelTernary.reset()
-    singleModelTernary.parameters.composition_profile.add_step_composition_step('CR', 0.2, 1, 0)
-    singleModelTernary.parameters.composition_profile.add_step_composition_step('AL', 0.8, 0, 0)
-    singleModelTernary.parameters.temperature.set_isothermal_temperature(1200+273.15)
+    singleModelTernary.parameters.compositionProfile.addStepCompositionStep('CR', 0.2, 1, 0)
+    singleModelTernary.parameters.compositionProfile.addStepCompositionStep('AL', 0.8, 0, 0)
+    singleModelTernary.parameters.temperature.setIsothermalTemperature(1200+273.15)
     singleModelTernary.setThermodynamics(NiCrAlTherm)
 
     singleModelTernary.setup()
 
     assert(singleModelTernary.x[0,25] + singleModelTernary.x[1,25] < 1)
     assert(singleModelTernary.x[0,75] + singleModelTernary.x[1,75] < 1)
-    assert(1 - (singleModelTernary.x[0,75] + singleModelTernary.x[1,75]) >= singleModelTernary.parameters.min_composition)
-    assert(1 - (singleModelTernary.x[0,75] + singleModelTernary.x[1,75]) >= singleModelTernary.parameters.min_composition)
-    assert(singleModelTernary.x[1,75] >= singleModelTernary.parameters.min_composition)
+    assert(1 - (singleModelTernary.x[0,75] + singleModelTernary.x[1,75]) >= singleModelTernary.parameters.minComposition)
+    assert(1 - (singleModelTernary.x[0,75] + singleModelTernary.x[1,75]) >= singleModelTernary.parameters.minComposition)
+    assert(singleModelTernary.x[1,75] >= singleModelTernary.parameters.minComposition)
 
 def test_SinglePhaseFluxes_shape():
     '''
@@ -46,17 +46,17 @@ def test_SinglePhaseFluxes_shape():
     N is the number of points
     '''
     singleModelBinary.reset()
-    singleModelBinary.parameters.composition_profile.add_step_composition_step('CR', 0.2, 0.8, 0)
-    singleModelBinary.parameters.temperature.set_isothermal_temperature(1073)
+    singleModelBinary.parameters.compositionProfile.addStepCompositionStep('CR', 0.2, 0.8, 0)
+    singleModelBinary.parameters.temperature.setIsothermalTemperature(1073)
     singleModelBinary.setThermodynamics(NiCrTherm)
     singleModelBinary.setup()
 
     fBinary, _ = singleModelBinary.getFluxes()
 
     singleModelTernary.reset()
-    singleModelTernary.parameters.composition_profile.add_step_composition_step('CR', 0.2, 0.4, 0)
-    singleModelTernary.parameters.composition_profile.add_step_composition_step('AL', 0.4, 0.4, 0)
-    singleModelTernary.parameters.temperature.set_isothermal_temperature(1073)
+    singleModelTernary.parameters.compositionProfile.addStepCompositionStep('CR', 0.2, 0.4, 0)
+    singleModelTernary.parameters.compositionProfile.addStepCompositionStep('AL', 0.4, 0.4, 0)
+    singleModelTernary.parameters.temperature.setIsothermalTemperature(1073)
     singleModelTernary.setThermodynamics(NiCrAlTherm)
     singleModelTernary.setup()
 
@@ -78,7 +78,7 @@ def test_HomogenizationMobility():
     binaryParameters = DiffusionParameters(['CR'])
     x = np.linspace(0.2, 0.3, N)
     T = 1073*np.ones(N)
-    mobBinary, _ = compute_homogenization_function(NiCrTherm, x, T, binaryParameters)
+    mobBinary, _ = computeHomogenizationFunction(NiCrTherm, x, T, binaryParameters)
     assert(mobBinary.shape == (N,2))
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
@@ -86,7 +86,7 @@ def test_HomogenizationMobility():
     x_al = np.linspace(0.3, 0.2, N)
     x = np.array([x_cr, x_al]).T
     T = 1073*np.ones(N)
-    mobTernary, _ = compute_homogenization_function(NiCrAlTherm, x, T, ternaryParameters)
+    mobTernary, _ = computeHomogenizationFunction(NiCrAlTherm, x, T, ternaryParameters)
     assert(mobTernary.shape == (N,3))
 
 
@@ -94,27 +94,27 @@ def test_HomogenizationMobility():
     # # homogenizationBinary.setCompositionStep(0.2, 0.8, 0, 'CR')
     # # homogenizationBinary.setThermodynamics(NiCrTherm)
     # # homogenizationBinary.setTemperature(1073)
-    # homogenizationBinary.parameters.composition_profile.add_step_composition_step('CR', 0.2, 0.8, 0)
-    # homogenizationBinary.parameters.temperature.set_isothermal_temperature(1073)
+    # homogenizationBinary.parameters.compositionProfile.addStepCompositionStep('CR', 0.2, 0.8, 0)
+    # homogenizationBinary.parameters.temperature.setIsothermalTemperature(1073)
     # homogenizationBinary.setThermodynamics(NiCrTherm)
     # homogenizationBinary.setup()
     # T = homogenizationBinary.parameters.temperature(homogenizationBinary.z, 0)
 
-    # mobBinary, _ = compute_homogenization_function(NiCrTherm, homogenizationBinary.x.T, T, homogenizationBinary.parameters)
+    # mobBinary, _ = computeHomogenizationFunction(NiCrTherm, homogenizationBinary.x.T, T, homogenizationBinary.parameters)
 
     # homogenizationTernary.reset()
     # # homogenizationTernary.setCompositionStep(0.2, 0.4, 0, 'CR')
     # # homogenizationTernary.setCompositionStep(0.4, 0.4, 0, 'AL')
     # # homogenizationTernary.setThermodynamics(NiCrAlTherm)
     # # homogenizationTernary.setTemperature(1073)
-    # homogenizationTernary.parameters.composition_profile.add_step_composition_step('CR', 0.2, 0.4, 0)
-    # homogenizationTernary.parameters.composition_profile.add_step_composition_step('AL', 0.4, 0.4, 0)
-    # homogenizationTernary.parameters.temperature.set_isothermal_temperature(1073)
+    # homogenizationTernary.parameters.compositionProfile.addStepCompositionStep('CR', 0.2, 0.4, 0)
+    # homogenizationTernary.parameters.compositionProfile.addStepCompositionStep('AL', 0.4, 0.4, 0)
+    # homogenizationTernary.parameters.temperature.setIsothermalTemperature(1073)
     # homogenizationTernary.setThermodynamics(NiCrAlTherm)
     # homogenizationTernary.setup()
     # T = homogenizationTernary.parameters.temperature(homogenizationTernary.z, 0)
 
-    # mobTernary, _ = compute_homogenization_function(NiCrAlTherm, homogenizationTernary.x.T, T, homogenizationTernary.parameters)
+    # mobTernary, _ = computeHomogenizationFunction(NiCrAlTherm, homogenizationTernary.x.T, T, homogenizationTernary.parameters)
 
     # #assert(mobBinary.shape == (N,len(homogenizationBinary.phases),2))
     # #assert(mobTernary.shape == (N,len(homogenizationTernary.phases),3))
@@ -131,14 +131,14 @@ def test_homogenizationSinglePhaseMobility():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.labyrinth_factor = 2
-    mob_data = compute_mobility(NiCrAlTherm, x, T, ternaryParameters)
+    ternaryParameters.labyrinthFactor = 2
+    mob_data = computeMobility(NiCrAlTherm, x, T, ternaryParameters)
 
     mob_funcs = ['wiener upper', 'wiener lower', 'hashin upper', 'lab']
     for f in mob_funcs:
-        ternaryParameters.hash_table.clearCache()
-        ternaryParameters.setHomogenizationFunction(mob_funcs)
-        mob, _ = compute_homogenization_function(NiCrAlTherm, x, T, ternaryParameters)
+        ternaryParameters.hashTable.clearCache()
+        ternaryParameters.homogenizationParameters.setHomogenizationFunction(mob_funcs)
+        mob, _ = computeHomogenizationFunction(NiCrAlTherm, x, T, ternaryParameters)
         assert(np.allclose(np.squeeze(mob), np.squeeze(mob_data.mobility[0]), atol=0, rtol=1e-3))
 
     # homogenizationTernary.reset()
@@ -147,9 +147,9 @@ def test_homogenizationSinglePhaseMobility():
     # # homogenizationTernary.setCompositionStep(0.05, 0.4, 0, 'AL')
     # # homogenizationTernary.setThermodynamics(NiCrAlTherm)
     # # homogenizationTernary.setTemperature(1073)
-    # homogenizationTernary.parameters.composition_profile.add_step_composition_step('CR', 0.05, 0.4, 0)
-    # homogenizationTernary.parameters.composition_profile.add_step_composition_step('AL', 0.05, 0.4, 0)
-    # homogenizationTernary.parameters.temperature.set_isothermal_temperature(1073)
+    # homogenizationTernary.parameters.compositionProfile.addStepCompositionStep('CR', 0.05, 0.4, 0)
+    # homogenizationTernary.parameters.compositionProfile.addStepCompositionStep('AL', 0.05, 0.4, 0)
+    # homogenizationTernary.parameters.temperature.setIsothermalTemperature(1073)
     # homogenizationTernary.setThermodynamics(NiCrAlTherm)
     # homogenizationTernary.setup()
     # T = homogenizationTernary.parameters.temperature(homogenizationTernary.z, 0)
@@ -165,7 +165,7 @@ def test_homogenizationSinglePhaseMobility():
     #     #homogenizationTernary.clearCache()
     #     homogenizationTernary.setup()
     #     homogenizationTernary.parameters.setHomogenizationFunction(f)
-    #     mobs.append(compute_homogenization_function(homogenizationTernary.therm, homogenizationTernary.x.T, homogenizationTernary.T, homogenizationTernary.parameters)[0])
+    #     mobs.append(computeHomogenizationFunction(homogenizationTernary.therm, homogenizationTernary.x.T, homogenizationTernary.T, homogenizationTernary.parameters)[0])
     #     #mobs.append(homogenizationTernary.mobilityFunction(mob.transpose(2,0,1), phaseFracs.T, labyrinth_factor=homogenizationTernary.labFactor).T)
     #     assert(np.allclose(mobs[-1][:,0], mob[0,:,0], atol=0, rtol=1e-3))
 
@@ -178,12 +178,12 @@ def test_homogenization_wiener_upper():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.setHomogenizationFunction('wiener upper')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction('wiener upper')
 
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
     assert_allclose(mob, [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -215,12 +215,12 @@ def test_homogenization_wiener_lower():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.setHomogenizationFunction('wiener lower')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction('wiener lower')
     
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
     assert_allclose(mob, [4.090531e-21, 1.068474e-21, 1.756032e-21], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -252,12 +252,12 @@ def test_homogenization_hashin_upper():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.setHomogenizationFunction('hashin upper')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction('hashin upper')
     
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
     assert_allclose(mob, [4.114414e-22, 1.074712e-22, 1.766285e-22], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -289,12 +289,12 @@ def test_homogenization_hashin_lower():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.setHomogenizationFunction('hashin lower')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction('hashin lower')
     
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
     assert_allclose(mob, [9.292913e-21, 2.427370e-21, 3.989373e-21], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -326,12 +326,12 @@ def test_homogenization_lab():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.setHomogenizationFunction('lab')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction('lab')
     
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = compute_homogenization_function(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
     assert_allclose(mob, [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -370,12 +370,12 @@ def test_single_phase_dxdt():
     #Define Cr and Al composition, with step-wise change at z=0
     #m.setCompositionLinear(0.077, 0.359, 'CR')
     #m.setCompositionLinear(0.054, 0.062, 'AL')
-    m.parameters.composition_profile.add_linear_composition_step('CR', 0.077, 0.359)
-    m.parameters.composition_profile.add_linear_composition_step('AL', 0.054, 0.062)
+    m.parameters.compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
+    m.parameters.compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
 
     m.setThermodynamics(NiCrAlTherm)
     #m.setTemperature(1200 + 273.15)
-    m.parameters.temperature.set_isothermal_temperature(1200+273.15)
+    m.parameters.temperature.setIsothermalTemperature(1200+273.15)
 
     m.setup()
     t, x = m.getCurrentX()
@@ -415,12 +415,12 @@ def test_diffusion_x_shape():
     #Define Cr and Al composition, with step-wise change at z=0
     #m.setCompositionLinear(0.077, 0.359, 'CR')
     #m.setCompositionLinear(0.054, 0.062, 'AL')
-    m.parameters.composition_profile.add_linear_composition_step('CR', 0.077, 0.359)
-    m.parameters.composition_profile.add_linear_composition_step('AL', 0.054, 0.062)
+    m.parameters.compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
+    m.parameters.compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
 
     m.setThermodynamics(NiCrAlTherm)
     #m.setTemperature(1200 + 273.15)
-    m.parameters.temperature.set_isothermal_temperature(1200+273.15)
+    m.parameters.temperature.setIsothermalTemperature(1200+273.15)
 
     m.setup()
     t, x = m.getCurrentX()
@@ -453,16 +453,16 @@ def test_homogenization_dxdt():
     #m.setCompositionLinear(0.257, 0.423, 'CR')
     #m.setCompositionLinear(0.065, 0.276, 'NI')
     #m.setTemperature(1100+273.15)
-    m.parameters.composition_profile.add_linear_composition_step('CR', 0.257, 0.423)
-    m.parameters.composition_profile.add_linear_composition_step('NI', 0.065, 0.276)
-    m.parameters.temperature.set_isothermal_temperature(1100+273.15)
+    m.parameters.compositionProfile.addLinearCompositionStep('CR', 0.257, 0.423)
+    m.parameters.compositionProfile.addLinearCompositionStep('NI', 0.065, 0.276)
+    m.parameters.temperature.setIsothermalTemperature(1100+273.15)
     m.setThermodynamics(FeCrNiTherm)
     #m.eps = 0.01
-    m.parameters.eps = 0.01
-    m.parameters.max_composition_change = 0.002
+    m.parameters.homogenizationParameters.eps = 0.01
+    m.parameters.maxCompositionChange = 0.002
 
     #m.setMobilityFunction('hashin lower')
-    m.parameters.setHomogenizationFunction('hashin lower')
+    m.parameters.homogenizationParameters.setHomogenizationFunction('hashin lower')
 
     m.setup()
     t, x = m.getCurrentX()

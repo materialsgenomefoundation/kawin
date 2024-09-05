@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from kawin.diffusion.DiffusionParameters import compute_mobility
+from kawin.diffusion.DiffusionParameters import computeMobility
 
 def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
     '''
@@ -128,7 +128,7 @@ def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, *args, **kwar
         diffModel.setup()
 
     T = diffModel.parameters.temperature(diffModel.z, diffModel.t)
-    mob_data = compute_mobility(diffModel.therm, diffModel.x.T, T, diffModel.parameters)
+    mob_data = computeMobility(diffModel.therm, diffModel.x.T, T, diffModel.parameters)
 
     if plotPhase is not None:
         pf = []

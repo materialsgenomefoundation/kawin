@@ -85,7 +85,7 @@ class GeneralThermodynamics:
         if type(phases) == str:  # check if a single phase was passed as a string instead of a list of phases.
             phases = [phases]
         self.phases = phases
-        self.phase_sampling_conditions = {p: None for p in self.phases}
+        self.phaseSamplingConditions = {p: None for p in self.phases}
 
         self._buildThermoModels()
 
@@ -1064,7 +1064,7 @@ class GeneralThermodynamics:
         if precPoints is None or prevT != T:
             precPoints = calculate(self.db, self.elements, phases[0], 
                                    pdens=self.sampling_pDens, model=sub_models, output='GM', 
-                                   phase_records=self.phase_records, conditions=self.phase_sampling_conditions.get(precPhase, None), 
+                                   phase_records=self.phase_records, conditions=self.phaseSamplingConditions.get(precPhase, None), 
                                    to_xarray=False, **str_cond)
             if self.orderedPhase[precPhase]:
                 orderedPoints = calculate(self.db, self.elements, phases[0], 

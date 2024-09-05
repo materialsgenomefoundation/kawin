@@ -1,7 +1,7 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
 from kawin.thermo.Mobility import mobility_from_composition_set, interstitials, x_to_u_frac
-from kawin.diffusion.DiffusionParameters import compute_homogenization_function
+from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction
 import copy
 
 class HomogenizationModel(DiffusionModel):    
@@ -23,7 +23,7 @@ class HomogenizationModel(DiffusionModel):
         x = x_curr[0]
         T = self.parameters.temperature(self.z, t)
 
-        avg_mob, mu = compute_homogenization_function(self.therm, x.T, T, self.parameters)
+        avg_mob, mu = computeHomogenizationFunction(self.therm, x.T, T, self.parameters)
         avg_mob = avg_mob.T
         mu = mu.T
 
@@ -51,14 +51,14 @@ class HomogenizationModel(DiffusionModel):
         Tmidfull = Tmid[np.newaxis,:]
         for i in range(fluxes.shape[0]-1):
             Tmidfull = np.concatenate((Tmidfull, Tmid[np.newaxis,:]), axis=0)
-        fluxes[nonzeroComp] += -self.parameters.eps * avg_mob[nonzeroComp] * 8.314 * Tmidfull[nonzeroComp] * dudz[nonzeroComp] / avgU[nonzeroComp]
+        fluxes[nonzeroComp] += -self.parameters.homogenizationParameters.eps * avg_mob[nonzeroComp] * 8.314 * Tmidfull[nonzeroComp] * dudz[nonzeroComp] / avgU[nonzeroComp]
 
         #Flux in a volume fixed frame: J_vi = J_i - x_i * sum(J_j)
         vfluxes = np.zeros((len(self.elements), self.N+1))
         vfluxes[:,1:-1] = fluxes[1:,:] - avgU[1:,:] * np.sum([fluxes[i] for i in range(len(self.allElements)) if self.allElements[i] not in interstitials], axis=0)
 
         #Boundary conditions
-        self.parameters.boundary_conditions.apply_boundary_conditions_to_fluxes(vfluxes)
+        self.parameters.boundaryConditions.applyBoundaryConditionsToFluxes(vfluxes)
 
         return vfluxes
 
@@ -68,7 +68,7 @@ class HomogenizationModel(DiffusionModel):
         '''
         vfluxes = self._getFluxes(self.t, [self.x])
         dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
-        dt = self.parameters.max_composition_change / np.amax(dJ[dJ!=0])
+        dt = self.parameters.maxCompositionChange / np.amax(dJ[dJ!=0])
         return vfluxes, dt
     
     def getDt(self, dXdt):
@@ -77,4 +77,4 @@ class HomogenizationModel(DiffusionModel):
         This is done by finding the time interval such that the composition
             change caused by the fluxes will be lower than self.maxCompositionChange
         '''
-        return self.parameters.max_composition_change / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
+        return self.parameters.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))

@@ -207,15 +207,15 @@ class DiffusionModel(GenericModel):
             if self.therm is not None:
                 self.therm.clearCache()
 
-            self.parameters.composition_profile.build_profile(self.x, self.z)
-            self.parameters.boundary_conditions.apply_boundary_conditions_to_initial_profile(self.x, self.z)
+            self.parameters.compositionProfile.buildProfile(self.x, self.z)
+            self.parameters.boundaryConditions.applyBoundaryConditionsToInitialProfile(self.x, self.z)
 
         xsum = np.sum(self.x, axis=0)
         if any(xsum > 1):
             print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[xsum>1]), np.amax(self.z[xsum>1])))
             raise Exception('Some compositions sum up to above 1')
-        self.x[self.x > self.parameters.min_composition] = self.x[self.x > self.parameters.min_composition] - len(self.allElements)*self.parameters.min_composition
-        self.x[self.x < self.parameters.min_composition] = self.parameters.min_composition
+        self.x[self.x > self.parameters.minComposition] = self.x[self.x > self.parameters.minComposition] - len(self.allElements)*self.parameters.minComposition
+        self.x[self.x < self.parameters.minComposition] = self.parameters.minComposition
         self.isSetup = True
         self.record(self.t) #Record at t = 0
 
@@ -253,7 +253,7 @@ class DiffusionModel(GenericModel):
         '''
         self.t = time
         self.x = x[0]
-        self.x = np.clip(self.x, self.parameters.min_composition, 1-self.parameters.min_composition)
+        self.x = np.clip(self.x, self.parameters.minComposition, 1-self.parameters.minComposition)
         self.record(self.t)
         self.updateCoupledModels()
         return self.getCurrentX()[1], False

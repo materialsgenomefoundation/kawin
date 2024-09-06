@@ -5,7 +5,7 @@ from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
 import kawin.diffusion.Plot as diffPlot
-from kawin.diffusion.DiffusionParameters import DiffusionParameters
+from kawin.diffusion.DiffusionParameters import DiffusionParameters, BoundaryConditions
 
 class DiffusionModel(GenericModel):
     #Boundary conditions
@@ -75,6 +75,15 @@ class DiffusionModel(GenericModel):
         '''
         self.therm = thermodynamics
 
+    def setTemperature(self, T):
+        self.parameters.temperature.setIsothermalTemperature(T)
+
+    def setTemperatureArray(self, times, temperatures):
+        self.parameters.temperature.setTemperatureArray(times, temperatures)
+
+    def setTemperatureFunction(self, func):
+        self.parameters.temperature.setTemperatureFunction(func)
+
     def _getVarDict(self):
         '''
         Returns mapping of { variable name : attribute name } for saving
@@ -103,6 +112,15 @@ class DiffusionModel(GenericModel):
         model._loadData(data)
         model.isSetup = True
         return model
+    
+    def setHashSensitivity(self, s):
+        self.parameters.hashTable.setHashSensitivity(s)
+
+    def useCache(self, use):
+        self.parameters.hashTable.enableCaching(use)
+
+    def clearCache(self):
+        self.parameters.hashTable.clearCache()
 
     def enableRecording(self, dtype = np.float32):
         '''
@@ -194,6 +212,42 @@ class DiffusionModel(GenericModel):
             return 0
         else:
             return self.phases.index(phase)
+        
+    def setBC(self, LBCtype = BoundaryConditions.FLUX_BC, LBCValue = 0, RBCType = BoundaryConditions.FLUX_BC, RBCValue = 0, element = None):
+        self.parameters.boundaryConditions.setBoundaryCondition(BoundaryConditions.LEFT, 
+                                                                LBCtype, LBCValue, element)
+        self.parameters.boundaryConditions.setBoundaryCondition(BoundaryConditions.RIGHT,
+                                                                RBCType, RBCValue, element)
+        
+    def setCompositionLinear(self, Lvalue, Rvalue, element = None):
+        element = self.elements[0] if element is None else element
+        self.parameters.compositionProfile.clearCompositionBuildSteps(element)
+        self.parameters.compositionProfile.addLinearCompositionStep(element, Lvalue, Rvalue)
+
+    def setCompositionStep(self, Lvalue, Rvalue, z, element = None):
+        element = self.elements[0] if element is None else element
+        self.parameters.compositionProfile.clearCompositionBuildSteps(element)
+        self.parameters.compositionProfile.addStepCompositionStep(element, Lvalue, Rvalue, z)
+
+    def setCompositionSingle(self, value, z, element = None):
+        element = self.elements[0] if element is None else element
+        self.parameters.compositionProfile.clearCompositionBuildSteps(element)
+        self.parameters.compositionProfile.addSingleCompositionStep(element, value, z)
+
+    def setCompositionInBounds(self, value, Lbound, Rbound, element = None):
+        element = self.elements[0] if element is None else element
+        self.parameters.compositionProfile.clearCompositionBuildSteps(element)
+        self.parameters.compositionProfile.addBoundedCompositionStep(element, value, Lbound, Rbound)
+
+    def setCompositionFunction(self, func, element = None):
+        element = self.elements[0] if element is None else element
+        self.parameters.compositionProfile.clearCompositionBuildSteps(element)
+        self.parameters.compositionProfile.addFunctionCompositionStep(element, func)
+
+    def setCompositionProfile(self, z, x, element = None):
+        element = self.elements[0] if element is None else element
+        self.parameters.compositionProfile.clearCompositionBuildSteps(element)
+        self.parameters.compositionProfile.addProfileCompositionStep(element, x, z)
 
     def setup(self):
         '''

@@ -5,6 +5,18 @@ from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction
 import copy
 
 class HomogenizationModel(DiffusionModel):    
+    def setMobilityFunction(self, function):
+        self.parameters.homogenizationParameters.setHomogenizationFunction(function)
+
+    def setLabyrinthFactor(self, n):
+        self.parameters.homogenizationParameters.setLabyrinthFactor(n)
+
+    def setMobilityPostProcessFunction(self, function, functionArgs = None):
+        self.parameters.homogenizationParameters.setPostProcessFunction(function, functionArgs)
+
+    def setIdealEps(self, eps):
+        self.parameters.homogenizationParameters.eps = eps
+    
     def _getFluxes(self, t, x_curr):
         '''
         Return fluxes and time interval for the current iteration

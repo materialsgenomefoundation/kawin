@@ -440,6 +440,25 @@ class HomogenizationParameters:
         Returns post process function
         '''
         self.postProcessParameters = [functionArgs]
+        if isinstance(functionName, str):
+            self._setPostProcessFunctionByStr(functionName)
+        else:
+            self._setPostProcessFunctionByID(functionName)
+
+    def _setPostProcessFunctionByStr(self, functionName):
+        keywords_map = {
+            'none': self.NO_POST,
+            'predefined': self.PREDEFINED,
+            'majority': self.MAJORITY,
+            'exclude': self.EXCLUDE
+        }
+        if functionName in keywords_map:
+            self._setHomogenizationFunctionByID(keywords_map[functionName])
+        
+        str_options = ', '.join(list(keywords_map.keys()))
+        raise Exception(f'Error: post process function by str should be {str_options}')
+
+    def _setPostProcessFunctionByID(self, functionName):
         if functionName == self.NO_POST:
             self.postProcessFunction = _postProcessDoNothing
         elif functionName == self.PREDEFINED:
@@ -449,7 +468,9 @@ class HomogenizationParameters:
         elif functionName == self.EXCLUDE:
             self.postProcessFunction = _postProcessExcludePhases
         else:
-            raise Exception("Error: post process function should be \'predefined\', \'majority\' or \'exclude\'")
+            func_types = ['NO_POST', 'PREDEFINED', 'MAJORITY', 'EXCLUDE']
+            int_options = ', '.join([f'HomogenizationParameters.{t}' for t in func_types])
+            raise Exception(f'Error: post process function by ID should be {int_options}')
             
     def setHomogenizationFunction(self, function):
         '''
@@ -478,6 +499,7 @@ class HomogenizationParameters:
         for func_id, keywords in keywords_map.items():
             if all([kw in function for kw in keywords]):
                 self._setHomogenizationFunctionByID(func_id)
+                return
         
         func_types = ['wiener upper', 'wiener lower', 'hashin upper', 'hashin lower', 'labyrinth']
         str_options = ', '.join(func_types)

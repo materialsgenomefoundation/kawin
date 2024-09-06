@@ -1,7 +1,7 @@
 from numpy.testing import assert_allclose
 import numpy as np
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel
-from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction, computeMobility, DiffusionParameters
+from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction, computeMobility, DiffusionParameters, HomogenizationParameters
 from kawin.thermo import GeneralThermodynamics
 from kawin.tests.datasets import *
 
@@ -134,10 +134,13 @@ def test_homogenizationSinglePhaseMobility():
     ternaryParameters.labyrinthFactor = 2
     mob_data = computeMobility(NiCrAlTherm, x, T, ternaryParameters)
 
-    mob_funcs = ['wiener upper', 'wiener lower', 'hashin upper', 'lab']
+    #mob_funcs = ['wiener upper', 'wiener lower', 'hashin upper', 'lab']
+    mob_funcs = [HomogenizationParameters.WIENER_UPPER, HomogenizationParameters.WIENER_LOWER, 
+                 HomogenizationParameters.HASHIN_UPPER, HomogenizationParameters.HASHIN_LOWER, 
+                 HomogenizationParameters.LABYRINTH]
     for f in mob_funcs:
         ternaryParameters.hashTable.clearCache()
-        ternaryParameters.homogenizationParameters.setHomogenizationFunction(mob_funcs)
+        ternaryParameters.homogenizationParameters.setHomogenizationFunction(f)
         mob, _ = computeHomogenizationFunction(NiCrAlTherm, x, T, ternaryParameters)
         assert(np.allclose(np.squeeze(mob), np.squeeze(mob_data.mobility[0]), atol=0, rtol=1e-3))
 
@@ -178,7 +181,7 @@ def test_homogenization_wiener_upper():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.homogenizationParameters.setHomogenizationFunction('wiener upper')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.WIENER_UPPER)
 
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
@@ -215,7 +218,7 @@ def test_homogenization_wiener_lower():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.homogenizationParameters.setHomogenizationFunction('wiener lower')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.WIENER_LOWER)
     
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
@@ -252,7 +255,7 @@ def test_homogenization_hashin_upper():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.homogenizationParameters.setHomogenizationFunction('hashin upper')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.HASHIN_UPPER)
     
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
@@ -289,7 +292,7 @@ def test_homogenization_hashin_lower():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.homogenizationParameters.setHomogenizationFunction('hashin lower')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.HASHIN_LOWER)
     
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
@@ -326,7 +329,7 @@ def test_homogenization_lab():
     T = 1073
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
-    ternaryParameters.homogenizationParameters.setHomogenizationFunction('lab')
+    ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.LABYRINTH)
     
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
@@ -462,7 +465,7 @@ def test_homogenization_dxdt():
     m.parameters.maxCompositionChange = 0.002
 
     #m.setMobilityFunction('hashin lower')
-    m.parameters.homogenizationParameters.setHomogenizationFunction('hashin lower')
+    m.parameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.HASHIN_LOWER)
 
     m.setup()
     t, x = m.getCurrentX()

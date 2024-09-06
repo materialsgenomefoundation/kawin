@@ -73,7 +73,7 @@ def test_diffusion_plotting():
 
     for m in models:
         #m[0].setTemperature(900)
-        m[0].parameters.temperature.set_isothermal_temperature(900)
+        m[0].parameters.temperature.setIsothermalTemperature(900)
 
         #For each plot, check that the number of lines correspond to number of elements or phases
         #For 'plot', number of lines should be elements (with or without reference) or a single element

@@ -379,9 +379,17 @@ class CompositionProfile:
                 build_functions[step_info[0]](i, x, z, *step_info[1], **step_info[2])
 
 class TemperatureParameters:
-    def __init__(self):
-        self.Tparameters = None
-        self.Tfunction = None
+    def __init__(self, *args):
+        if len(args) == 2:
+            self.setTemperatureArray(*args)
+        elif len(args) == 1:
+            if callable(args[0]):
+                self.setTemperatureFunction(args[0])
+            else:
+                self.setIsothermalTemperature(args[0])
+        else:
+            self.Tparameters = None
+            self.Tfunction = None
 
     def setIsothermalTemperature(self, T):
         self.Tparameters = T
@@ -399,28 +407,49 @@ class TemperatureParameters:
         return self.Tfunction(z, t)
 
 class HomogenizationParameters:
-    def __init__(self):
-        self.setHomogenizationFunction('wiener upper')
-        self.labyrinthFactor: float = 1
-        self.setPostProcessFunction(None)
-        self.eps = 0.05
+    WIENER_UPPER = 0
+    WIENER_LOWER = 1
+    HASHIN_UPPER = 2
+    HASHIN_LOWER = 3
+    LABYRINTH = 4
+
+    NO_POST = 5
+    PREDEFINED = 6
+    MAJORITY = 7
+    EXCLUDE = 8
+
+    def __init__(self, 
+                 homogenizationFunction = None, 
+                 labyrinthFactor = 1, 
+                 eps = 0.05,
+                 postProcessFunction = None,
+                 postProcessArgs = None):
+        if homogenizationFunction is None:
+            homogenizationFunction = self.WIENER_UPPER
+        self.setHomogenizationFunction(homogenizationFunction)
+
+        self.labyrinthFactor: float = labyrinthFactor
+
+        if postProcessFunction is None:
+            postProcessFunction = self.NO_POST
+        self.setPostProcessFunction(postProcessFunction, postProcessArgs)
+        self.eps = eps
 
     def setPostProcessFunction(self, functionName, functionArgs = None):
         '''
         Returns post process function
         '''
         self.postProcessParameters = [functionArgs]
-        if functionName is None:
+        if functionName == self.NO_POST:
             self.postProcessFunction = _postProcessDoNothing
+        elif functionName == self.PREDEFINED:
+            self.postProcessFunction = _postProcessPredefinedMatrixPhase
+        elif functionName == self.MAJORITY:
+            self.postProcessFunction = _postProcessMajorityPhase
+        elif functionName == self.EXCLUDE:
+            self.postProcessFunction = _postProcessExcludePhases
         else:
-            if functionName == 'predefined':
-                self.postProcessFunction = _postProcessPredefinedMatrixPhase
-            elif functionName == 'majority':
-                self.postProcessFunction = _postProcessMajorityPhase
-            elif functionName == 'exclude':
-                self.postProcessFunction = _postProcessExcludePhases
-            else:
-                raise "Error: post process function should be \'predefined\', \'majority\' or \'exclude\'"
+            raise Exception("Error: post process function should be \'predefined\', \'majority\' or \'exclude\'")
             
     def setHomogenizationFunction(self, function):
         '''
@@ -433,16 +462,42 @@ class HomogenizationParameters:
         function : str
             Options - 'upper wiener', 'lower wiener', 'upper hashin-shtrikman', 'lower hashin-strikman', 'labyrinth'
         '''
-        if 'upper' in function and 'wiener' in function:
+        if isinstance(function, str):
+            self._setHomogenizationFunctionByStr(function)
+        else:
+            self._setHomogenizationFunctionByID(function)
+
+    def _setHomogenizationFunctionByStr(self, function):
+        keywords_map = {
+            self.WIENER_UPPER: ['wiener', 'upper'],
+            self.WIENER_LOWER: ['wiener', 'lower'],
+            self.HASHIN_UPPER: ['hashin', 'upper'],
+            self.HASHIN_LOWER: ['hashin', 'lower'],
+            self.LABYRINTH: ['lab'],
+        }
+        for func_id, keywords in keywords_map.items():
+            if all([kw in function for kw in keywords]):
+                self._setHomogenizationFunctionByID(func_id)
+        
+        func_types = ['wiener upper', 'wiener lower', 'hashin upper', 'hashin lower', 'labyrinth']
+        str_options = ', '.join(func_types)
+        raise Exception(f'Error: homogenization function by str should be {str_options}')
+
+    def _setHomogenizationFunctionByID(self, function):
+        if function == self.WIENER_UPPER:
             self.homogenizationFunction = wienerUpper
-        elif 'lower' in function and 'wiener' in function:
+        elif function == self.WIENER_LOWER:
             self.homogenizationFunction = wienerLower
-        elif 'upper' in function and 'hashin' in function:
+        elif function == self.HASHIN_UPPER:
             self.homogenizationFunction = hashinShtrikmanUpper
-        elif 'lower' in function and 'hashin' in function:
+        elif function == self.HASHIN_LOWER:
             self.homogenizationFunction = hashinShtrikmanLower
-        elif 'lab' in function:
+        elif function == self.LABYRINTH:
             self.homogenizationFunction = labyrinth
+        else:
+            func_types = ['WIENER_UPPER', 'WIENER_LOWER', 'HASHIN_UPPER', 'HASHIN_LOWER', 'LABYRINTH']
+            int_options = ', '.join([f'HomogenizationParameters.{t}' for t in func_types])
+            raise Exception(f'Error: homogenization function by ID should be {int_options}')
 
     def setLabyrinthFactor(self, n):
         '''

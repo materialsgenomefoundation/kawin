@@ -104,12 +104,12 @@ def test_coupler_shape():
     #Define Cr and Al composition, with step-wise change at z=0
     #d_model.setCompositionLinear(0.077, 0.359, 'CR')
     #d_model.setCompositionLinear(0.054, 0.062, 'AL')
-    d_model.parameters.composition_profile.add_linear_composition_step('CR', 0.077, 0.359)
-    d_model.parameters.composition_profile.add_linear_composition_step('AL', 0.054, 0.062)
+    d_model.parameters.compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
+    d_model.parameters.compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
 
     d_model.setThermodynamics(NiAlCrTherm)
     #d_model.setTemperature(1200 + 273.15)
-    d_model.parameters.temperature.set_isothermal_temperature(1200+273.15)
+    d_model.parameters.temperature.setIsothermalTemperature(1200+273.15)
 
     coupled_model = Coupler([p_model, d_model])
     coupled_model.setup()

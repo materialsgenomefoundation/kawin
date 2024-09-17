@@ -56,6 +56,7 @@ class GeneralThermodynamics:
     '''
 
     gOffset = 1      #Small value to add to precipitate phase for when order/disorder models are used
+    stateVariables = sorted([v.GE, v.N, v.P, v.T], key=str)
 
     def __init__(self, database, elements, phases, drivingForceMethod = 'tangent', parameters = None):
         if isinstance(database, str):
@@ -129,11 +130,11 @@ class GeneralThermodynamics:
         #This may be unnecessary as already disordered phase models will not be affected, but I guess just in case the matrix phase happens to be an ordered solution
         param_keys, _ = extract_parameters(self._parameters)
         self.models = {self.phases[0]: Model(self.db, self.elements, self.phases[0], parameters=param_keys)}
-        self.models[self.phases[0]].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
+        self.models[self.phases[0]].state_variables = self.stateVariables
 
         for i in range(1, len(self.phases)):
             self.models[self.phases[i]] = ExtraGibbsModel(self.db, self.elements, self.phases[i], parameters=param_keys)
-            self.models[self.phases[i]].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
+            self.models[self.phases[i]].state_variables = self.stateVariables
 
         self.phase_records = PhaseRecordFactory(self.db, self.elements, 
                                                        self.models[self.phases[0]].state_variables, 
@@ -169,12 +170,13 @@ class GeneralThermodynamics:
 
             if len(phase_mob_params[p]) > 0 or len(phase_diff_params[p]) > 0:
                 self.mobModels[p] = MobilityModel(self.db, self.elements, p, parameters=param_keys)
-                self.mobModels[p].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
+                self.mobModels[p].state_variables = self.stateVariables
 
         mob_phases = list(self.mobModels.keys())
-        self.mob_phase_records = PhaseRecordFactory(self.db, self.elements, 
-                                                       self.mobModels[mob_phases[0]].state_variables, 
-                                                       self.mobModels, parameters=self._parameters)
+        if len(mob_phases) > 0:
+            self.mob_phase_records = PhaseRecordFactory(self.db, self.elements, 
+                                                        self.stateVariables, 
+                                                        self.mobModels, parameters=self._parameters)
 
         for p in self.mobModels:
             if len(phase_mob_params[p]) > 0:

@@ -52,6 +52,7 @@ class EquilibriumMobilityData:
         if self.refComp is None and 'TRACER' in data['output']:
             self.refComp = [data['output'][len(self.output)+1:]]
         self.depComps = data.get('dependent_el', [])
+        self.vacancyPoor = data.get('vacancy_poor_interstitial_sublattice', False)
 
         #Set diffusing species - this is necessary for tracer data of a component at the limit of X->0
         #  in which case, the dataset will not include the component when building the model
@@ -171,7 +172,7 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
         #         that exists in the database, then the sign of the calculated and desired interdiffusivity
         #         should be the same
         if data.output == 'INTER_DIFF':
-            mobMatrix = mobility_matrix_from_dof(cs_dof, cs_X, cs_el, mob_from_CS, data.phase_records[data.phases[0]])
+            mobMatrix = mobility_matrix_from_dof(cs_dof, cs_X, cs_el, mob_from_CS, data.phase_records[data.phases[0]], data.vacancyPoor)
             cd, _ = chemical_diffusivity_from_mob(cs_dmudx, mobMatrix)
 
             depComp1 = data.non_va_elements.index(data.depComps[0])

@@ -10,7 +10,7 @@ from scipy.stats import norm
 import tinydb
 
 from pycalphad import Database, variables as v
-from pycalphad.core.utils import unpack_components, filter_phases, extract_parameters
+from pycalphad.core.utils import unpack_species, filter_phases, extract_parameters
 
 from espei.core_utils import ravel_conditions
 from espei.phase_models import PhaseModelSpecification
@@ -19,7 +19,8 @@ from espei.utils import database_symbols_to_fit, PickleableTinyDB
 from espei.error_functions.residual_base import ResidualFunction, residual_function_registry
 from espei.error_functions.non_equilibrium_thermochemical_error import calculate_points_array
 
-import kawin.mobility_fitting.error_functions.cached_mobility as cmob
+#import kawin.mobility_fitting.error_functions.cached_mobility as cmob
+from kawin.thermo.Mobility import mobility_from_dof_phase_record, prefactor_from_dof_phase_record, activation_energy_from_dof_phase_record, tracer_diffusivity_from_mobility
 from kawin.mobility_fitting.error_functions.utils import get_output_base_name, get_base_names, build_model, get_base_std
 
 _log = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class NonEquilibriumMobilityData:
         #  in which case, the dataset will not include the component when building the model
         #TODO: check if we only need refComp for the diffusing species
         self.diffusing_species = sorted(list(set(self.refComp) | set(self.depComps) | set(self.elements) - set(['VA'])))
-        self.models, self.phase_records, self.mob_models, self.mob_callables = build_model(dbf, self.elements, self.phases[0], parameters, self.diffusing_species)
+        self.models, self.phase_records, self.mob_models, self.mob_phase_records = build_model(dbf, self.elements, self.phases[0], parameters, self.diffusing_species)
         self.mobility_correction = {c:1 for c in self.non_va_elements}
 
         self._processConditions(data)
@@ -120,9 +121,9 @@ def calc_mob_differences(data : NonEquilibriumMobilityData, parameters : np.ndar
     #Update phase record parameters
     param_keys, param_values = extract_parameters(paramDict)
     for p in data.phases:
-        data.phase_records[p].parameters[:] = np.asarray(param_values, dtype=np.float_)
+        data.phase_records[p].parameters[:] = np.asarray(param_values, dtype=np.float64)
 
-    state_variables = sorted([v.T, v.P, v.N, v.GE])
+    state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
     for i in range(len(data.values)):
         #Internal degrees of freedom (we include v.GE here to be compatible with kawin)
         dof = np.zeros(4 + len(data.mob_models[data.phases[0]].site_fractions))
@@ -130,10 +131,7 @@ def calc_mob_differences(data : NonEquilibriumMobilityData, parameters : np.ndar
         dof[state_variables.index(v.P)] = data.P[i]
         dof[state_variables.index(v.N)] = 1
         dof[4:] = data.points[i]
-
         value = data.values[i]
-
-        refIndex = data.diffusing_species.index(data.refComp[0])
 
         #NOTE: for tracer diffusivity and prefactor, we multiply by the sign of the value
         #      This is for cases if the computed and desired values are of different signs
@@ -141,18 +139,17 @@ def calc_mob_differences(data : NonEquilibriumMobilityData, parameters : np.ndar
         #      In reality, tracer diffusivity and prefactor should always be positive, so
         #      this may not be necessary
         if data.output == 'TRACER_DIFF':
-            calculated_values = cmob.mobility_from_composition_set_symbolic_quick(dof, data.diffusing_species, data.mob_models[data.phases[0]], paramDict)
-            r = calculated_values[refIndex]
+            mob_from_CS = mobility_from_dof_phase_record(dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
+            r = tracer_diffusivity_from_mobility(data.T[i], mob_from_CS)
             r = np.sign(r) * np.log10(np.abs(r))
             value = np.sign(value) * np.log10(np.abs(value))
 
         elif data.output == 'TRACER_Q':
-            calculated_values = cmob.activation_energy_from_composition_set_quick(dof, data.diffusing_species, data.mob_models[data.phases[0]], paramDict)
-            r = calculated_values[refIndex]
+            r = activation_energy_from_dof_phase_record(dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
 
         elif data.output == 'TRACER_D0':
-            calculated_values = cmob.prefactor_from_composition_set_quick(dof, data.diffusing_species, data.mob_models[data.phases[0]], paramDict)
-            r = np.exp(calculated_values[refIndex])
+            r = prefactor_from_dof_phase_record(dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
+            r = np.exp(r)
             r = np.sign(r) * np.log10(r)
             value = np.sign(value) * np.log10(np.abs(value))
 
@@ -197,7 +194,7 @@ class NonEquilibriumMobilityResidual(ResidualFunction):
             comps = sorted(phase_models.components)
         else:
             comps = sorted(database.elements)
-        phases = sorted(filter_phases(database, unpack_components(database, comps), database.phases.keys()))
+        phases = sorted(filter_phases(database, unpack_species(database, comps), database.phases.keys()))
         if symbols_to_fit is None:
             symbols_to_fit = database_symbols_to_fit(database)
         # okay if parameters are initialized to zero, we only need the symbol names

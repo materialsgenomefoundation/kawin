@@ -1,5 +1,5 @@
-from pycalphad import Model, Database, calculate, equilibrium, variables as v
-from pycalphad.codegen.callables import build_callables, build_phase_records
+from pycalphad import Model, variables as v
+from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.utils import extract_parameters
 from kawin.thermo.Mobility import MobilityModel
 
@@ -28,17 +28,11 @@ def build_model(db, elements, phase, parameters, diffusing_species):
     #TODO: this may not be necessary since v.GE is only added if the model
     #      is built in the GeneralThermodynamics module
     model[phase].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
-
-    phase_record = build_phase_records(db, elements, [phase], model[phase].state_variables, 
-                                       model, build_gradients=True, build_hessians=True, 
-                                       parameters=parameters)
+    prf = PhaseRecordFactory(db, elements, model[phase].state_variables, model, parameters=parameters)
     
     mob_model = {phase: MobilityModel(db, elements, phase, parameters=param_keys)}
+    mob_model[phase].state_variables = sorted([v.T, v.P, v.N, v.GE], key=str)
     mob_model[phase].set_diffusing_species(db, diffusing_species)
-    mob_callable = {phase: {}}
-    diffusing_species = sorted(list(set(diffusing_species) - set(['VA'])))
-    for c in diffusing_species:
-        bcp = build_callables(db, elements, [phase], mob_model, parameter_symbols=parameters, output=f'MOB_{c}', build_gradients=False, build_hessians=False, additional_statevars=[v.T, v.P, v.N, v.GE])
-        mob_callable[phase][c] = bcp[f'MOB_{c}']['callables'][phase]
+    mob_prf = PhaseRecordFactory(db, elements, mob_model[phase].state_variables, mob_model, parameters=parameters)
 
-    return model, phase_record, mob_model, mob_callable
+    return model, prf, mob_model, mob_prf

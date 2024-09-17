@@ -12,7 +12,7 @@ from scipy.stats import norm
 import tinydb
 
 from pycalphad import Database, variables as v
-from pycalphad.core.utils import filter_phases, unpack_components, unpack_condition, extract_parameters
+from pycalphad.core.utils import filter_phases, unpack_species, unpack_condition, extract_parameters
 
 from espei.phase_models import PhaseModelSpecification
 from espei.typing import SymbolName
@@ -23,7 +23,8 @@ from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import partialdMudX
 from kawin.thermo.Mobility import interstitials
 
-import kawin.mobility_fitting.error_functions.cached_mobility as cmob
+#import kawin.mobility_fitting.error_functions.cached_mobility as cmob
+from kawin.thermo.Mobility import mobility_from_dof_phase_record, mobility_matrix_from_dof, chemical_diffusivity_from_mob, interdiffusivity_from_Dkj, prefactor_from_dof_phase_record, activation_energy_from_dof_phase_record, tracer_diffusivity_from_mobility
 from kawin.mobility_fitting.error_functions.utils import get_output_base_name, get_base_names, build_model, get_base_std
 
 _log = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ class EquilibriumMobilityData:
         #Set diffusing species - this is necessary for tracer data of a component at the limit of X->0
         #  in which case, the dataset will not include the component when building the model
         self.diffusing_species = sorted(list(set(self.refComp) | set(self.depComps) | set(self.elements) - set(['VA'])))
-        self.models, self.phase_records, self.mob_models, self.mob_callables = build_model(dbf, self.elements, self.phases[0], parameters, self.diffusing_species)
+        self.models, self.phase_records, self.mob_models, self.mob_phase_records = build_model(dbf, self.elements, self.phases[0], parameters, self.diffusing_species)
         self.mobility_correction = {c:1 for c in self.non_va_elements}
 
         self.conditions = {}
@@ -144,7 +145,7 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
     #Update phase record parameters
     param_keys, param_values = extract_parameters(paramDict)
     for p in data.phases:
-        data.phase_records[p].parameters[:] = np.asarray(param_values, dtype=np.float_)
+        data.phase_records[p].parameters[:] = np.asarray(param_values, dtype=np.float64)
 
     keys, values = zip(*data.conditions.items())
     allConds = [dict(zip(keys,p)) for p in product(*values)]
@@ -155,7 +156,8 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
 
         #Compute mobility from cached equilibrium data
         cs_el, cs_T, cs_dof, cs_X, cs_dmudx = cs_data
-        mob_from_CS = cmob.mobility_from_composition_set_quick(cs_dof, cs_el, data.mob_callables[data.phases[0]], data.mobility_correction, parameters = paramDict)
+        #mob_from_CS = cmob.mobility_from_composition_set_quick(cs_dof, cs_el, data.mob_callables[data.phases[0]], data.mobility_correction, parameters = paramDict)
+        mob_from_CS = mobility_from_dof_phase_record(cs_dof, data.mob_phase_records, data.phases[0], cs_el, paramDict)
 
         refIndex = data.non_va_elements.index(data.refComp[0])
         
@@ -169,8 +171,8 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
         #         that exists in the database, then the sign of the calculated and desired interdiffusivity
         #         should be the same
         if data.output == 'INTER_DIFF':
-            mobMatrix = cmob.mobility_matrix_quick(cs_dof, cs_X, cs_el, mob_from_CS, data.phase_records[data.phases[0]])
-            cd, _ = cmob.chemical_diffusivity_quick(cs_dmudx, mobMatrix)
+            mobMatrix = mobility_matrix_from_dof(cs_dof, cs_X, cs_el, mob_from_CS, data.phase_records[data.phases[0]])
+            cd, _ = chemical_diffusivity_from_mob(cs_dmudx, mobMatrix)
 
             depComp1 = data.non_va_elements.index(data.depComps[0])
             depComp2 = data.non_va_elements.index(data.depComps[1])
@@ -181,18 +183,17 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_DIFF':
-            tracer_diff = cmob.tracer_diffusivity_quick(cs_T, mob_from_CS)
+            tracer_diff = tracer_diffusivity_from_mobility(cs_T, mob_from_CS)
             D = tracer_diff[refIndex]
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_D0':
-            D0 = cmob.prefactor_from_composition_set_quick(cs_dof, cs_el, data.mob_models[data.phases[0]], parameters = paramDict)
-            D = np.exp(D0[refIndex])
+            D0 = prefactor_from_dof_phase_record(cs_dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
+            D = np.exp(D0)
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_Q':
-            Qs = cmob.activation_energy_from_composition_set_quick(cs_dof, cs_el, data.mob_models[data.phases[0]], parameters = paramDict)
-            Q = Qs[refIndex]
+            Q = activation_energy_from_dof_phase_record(cs_dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
             diffs.append(Q - value)
 
         wts.append(data.weights[i])
@@ -235,7 +236,7 @@ class EquilibriumMobilityResidual(ResidualFunction):
             comps = sorted(phase_models.components)
         else:
             comps = sorted(database.elements)
-        phases = sorted(filter_phases(database, unpack_components(database, comps), database.phases.keys()))
+        phases = sorted(filter_phases(database, unpack_species(database, comps), database.phases.keys()))
         if symbols_to_fit is None:
             symbols_to_fit = database_symbols_to_fit(database)
         # okay if parameters are initialized to zero, we only need the symbol names

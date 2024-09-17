@@ -1,6 +1,6 @@
 import numpy as np
 from pycalphad import Database, Model, variables as v
-from pycalphad.codegen.callables import build_phase_records
+from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from symengine import Piecewise, And, Symbol
 from tinydb import where
 from kawin.thermo.LocalEquilibrium import local_equilibrium
@@ -36,7 +36,7 @@ class EquilibriumSiteFractionGenerator:
         active_comps, comps = self._generate_comps_key(components)
         if active_comps not in self.models:
             self.models[active_comps] = {self.phase: Model(self.db, comps, self.phase)}
-            self.phase_records[active_comps] = build_phase_records(self.db, comps, [self.phase], {v.T, v.P, v.N, v.GE}, self.models[active_comps])
+            self.phase_records[active_comps] = PhaseRecordFactory(self.db, comps, {v.T, v.P, v.N, v.GE}, self.models[active_comps])
             self.constituents[active_comps] = [c for cons in self.models[active_comps][self.phase].constituents for c in sorted(list(cons))]
 
     def __call__(self, components, conditions : dict[v.StateVariable: float]) -> dict[v.Species: float]:

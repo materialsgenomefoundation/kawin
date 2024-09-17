@@ -1,2 +1,3 @@
 from .SinglePhase import SinglePhaseModel
 from .Homogenization import HomogenizationModel
+from .DiffusionParameters import DiffusionParameters, HashTable, CompositionProfile, BoundaryConditions, HomogenizationParameters, TemperatureParameters

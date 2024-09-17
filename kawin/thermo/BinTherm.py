@@ -1,6 +1,6 @@
 from kawin.thermo.Thermodynamics import GeneralThermodynamics
 import numpy as np
-from pycalphad import equilibrium, calculate, variables as v
+from pycalphad import Workspace, equilibrium, calculate, variables as v
 from pycalphad.core.composition_set import CompositionSet
 from kawin.thermo.FreeEnergyHessian import dMudX
 
@@ -30,17 +30,11 @@ class BinaryThermodynamics (GeneralThermodynamics):
     '''
     def __init__(self, database, elements, phases, drivingForceMethod = 'tangent', interfacialCompMethod = 'equilibrium', parameters = None):
         super().__init__(database, elements, phases, drivingForceMethod, parameters)
-
-        if self.elements[1] < self.elements[0]:
-            self.reverse = True
-        else:
-            self.reverse = False
+        self.reverse = self.elements[1] < self.elements[0]
 
         #Guess composition for when finding tieline
         self._guessComposition = {self.phases[i]: (0, 1, 0.1) for i in range(1, len(self.phases))}
-
         self.setInterfacialMethod(interfacialCompMethod)
-
 
     def setInterfacialMethod(self, interfacialCompMethod):
         '''
@@ -108,25 +102,13 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if hasattr(gExtra, '__len__'):
-            if not hasattr(T, '__len__'):
-                caArray, cbArray = self._interfacialComposition(T, gExtra, precPhase)
-            else:
-                #If T is also an array, then iterate through T and gExtra
-                #Otherwise, pycalphad will create a cartesian product of the two
-                caArray = []
-                cbArray = []
-                for i in range(len(gExtra)):
-                    ca, cb = self._interfacialComposition(T[i], gExtra[i], precPhase)
-                    caArray.append(ca)
-                    cbArray.append(cb)
-                caArray = np.array(caArray)
-                cbArray = np.array(cbArray)
-
-            return caArray, cbArray
+        gExtra = np.atleast_1d(gExtra)
+        T = np.atleast_1d(T)
+        if len(T) == 1:
+            caArray, cbArray = self._interfacialComposition(T[0], gExtra, precPhase)
         else:
-            return self._interfacialComposition(T, gExtra, precPhase)
-
+            caArray, cbArray = zip(*[self._interfacialComposition(T[i], gExtra[i], precPhase) for i in range(len(T))])
+        return np.squeeze(caArray), np.squeeze(cbArray)
 
     def _interfacialCompositionFromEq(self, T, gExtra = 0, precPhase = None):
         '''
@@ -149,61 +131,49 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if precPhase is None:
-            precPhase = self.phases[1]
-
-        if hasattr(gExtra, '__len__'):
-            gExtra = np.array(gExtra)
-        else:
-            gExtra = np.array([gExtra])
+        precPhase = self.phases[1] if precPhase is None else precPhase
+        gExtra = np.atleast_1d(gExtra)
         gExtra += self.gOffset
 
         #Compute equilibrium at guess composition
         cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: gExtra}
-        eq = equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond, model=self.models,
-                        phase_records={self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]},
-                        calc_opts = {'pdens': self.pDens})
+        phases, sub_models = self._setupSubModels(precPhase)
+        wks = Workspace(self.db, self.elements, phases, cond, models=sub_models,
+                        phase_record_factory = self.phase_records, calc_opts={'pdens': self.pDens})
+        
+        coord_keys = list(wks.eq.coords.keys())
+        ge_var_idx = coord_keys.index('GE')
 
-        xParentArray = np.zeros(len(gExtra))
-        xPrecArray = np.zeros(len(gExtra))
-        for g in range(len(gExtra)):
-            eqG = eq.where(eq.GE == gExtra[g], drop=True)
-            gm = eqG.GM.values.ravel()
-            for i in range(len(gm)):
-                eqSub = eqG.where(eqG.GM == gm[i], drop=True)
+        xMatrixArray = -1*np.ones(gExtra.shape, dtype=np.float64)
+        xPrecipArray = -1*np.ones(gExtra.shape, dtype=np.float64)
+        gIndex = 0
+        # cs_idx is a 5 len tuple of (GE, N, P, T, X)
+        # where it iterates by X first, then by GE
+        for cs_idx, cs_list in wks.enumerate_composition_sets():
+            # If the GE index is greater than the current record index, then
+            # update the current index. This occurs if we did not find any
+            # two-phase regions at a given value of GE and now we want to move
+            # on to the next value of GE
+            if cs_idx[ge_var_idx] > gIndex:
+                gIndex = cs_idx[ge_var_idx]
 
-                ph = eqSub.Phase.values.ravel()
-                ph = ph[ph != '']
-
-                #Check if matrix and precipitate phase are stable, and check if there's no miscibility gaps
+            # Only check for two-phase region if the cs list corresponds
+            # to the current index of GE that we're looking at
+            # If the current index of GE is greater than what's in
+            # cs_idx, then we want to iterate the composition sets until we
+            # catch up to gIndex
+            if cs_idx[ge_var_idx] == gIndex:
+                ph = [cs.phase_record.phase_name for cs in cs_list]
                 if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
-                    #Get indices for each phase
-                    eqPa = eqSub.where(eqSub.Phase == self.phases[0], drop=True)
-                    eqPr = eqSub.where(eqSub.Phase == precPhase, drop=True)
+                    cs_matrix = [cs for cs in cs_list if cs.phase_record.phase_name == self.phases[0]][0]
+                    cs_precip = [cs for cs in cs_list if cs.phase_record.phase_name == precPhase][0]
 
-                    cParent = eqPa.X.values.ravel()
-                    cPrec = eqPr.X.values.ravel()
+                    c_idx = 0 if self.reverse else 1
+                    xMatrixArray[gIndex] = cs_matrix.X[c_idx]
+                    xPrecipArray[gIndex] = cs_precip.X[c_idx]
+                    gIndex += 1
 
-                    #Get composition of element, use element index of 1 is the parent index is first alphabetically
-                    if self.reverse:
-                        xParent = cParent[0]
-                        xPrec = cPrec[0]
-                    else:
-                        xParent = cParent[1]
-                        xPrec = cPrec[1]
-
-                    xParentArray[g] = xParent
-                    xPrecArray[g] = xPrec
-                    break
-            if xParentArray[g] == 0:
-                xParentArray[g] = -1
-                xPrecArray[g] = -1
-
-        if len(gExtra) == 1:
-            return xParentArray[0], xPrecArray[0]
-        else:
-            return xParentArray, xPrecArray
-
+        return np.squeeze(xMatrixArray), np.squeeze(xPrecipArray)
 
     def _interfacialCompositionFromCurvature(self, T, gExtra = 0, precPhase = None):
         '''
@@ -227,91 +197,55 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if precPhase is None:
-            precPhase = self.phases[1]
-
-        if hasattr(gExtra, '__len__'):
-            gExtra = np.array(gExtra)
-        else:
-            gExtra = np.array([gExtra])
+        precPhase = self.phases[1] if precPhase is None else precPhase
+        gExtra = np.atleast_1d(gExtra)
 
         #Compute equilibrium at guess composition
-        cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: self.gOffset}
-        eq = equilibrium(self.db, self.elements, [self.phases[0], precPhase], cond, model=self.models,
-                        phase_records={self.phases[0]: self.phase_records[self.phases[0]], precPhase: self.phase_records[precPhase]},
-                        calc_opts = {'pdens': self.pDens})
+        cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: self.gOffset, v.N: 1}
+        phases, sub_models = self._setupSubModels(precPhase)
+        wks = Workspace(self.db, self.elements, phases, cond, models=sub_models,
+                        phase_record_factory = self.phase_records, calc_opts={'pdens': self.pDens})
+        chemical_potentials = np.squeeze(wks.eq.MU)
 
-        gm = eq.GM.values.ravel()
-        for g in gm:
-            eqSub = eq.where(eq.GM == g, drop=True)
-
-            ph = eqSub.Phase.values.ravel()
-            ph = ph[ph != '']
-
-            #Check if matrix and precipitate phase are stable, and check if there's no miscibility gaps
+        idx = 0
+        for _, cs_list in wks.enumerate_composition_sets():
+            ph = [cs.phase_record.phase_name for cs in cs_list]
             if len(ph) == 2 and self.phases[0] in ph and precPhase in ph:
-                #Cast values in state_variables to double for updating composition sets
-                state_variables = np.array([cond[v.GE], cond[v.N], cond[v.P], cond[v.T]], dtype=np.float64)
-                stable_phases = eqSub.Phase.values.ravel()
-                phase_amounts = eqSub.NP.values.ravel()
-                matrix_idx = np.where(stable_phases == self.phases[0])[0]
-                precip_idx = np.where(stable_phases == precPhase)[0]
+                cs_matrix = [cs for cs in cs_list if cs.phase_record.phase_name == self.phases[0]][0]
+                cs_precip = [cs for cs in cs_list if cs.phase_record.phase_name == precPhase][0]
+                chem_pot = chemical_potentials[idx]
 
-                cs_matrix = CompositionSet(self.phase_records[self.phases[0]])
-                if len(matrix_idx) > 1:
-                    matrix_idx = [matrix_idx[np.argmax(phase_amounts[matrix_idx])]]
-                cs_matrix.update(eqSub.Y.isel(vertex=matrix_idx).values.ravel()[:cs_matrix.phase_record.phase_dof],
-                                    phase_amounts[matrix_idx], state_variables)
-                cs_precip = CompositionSet(self.phase_records[precPhase])
-                if len(precip_idx) > 1:
-                    precip_idx = [precip_idx[np.argmax(phase_amounts[precip_idx])]]
-                cs_precip.update(eqSub.Y.isel(vertex=precip_idx).values.ravel()[:cs_precip.phase_record.phase_dof],
-                                    phase_amounts[precip_idx], state_variables)
+                #Free energy curvature
+                dMudxMatrix = np.squeeze(dMudX(chem_pot, cs_matrix, self.elements[0]))
+                dMudxPrecip = np.squeeze(dMudX(chem_pot, cs_precip, self.elements[0]))
 
-                chemical_potentials = eqSub.MU.values.ravel()
-                cPrec = eqSub.isel(vertex=precip_idx).X.values.ravel()
-                cParent = eqSub.isel(vertex=matrix_idx).X.values.ravel()
+                c_idx = 0 if self.reverse else 1
+                xMatrixEq = cs_matrix.X[c_idx]
+                xPrecipEq = cs_precip.X[c_idx]
 
-                dMudxParent = dMudX(chemical_potentials, cs_matrix, self.elements[0])
-                dMudxPrec = dMudX(chemical_potentials, cs_precip, self.elements[0])
-
-                #Get composition of element, use element index of 1 is the parent index is first alphabetically
-                if self.reverse:
-                    xParentEq = cParent[0]
-                    xPrecEq = cPrec[0]
+                #Compute composition of matrix and precipitate phase
+                # x_meq, x_peq - matrix and precipitate composition at bulk equilibrum
+                # x_m, x_p - matrix and precipitate composition for particle
+                # (x_m - x_meq) * dmu/dx * (x_peq - x_meq) = gExtra
+                # (x_m - x_meq) * dmu_m/dx = (x_p - x_peq) * dmu_p/dx
+                # If dmu/dx is 0 (or undefined), then we use the equilibrium compositions
+                if dMudxMatrix != 0:
+                    xMatrix = gExtra / dMudxMatrix / (xPrecipEq - xMatrixEq) + xMatrixEq
                 else:
-                    xParentEq = cParent[1]
-                    xPrecEq = cPrec[1]
+                    xMatrix = xMatrixEq*np.ones(gExtra.shape)
 
-                #dmudx are scalars here
-                dMudxParent = dMudxParent[0,0]
-                dMudxPrec = dMudxPrec[0,0]
-
-                if dMudxParent != 0:
-                    xParent = gExtra / dMudxParent / (xPrecEq - xParentEq) + xParentEq
+                if dMudxPrecip != 0:
+                    xPrecip = dMudxMatrix * (xMatrix - xMatrixEq) / dMudxPrecip + xPrecipEq
                 else:
-                    xParent = xParentEq*np.ones(len(gExtra))
+                    xPrecip = xPrecipEq*np.ones(gExtra.shape)
 
-                if dMudxPrec != 0:
-                    xPrec = dMudxParent * (xParent - xParentEq) / dMudxPrec + xPrecEq
-                else:
-                    xPrec = xPrecEq*np.ones(len(gExtra))
+                xMatrix = np.clip(xMatrix, 0, 1, dtype=np.float64)
+                xPrecip = np.clip(xPrecip, 0, 1, dtype=np.float64)
+                return np.squeeze(xMatrix), np.squeeze(xPrecip)
 
-                xParent[xParent < 0] = 0
-                xParent[xParent > 1] = 1
-                xPrec[xPrec < 0] = 0
-                xPrec[xPrec > 1] = 1
+            idx += 1
 
-                if len(gExtra) == 1:
-                    return xParent[0], xPrec[0]
-                else:
-                    return xParent, xPrec
-
-        if len(gExtra) == 1:
-            return -1, -1
-        else:
-            return -1*np.ones(len(gExtra)), -1*np.ones(len(gExtra))
-
+        return -1*np.ones(gExtra.shape), -1*np.ones(gExtra.shape)
 
     def plotPhases(self, ax, T, gExtra = 0, plotGibbsOffset = False, *args, **kwargs):
         '''
@@ -331,12 +265,14 @@ class BinaryThermodynamics (GeneralThermodynamics):
                 with no extra Gibbs free energy contributions
             Defualts to False
         '''
-        points = calculate(self.db, self.elements, self.phases[0], P=101325, T=T, GE=0, model=self.models, phase_records=self.phase_records, output='GM')
+        phases, sub_models = self._setupSubModels([self.phases[0]])
+        points = calculate(self.db, self.elements, phases[0], P=101325, T=T, GE=0, model=sub_models, phase_records=self.phase_records, output='GM')
         ax.scatter(points.X.sel(component=self.elements[1]), points.GM / 1000, label=self.phases[0], *args, **kwargs)
 
         #Add gExtra to precipitate phase
         for i in range(1, len(self.phases)):
-            points = calculate(self.db, self.elements, self.phases[i], P=101325, T=T, GE=0, model=self.models, phase_records=self.phase_records, output='GM')
+            phases, sub_models = self._setupSubModels([self.phases[i]])
+            points = calculate(self.db, self.elements, phases[0], P=101325, T=T, GE=0, model=sub_models, phase_records=self.phase_records, output='GM')
             ax.scatter(points.X.sel(component=self.elements[1]), (points.GM + gExtra) / 1000, label=self.phases[i], *args, **kwargs)
 
             #Plot non-offset precipitate phase

@@ -83,31 +83,19 @@ class EffectiveDiffusionFunctions:
         -------
         Effective diffusion distance (eps) to be used as (eps*R) in the growth rate equation
         '''
-        
         #Interpolation constant
         a = 1.2
-        
-        if hasattr(supersaturation, '__len__'):
-            diff = np.zeros(len(supersaturation))
-            indices = (supersaturation >= 0) & (supersaturation < 1)
-            diff[supersaturation >= 1] = 0
-            diff[supersaturation < 0] = 1
-            
-            lam = (1 - supersaturation[indices]**a) * self.lambdaLow(supersaturation[indices]) + (supersaturation[indices]**a) * self.lambdaHigh(supersaturation[indices])
-            diff[indices] = supersaturation[indices] / (2 * lam**2)
-            
-            return diff
-            
-        else:
-            if supersaturation < 0:
-                return 1
-            
-            if supersaturation >= 1:
-                return 0
-                
-            lam = (1 - supersaturation**a) * self.lambdaLow(supersaturation) + (supersaturation**a) * self.lambdaHigh(supersaturation)
 
-            return supersaturation / (2 * lam**2)
+        supersaturation = np.atleast_1d(supersaturation)
+        diff = np.zeros(len(supersaturation))
+        indices = (supersaturation >= 0) & (supersaturation < 1)
+        diff[supersaturation >= 1] = 0
+        diff[supersaturation < 0] = 1
+        
+        lam = (1 - supersaturation[indices]**a) * self.lambdaLow(supersaturation[indices]) + (supersaturation[indices]**a) * self.lambdaHigh(supersaturation[indices])
+        diff[indices] = supersaturation[indices] / (2 * lam**2)
+        
+        return np.squeeze(diff)
         
     def noDiffusionDistance(self, supersaturation):
         '''
@@ -122,7 +110,6 @@ class EffectiveDiffusionFunctions:
         -------
         1 or array of 1s
         '''
-        if hasattr(supersaturation, '__len__'):
-            return np.ones(len(supersaturation), dtype=np.float32)
-        else:
-            return 1
+        #TODO: this can be more efficient
+        supersaturation = np.atleast_1d(supersaturation)
+        return np.squeeze(np.ones(supersaturation.shape), dtype=np.float64)

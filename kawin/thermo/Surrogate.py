@@ -3,6 +3,8 @@ import pickle
 from scipy.interpolate import Rbf
 import scipy.spatial.distance as spd
 
+from kawin.thermo.MultiTherm import CurvatureOutput, GrowthRateOutput
+
 def generateTrainingPoints(*arrays):
     '''
     Creates all combinations of inputted arrays
@@ -85,7 +87,7 @@ class BinarySurrogate:
         
         #If no driving force or interfacial composition function is supplied, then use function from thermodynamics class
         if drivingForce is None:
-            self.drivingForceFunction = lambda x, T, returnComp=False, training = True: self.binTherm.getDrivingForce(x, T, self.precPhase, returnComp, training)
+            self.drivingForceFunction = lambda x, T, removeCache = True: self.binTherm.getDrivingForce(x, T, self.precPhase, removeCache)
         else:
             self.drivingForceFunction = drivingForce
         
@@ -209,7 +211,7 @@ class BinarySurrogate:
         n = 0   #Index for precCompIndices (needs to correspond to indices self.drivingForce array)
         for t in temperature:
             for x in comps:
-                dG, xP = self.drivingForceFunction(x, t, returnComp = True)
+                dG, xP = self.drivingForceFunction(x, t)
 
                 #If driving force can be obtained (generally True)
                 if dG is not None:
@@ -305,7 +307,7 @@ class BinarySurrogate:
         
         self._createDGSurrogate()            
         
-    def getDrivingForce(self, x, T, returnComp = False):
+    def getDrivingForce(self, x, T):
         '''
         Gets driving force from surrogate models
         
@@ -315,49 +317,29 @@ class BinarySurrogate:
             Composition
         T : float or array of floats
             Temperature, must be same length as x
-        returnComp : bool (optional)
-            Returns precipitate composition if True (defaults to False)
         
         Returns
         -------
         (driving force, precipitate composition)
         Both will be same shape as x and T
         Positive driving force means that precipitate will form
-        precipitate composition will be None if returnComp is False
+        precipitate composition will be None if dG is negative
         '''
         if self.TDGscale is None:
             raise Exception("Driving force has not been trained.")
 
-        #Convert arrays to Numpy arrays for math operations
-        if hasattr(x, '__len__'):
-            x = np.array(x)
-        if hasattr(T, '__len__'):
-            T = np.array(T)
+        x = np.atleast_1d(x)
+        T = np.atleast_1d(T)
 
         if self.linearDG:
             dG = self.SurrogateDrivingForce(x / self.XDGscale, T / self.TDGscale)
-            
-            if returnComp:
-                xP = self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale)
-                return dG, xP
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
-                
+            xP = self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale)
+            return dG, xP
         else:
             dG = self.SurrogateDrivingForce(x, T / self.TDGscale)
-            
-            if returnComp:
-                xP = self.SurrogatePrecComp(x, T / self.TDGscale)
+            xP = self.SurrogatePrecComp(x, T / self.TDGscale)
 
-                return dG, xP
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
+        return np.squeeze(dG), np.squeeze(xP)
         
     def trainInterfacialComposition(self, temperature, freeEnergy, function='linear', epsilon=1, smooth=0, scale = 'linear'):
         '''
@@ -463,7 +445,7 @@ class BinarySurrogate:
         for t in temperature:
             for x in self.uniqueXPrec:
                 #Driving force calcs can be interpreted as the maximum free energy that can be contributed by the Gibbs-Thomson effect
-                dG, _ = self.drivingForceFunction(x, t, returnComp = False)
+                dG, _ = self.drivingForceFunction(x, t)
 
                 #if driving force can be obtained (generally True)
                 if dG is not None:
@@ -597,33 +579,22 @@ class BinarySurrogate:
         #   for any values of gExtra less than the lowest training point, which can lead to non-realistic
         #   values in the precipitate simulation (i.e. precipitates growing in an unsaturated matrix).
         #   Just train more points at lower gExtra values (larger radius sizes)
-        if hasattr(gExtra, '__len__'):
-            gExtra = np.array(gExtra)
-            gExtra[1 / (gExtra * self.GICscale) > np.amax(self.ICcoords[:,1])] = 1 / (np.amax(self.ICcoords[:,1]) * self.GICscale)
-        else:
-            if gExtra == 0 or (1 / (gExtra * self.GICscale)) > np.amax(self.ICcoords[:,1]):
-                gExtra = 1 / (np.amax(self.ICcoords[:,1]) * self.GICscale)
-        if hasattr(T, '__len__'):
-            T = np.array(T)
+        gExtra = np.atleast_1d(gExtra)
+        gExtra[(gExtra*self.GICscale) < 1/np.amax(self.ICcoords[:,1])] = 1 / (np.amax(self.ICcoords[:,1]) * self.GICscale)
 
         #If gExtra is array and T isn't, then convert T to array
         #This is to keep consistent with Thermodynamics counterpart
-        if hasattr(gExtra, '__len__') and not hasattr(T, '__len__'):
-            T = T * np.ones(len(gExtra))
+        T = np.atleast_1d(T)
+        if len(gExtra) > 1 and len(T) == 1:
+            T = T*np.ones(gExtra.shape)
 
         xM, xP = self.SurrogateParent(T / self.TICscale, 1 / (gExtra * self.GICscale)), self.SurrogatePrec(T / self.TICscale, 1 / (gExtra * self.GICscale))
-        
         dG = self.SurrogateG(xP / self.XGscale, T / self.TICscale)
-        if hasattr(xM, '__len__'):
-            noneVals = (dG < gExtra)
-            xM[noneVals] = -1
-            xP[noneVals] = -1
-        else:
-            if dG < gExtra:
-                xM = -1
-                xP = -1
+        noneVals = (dG < gExtra)
+        xM[noneVals] = -1
+        xP[noneVals] = -1
                     
-        return xM, xP
+        return np.squeeze(xM), np.squeeze(xP)
 
     def trainInterdiffusivity(self, comps, temperature, function='linear', epsilon=1, smooth=0, scale='linear'):
         '''
@@ -759,19 +730,16 @@ class BinarySurrogate:
         -------
         diffusivity (same shape as x and T)
         '''
-        #Convert arrays to numpy arrays for math operations
-        if hasattr(x, '__len__'):
-            x = np.array(x)
-        if hasattr(T, '__len__'):
-            T = np.array(T)
+        x = np.atleast_1d(x)
+        T = np.atleast_1d(T)
 
         if self.XDiffscale is None:
             raise Exception("Diffusivity has not been trained.")
 
         if self.singleXDiff:
-            return self.SurrogateDiff(T / self.TDiffscale)
+            return np.squeeze(self.SurrogateDiff(T / self.TDiffscale))
         else:
-            return self.SurrogateDiff(x / self.XDiffscale, T / self.TDiffscale)
+            return np.squeeze(self.SurrogateDiff(x / self.XDiffscale, T / self.TDiffscale))
         
     def drivingForceTrainingTemperature(self):
         '''
@@ -911,9 +879,7 @@ class MulticomponentSurrogate:
         
         #Grab driving force and curvature function from thermodynamics class if not supplied
         if drivingForce is None:
-            #self.drivingForceFunction = self.therm.getDrivingForce
-            self.drivingForceFunction = lambda x, T, returnComp=False, training = True: self.therm.getDrivingForce(x, T, self.precPhase, returnComp, training)
-            #self.drivingForceFunction = lambda x, T, returnComp=False: self.therm.drivingForceFromCurvature(x, T, self.precPhase, returnComp)
+            self.drivingForceFunction = lambda x, T, removeCache = True: self.therm.getDrivingForce(x, T, self.precPhase, removeCache)
         else:
             self.drivingForceFunction = drivingForce
 
@@ -927,7 +893,7 @@ class MulticomponentSurrogate:
         if curvature is None:
             #self.curvature = self.therm.curvatureFactor
             #self.curvature = lambda x, T, training = True: self.therm.curvatureFactor(x, T, self.precPhase, training)
-            self.curvature = lambda x, T, training = True: self.therm._curvatureWithSearch(x, T, self.precPhase, training)
+            self.curvature = lambda x, T, removeCache = True: self.therm._curvatureWithSearch(x, T, self.precPhase, removeCache)
         else:
             self.curvature = curvature
 
@@ -1040,7 +1006,7 @@ class MulticomponentSurrogate:
         n = 0   #Index for precCompIndices (needs to correspond to indices self.drivingForce array)
         for t in temperature:
             for x in comps:
-                dG, xP = self.drivingForceFunction(x, t, returnComp = True)
+                dG, xP = self.drivingForceFunction(x, t)
                 
                 #If driving force can be obtained (generally True)
                 if dG is not None:
@@ -1055,7 +1021,7 @@ class MulticomponentSurrogate:
                         self.precCompIndices.append(n)
                         
                         xMeq, xPeq = self.interfacialCompositionFunction(x, t, 0)
-                        if xMeq is not None:
+                        if any(xMeq == -1):
                             self.drivingForce.append(0)
                             self.dGcoords.append(np.concatenate((xMeq[1:], [t])))
                             n += 1
@@ -1150,7 +1116,7 @@ class MulticomponentSurrogate:
         
         self._createDGSurrogate()
         
-    def getDrivingForce(self, x, T, returnComp = False):
+    def getDrivingForce(self, x, T):
         '''
         Gets driving force from surrogate models
         
@@ -1169,33 +1135,15 @@ class MulticomponentSurrogate:
         if self.TDGscale is None:
             raise Exception("Driving force has not been trained.")
 
-        if hasattr(T, '__len__'):
-            T = np.array(T)
-        x = np.array(x)
-        if x.ndim == 2:
-            x = x.T
+        T = np.atleast_1d(T)
+        x = np.atleast_2d(x).T
 
         if self.linearDG:
             dG = self.SurrogateDrivingForce(*(x / self.XDGscale), T / self.TDGscale)
-            
-            if returnComp:
-                return dG, self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale).T
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
-            
+            return np.squeeze(dG), np.squeeze(self.SurrogatePrecComp(x / self.XDGscale, T / self.TDGscale).T)
         else:
             dG = self.SurrogateDrivingForce(x, T / self.TDGscale)
-            
-            if returnComp:
-                return dG, self.SurrogatePrecComp(x, T / self.TDGscale)
-            else:
-                if hasattr(dG, '__len__'):
-                    return dG, np.full(dG.shape, None)
-                else:
-                    return dG, None
+            return np.squeeze(dG), np.squeeze(self.SurrogatePrecComp(x, T / self.TDGscale))
 
     def trainCurvature(self, comps, temperature, function='linear', epsilon=1, smooth=0, scale='linear'):
         '''
@@ -1252,20 +1200,18 @@ class MulticomponentSurrogate:
         for t in temperature:
             for x in comps:
                 results = self.curvature(x, t)
-                #dc, mc, gba, beta, ca, cb = self.curvature(x, t)
 
                 if results is not None:
-                    dc, mc, gba, beta, ca, cb = results
                     #Since Dc, Mc and Gba is constant for a given tie-line, add 3 training data points (at bulk compostion and phase boundaries)
                     #This should give more accurate values at very small or very large supersaturations without having to calculate a lot of training data
-                    compCoords = [x, ca, cb]
+                    compCoords = [x, results.c_eq_alpha, results.c_eq_beta]
                     for i in range(3):
-                        self.Dc.append(dc)
-                        self.Mc.append(mc)
-                        self.Gba.append(gba)
-                        self.beta.append(beta)
-                        self.Ca.append(ca)
-                        self.Cb.append(cb)
+                        self.Dc.append(results.dc)
+                        self.Mc.append(results.mc)
+                        self.Gba.append(results.gba)
+                        self.beta.append(results.beta)
+                        self.Ca.append(results.c_eq_alpha)
+                        self.Cb.append(results.c_eq_beta)
                         self.ICcoords.append(np.concatenate((compCoords[i], [t])))
 
         self.Dc = np.array(self.Dc)
@@ -1407,11 +1353,8 @@ class MulticomponentSurrogate:
             mc = self.SurrogateMc(*(x / self.XICscale), T / self.TICscale)
             gba = self.SurrogateGba(x / self.XICscale, T / self.TICscale)
             beta = self.SurrogateBeta(*(x / self.XICscale), T / self.TICscale)
-            #beta = self.SurrogateBeta(x, T / self.TICscale)
             ca = self.SurrogateCa(x / self.XICscale, T / self.TICscale)
             cb = self.SurrogateCb(x / self.XICscale, T / self.TICscale)
-            
-            return dc, mc, gba, beta, ca, cb
             
         else:
             dc = self.SurrogateDc(x, T / self.TICscale)
@@ -1421,7 +1364,12 @@ class MulticomponentSurrogate:
             ca = self.SurrogateCa(x, T / self.TICscale)
             cb = self.SurrogateCb(x, T / self.TICscale)
             
-            return dc, mc, gba, beta, ca, cb
+        return CurvatureOutput(dc=np.squeeze(dc), 
+                                mc=np.squeeze(mc), 
+                                gba=np.squeeze(gba), 
+                                beta=np.squeeze(beta), 
+                                c_eq_alpha=np.squeeze(ca), 
+                                c_eq_beta=np.squeeze(cb))
 
     def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, searchDir = None):
         '''
@@ -1452,43 +1400,30 @@ class MulticomponentSurrogate:
         if self.TICscale is None:
             raise Exception("Curvature needs to be trained to calculated interfacial composition.")
 
-        if hasattr(R, '__len__'):
-            R = np.array(R)
-        if hasattr(gExtra, '__len__'):
-            gExtra = np.array(gExtra)
-
-        dc, mc, gba, beta, ca, cb = self.getCurvature(x, T)
+        R = np.atleast_1d(R)
+        gExtra = np.atleast_1d(gExtra)
+        x = np.array(x)
+        T = np.array(T)
+        curv_results = self.getCurvature(x, T)
 
         Rdiff = (dG - gExtra)
+        gr = (curv_results.mc / R) * Rdiff
 
-        gr = (mc / R) * Rdiff
+        calpha = x[np.newaxis,:] - np.outer(Rdiff, curv_results.dc)
+        dca = calpha - curv_results.c_eq_alpha[np.newaxis,:]
+        dcb = np.matmul(curv_results.gba, dca.T).T
+        cbeta = curv_results.c_eq_beta[np.newaxis,:] + dcb
 
-        if hasattr(Rdiff, '__len__'):
-            calpha = np.zeros((len(Rdiff), len(self.elements)))
-            dca = np.zeros((len(Rdiff), len(self.elements)))
-            cbeta = np.zeros((len(Rdiff), len(self.elements)))
-            for i in range(len(self.elements)):
-                calpha[:,i] = x[i] - dc[i] * Rdiff
-                dca[:,i] = calpha[:,i] - ca[i]
+        calpha = np.clip(calpha, 0, 1)
+        cbeta = np.clip(cbeta, 0, 1)
 
-            dcb = np.matmul(gba, dca.T)
-            for i in range(len(self.elements)):
-                cbeta[:,i] = cb[i] + dcb[i,:]
+        return GrowthRateOutput(growth_rate=np.squeeze(gr), 
+                                c_alpha=np.squeeze(calpha), 
+                                c_beta=np.squeeze(cbeta), 
+                                c_eq_alpha=np.squeeze(curv_results.c_eq_alpha), 
+                                c_eq_beta=np.squeeze(curv_results.c_eq_beta))
 
-            calpha[calpha < 0] = 0
-            cbeta[cbeta < 0] = 0
-
-            return gr, calpha, cbeta, ca, cb
-        else:
-            calpha = x - dc * Rdiff
-            cbeta = cb + np.matmul(gba, (calpha - ca)).flatten()
-
-            calpha[calpha < 0] = 0
-            cbeta[cbeta < 0] = 0
-
-            return gr, calpha, cbeta, ca, cb
-
-    def impingementFactor(self, x, T):
+    def impingementFactor(self, x, T, searchDir = None):
         '''
         Calculates impingement factor for nucleation rate calculations
 

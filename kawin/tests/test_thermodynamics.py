@@ -28,13 +28,16 @@ NiAlCrThermDiff.setEQSamplingDensity(500)
 AlCrNiTherm.setDFSamplingDensity(2000)
 AlCrNiTherm.setEQSamplingDensity(500)
 
+def test_load_database_without_mobility():
+    therm_nomob = BinaryThermodynamics(ALZR_TDB_NO_MOB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'])
+
 def test_DG_binary():
     '''
     Checks value of binary driving force calculation
 
     Driving force value was updated due to switch from approximate to tangent method
     '''
-    dg, _ = AlZrTherm.getDrivingForce(0.004, 673.15, training = True)
+    dg, _ = AlZrTherm.getDrivingForce(0.004, 673.15, removeCache = True)
     assert_allclose(dg, 6346.930428, atol=0, rtol=1e-3)
 
 def test_DG_binary_output():
@@ -45,15 +48,33 @@ def test_DG_binary_output():
         (array, array) input -> array
     '''
     methods = ['sampling', 'approximate', 'curvature', 'tangent']
+    outputs = {
+        'sampling': (6345.930428259977, 
+                     0.25, 
+                     np.array([6345.93042826, 6612.95334136], dtype=np.float64), 
+                     np.array([0.25, 0.25], dtype=np.float64)),
+        'approximate': (6345.930428259977, 
+                        0.25, 
+                        np.array([6345.93042826, 6612.95334136], dtype=np.float64), 
+                        np.array([0.25, 0.25], dtype=np.float64)),
+        'curvature': (107614.58901380893, 
+                      0.25, 
+                      np.array([107614.58901381, 118502.7444224], dtype=np.float64), 
+                      np.array([0.25, 0.25], dtype=np.float64)),
+        'tangent': (6345.930428259977, 
+                    0.25, 
+                    np.array([6345.93042826, 6612.95334136], dtype=np.float64), 
+                    np.array([0.25, 0.25], dtype=np.float64)),
+    }
     for m in methods:
         AlZrTherm.setDrivingForceMethod(m)
-        dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, returnComp=True, training = True)
-        dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], returnComp=True, training = True)
+        dg, xP = AlZrTherm.getDrivingForce(0.004, 673.15, removeCache = True)
+        dgarray, xParray = AlZrTherm.getDrivingForce([0.004, 0.005], [673.15, 683.15], removeCache = True)
 
-        assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
-        assert np.isscalar(xP) or (type(xP) == np.ndarray and xP.ndim == 0)
-        assert hasattr(dgarray, '__len__') and len(dgarray) == 2
-        assert hasattr(xParray, '__len__') and len(xParray) == 2
+        assert_allclose(dg, outputs[m][0], atol=0, rtol=1e-3)
+        assert_allclose(xP, outputs[m][1], atol=0, rtol=1e-3)
+        assert_allclose(dgarray, outputs[m][2], atol=0, rtol=1e-3)
+        assert_allclose(xParray, outputs[m][3], atol=0, rtol=1e-3)
 
     AlZrTherm.setDrivingForceMethod('tangent')
 
@@ -63,7 +84,7 @@ def test_DG_ternary():
 
     Driving force value was updated due to switch from approximate to tangent method
     '''
-    dg, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
+    dg, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, removeCache = True)
     assert_allclose(dg, 265.779087, atol=0, rtol=1e-3)
 
 def test_DG_ternary_output():
@@ -73,15 +94,34 @@ def test_DG_ternary_output():
         (array, scalar) -> scalar
         (2D array, array) -> array
     '''
+    outputs = {
+        'sampling': (149.3270234841475, 
+                     np.array([0.05152576, 0.19847424], dtype=np.float64), 
+                     np.array([149.32702348, 177.46915929, 201.31219334], dtype=np.float64), 
+                     np.array([[0.05152576, 0.19847424], [0.05215108, 0.19784892], [0.05265133, 0.19734867]], dtype=np.float64)),
+        'approximate': (244.01202650912455, 
+                        np.array([0.06160901, 0.17315461], dtype=np.float64), 
+                        np.array([244.01202651, 266.01999011, 284.72675077], dtype=np.float64), 
+                        np.array([[0.06160901, 0.17315461], [0.06381704, 0.17185646], [0.06596566, 0.17071728]], dtype=np.float64)),
+        'curvature': (260.3790192099628, 
+                      np.array([0.06160901, 0.17315461], dtype=np.float64), 
+                      np.array([260.37901921, 286.87854217, 310.28588738], dtype=np.float64), 
+                      np.array([[0.06160901, 0.17315461], [0.06381704, 0.17185646], [0.06596566, 0.17071728]], dtype=np.float64)),
+        'tangent': (265.7790871298183, 
+                    np.array([0.05474014, 0.18714878], dtype=np.float64), 
+                    np.array([265.77908713, 292.39934163, 315.57844117], dtype=np.float64), 
+                    np.array([[0.05474014, 0.18714878], [0.05580252, 0.18724615], [0.05681591, 0.18734315]], dtype=np.float64)),
+    }
     methods = ['sampling', 'approximate', 'curvature', 'tangent']
     for m in methods:
         NiCrAlTherm.setDrivingForceMethod(m)
-        dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, returnComp=True, training = True)
-        dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], returnComp=True, training = True)
-        assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
-        assert xP.ndim == 1 and len(xP) == 2
-        assert hasattr(dgarray, '__len__')
-        assert xParray.shape == (3, 2)
+        dg, xP = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, removeCache = True)
+        dgarray, xParray = NiCrAlTherm.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], removeCache = True)
+        
+        assert_allclose(dg, outputs[m][0], atol=0, rtol=1e-3)
+        assert_allclose(xP, outputs[m][1], atol=0, rtol=1e-3)
+        assert_allclose(dgarray, outputs[m][2], atol=0, rtol=1e-3)
+        assert_allclose(xParray, outputs[m][3], atol=0, rtol=1e-3)
 
     NiCrAlTherm.setDrivingForceMethod('tangent')
 
@@ -92,9 +132,9 @@ def test_DG_ternary_order():
         Input elements as [Ni, Al, Cr] should require composition to be [Al, Cr]
         Input elements as [Al, Cr, Ni] should require composition to be [Cr, Ni]
     '''
-    dg1, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, training = True)
-    dg2, _ = NiAlCrTherm.getDrivingForce([0.1, 0.08], 1073.15, training = True)
-    dg3, _ = AlCrNiTherm.getDrivingForce([0.08, 0.82], 1073.15, training = True)
+    dg1, _ = NiCrAlTherm.getDrivingForce([0.08, 0.1], 1073.15, removeCache = True)
+    dg2, _ = NiAlCrTherm.getDrivingForce([0.1, 0.08], 1073.15, removeCache = True)
+    dg3, _ = AlCrNiTherm.getDrivingForce([0.08, 0.82], 1073.15, removeCache = True)
     assert_allclose(dg1, dg2, atol=0, rtol=1e-3)
     assert_allclose(dg2, dg3, atol=0, rtol=1e-3)
 
@@ -121,18 +161,32 @@ def test_IC_binary_output():
         (scalar, array) -> (array, array)   Special case where T is scalar
     '''
     methods = ['curvature', 'equilibrium']
+    outputs = {
+        'curvature': (0.00023491993105882053,
+                      0.25,
+                      np.array([0.00023492, 0.00214397], dtype=np.float64),
+                      np.array([0.25, 0.25], dtype=np.float64),
+                      np.array([0.00023492, 0.00188604], dtype=np.float64),
+                      np.array([0.25, 0.25], dtype=np.float64)),
+        'equilibrium': (0.0016991452009952736,
+                      0.25,
+                      np.array([0.00169915, -1], dtype=np.float64),
+                      np.array([0.25, -1], dtype=np.float64),
+                      np.array([0.00169915, -1], dtype=np.float64),
+                      np.array([0.25, -1], dtype=np.float64))
+    }
     for m in methods:
         AlZrTherm.setInterfacialMethod(m)
         xm, xp = AlZrTherm.getInterfacialComposition(673.15, 5000)
         xmarray, xparray = AlZrTherm.getInterfacialComposition([673.15, 683.15], [5000, 50000])
         xmarray2, xparray2 = AlZrTherm.getInterfacialComposition(673.15, [5000, 50000])
 
-        assert np.isscalar(xm) or (type(xm) == np.ndarray and xm.ndim == 0)
-        assert np.isscalar(xp) or (type(xp) == np.ndarray and xp.ndim == 0)
-        assert hasattr(xmarray, '__len__') and len(xmarray) == 2
-        assert hasattr(xparray, '__len__') and len(xparray) == 2
-        assert hasattr(xmarray2, '__len__') and len(xmarray2) == 2
-        assert hasattr(xparray2, '__len__') and len(xparray2) == 2
+        assert_allclose(xm, outputs[m][0], atol=0, rtol=1e-3)
+        assert_allclose(xp, outputs[m][1], atol=0, rtol=1e-3)
+        assert_allclose(xmarray, outputs[m][2], atol=0, rtol=1e-3)
+        assert_allclose(xparray, outputs[m][3], atol=0, rtol=1e-3)
+        assert_allclose(xmarray2, outputs[m][4], atol=0, rtol=1e-3)
+        assert_allclose(xparray2, outputs[m][5], atol=0, rtol=1e-3)
 
     AlZrTherm.setInterfacialMethod('equilibrium')
 
@@ -152,8 +206,8 @@ def test_Mob_binary_output():
     '''
     dnkj = AlZrTherm.getInterdiffusivity(0.004, 673.15)
     dnkjarray = AlZrTherm.getInterdiffusivity([0.004, 0.005], [673.15, 683.15])
-    assert np.isscalar(dnkj) or (type(dnkj) == np.ndarray and dnkj.ndim == 0)
-    assert hasattr(dnkjarray, '__len__') and len(dnkjarray) == 2
+    assert_allclose(dnkj, 1.2803441194011191e-20, atol=0, rtol=1e-3)
+    assert_allclose(dnkjarray, np.array([1.28034412e-20, 2.41102630e-20], dtype=np.float64), atol=0, rtol=1e-3)
 
 def test_Mob_ternary():
     '''
@@ -171,9 +225,12 @@ def test_Mob_ternary_output():
     '''
     dnkj = NiCrAlTherm.getInterdiffusivity([0.08, 0.1], 1073.15)
     dnkjarray = NiCrAlTherm.getInterdiffusivity([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15])
-
-    assert dnkj.shape == (2, 2)
-    assert dnkjarray.shape == (3, 2, 2)
+    dnkj_desired = np.array([[8.23950865e-18, 4.43371333e-18], [2.33938485e-17, 5.04911642e-17]], dtype=np.float64)
+    dnkjarray_desired = np.array([[[8.23950865e-18, 4.43371333e-18], [2.33938485e-17, 5.04911642e-17]],
+                                  [[9.88803167e-18, 5.48849162e-18], [2.70880749e-17, 5.90341424e-17]], 
+                                  [[1.18344487e-17, 6.75930949e-18], [3.13266687e-17, 6.89291270e-17]]], dtype=np.float64)
+    assert_allclose(dnkj, dnkj_desired, atol=0, rtol=1e-3)
+    assert_allclose(dnkjarray, dnkjarray_desired, atol=0, rtol=1e-3)
 
 def test_Mob_order():
     '''
@@ -191,9 +248,16 @@ def test_Curv_ternary():
     '''
     Checks that order of elements does not matter for curvature calculations
     '''
-    n1, d1, g1, b1, ca1, cb1 = NiCrAlTherm.curvatureFactor([0.08, 0.1], 1073.15, training = True)
-    n2, d2, g2, b2, ca2, cb2 = NiAlCrTherm.curvatureFactor([0.1, 0.08], 1073.15, training = True)
-    n3, d3, g3, b3, ca3, cb3 = AlCrNiTherm.curvatureFactor([0.08, 0.82], 1073.15, training = True)
+    n1, d1, g1, b1, ca1, cb1 = NiCrAlTherm.curvatureFactor([0.08, 0.1], 1073.15, removeCache = True)
+    n2, d2, g2, b2, ca2, cb2 = NiAlCrTherm.curvatureFactor([0.1, 0.08], 1073.15, removeCache = True)
+    n3, d3, g3, b3, ca3, cb3 = AlCrNiTherm.curvatureFactor([0.08, 0.82], 1073.15, removeCache = True)
+
+    assert_allclose(n1, np.array([-8.01953749e-05,  6.86043210e-05], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(d1, 1.6188271145399225e-20, atol=0, rtol=1e-3)
+    assert_allclose(g1, np.array([[0.19083364, -0.60826741], [ 0.31993136, 1.59959791]], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(b1, 1.3680751771342657e-16, atol=0, rtol=1e-3)
+    assert_allclose(ca1, np.array([0.08275715, 0.08903276], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(cb1, np.array([0.06160901, 0.17315461], dtype=np.float64), atol=0, rtol=1e-3)
 
     n2[[0,1]] = n2[[1,0]]
     g2[[0,1],:] = g2[[1,0],:]
@@ -216,15 +280,40 @@ def test_Curv_ternary():
     assert_allclose(cb1, cb2, atol=0, rtol=1e-3)
     assert_allclose(cb1, cb3change, atol=0, rtol=1e-3)
 
+def test_Curv_in_single_phase():
+    '''
+    Checks that curvature factors returns None in a single phase region
+    But, if a search direction is supplied, then a two-phase region can be found
+
+    We will not check the values here since the search direction is mainly to get
+    an approximation for the curvature factor when its undefined and to get a
+    negative growth rate for the precipitates
+    '''
+    NiCrAlTherm.setDrivingForceMethod('tangent')
+    x0 = [0.01, 0.01]
+    T = 1073.15
+    curv_factors_invalid = NiCrAlTherm.curvatureFactor(x0, T, removeCache = True)
+
+    dg, xb = NiCrAlTherm.getDrivingForce(x0, T, removeCache=True)
+    curv_factors = NiCrAlTherm.curvatureFactor(x0, T, removeCache=True, searchDir=xb)
+
+    assert curv_factors_invalid is None
+    assert curv_factors is not None
+
 def test_IC_ternary():
     '''
     Checks that order does not matter for growth and interfacial composition calculations
     Ignore equilibrium compositions since growth and interfacial compositions depend on them anyways
         If growth and interfacial compositions are correct, then equilibrium compositions are also correct
     '''
-    g1, ca1, cb1, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
-    g2, ca2, cb2, _, _ = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, training = True)
-    g3, ca3, cb3, _, _ = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, training = True)
+    growth1 = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    growth2 = NiAlCrTherm.getGrowthAndInterfacialComposition([0.1, 0.08], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    growth3 = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    #g3, ca3, cb3, _, _ = AlCrNiTherm.getGrowthAndInterfacialComposition([0.08, 0.82], 1073.15, 900, 1e-9, 1000, removeCache = True)
+
+    g1, ca1, cb1 = growth1.growth_rate, growth1.c_alpha, growth1.c_beta
+    g2, ca2, cb2 = growth2.growth_rate, growth2.c_alpha, growth2.c_beta
+    g3, ca3, cb3 = growth3.growth_rate, growth3.c_alpha, growth3.c_beta
 
     #Change ca2,cb2 from [AL, CR] to [CR, AL]
     ca2[[0,1]] = ca2[[1,0]]
@@ -235,6 +324,8 @@ def test_IC_ternary():
     cb3change = [cb3[0], 1-cb3[0]-cb3[1]]
 
     assert_allclose(g1, -1.618827e-09, atol=0, rtol=1e-3)
+    assert_allclose(ca1, np.array([0.07198046, 0.10686043], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(cb1, np.array([0.04870846, 0.19822392], dtype=np.float64), atol=0, rtol=1e-3)
 
     assert_allclose(g1, g2, atol=0, rtol=1e-3)
     assert_allclose(g1, g3, atol=0, rtol=1e-3)
@@ -250,16 +341,23 @@ def test_IC_ternary_output():
         (array, scalar, scalar, scalar, scalar) -> (scalar, array, array)
         (array, scalar, scalar, array, array) -> (array, 2D array, 2D array)
     '''
-    g, ca, cb, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, training = True)
-    garray, caarray, cbarray, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], training = True)
+    growth = NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, 1e-9, 1000, removeCache = True)
+    growth_array= NiCrAlTherm.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500], removeCache = True)
 
-    assert np.isscalar(g) or (type(g) == np.ndarray and g.ndim == 0)
-    assert hasattr(ca, '__len__') and len(ca) == 2
-    assert hasattr(cb, '__len__') and len(cb) == 2
-    assert hasattr(garray, '__len__') and len(garray) == 3
-    assert caarray.shape == (3, 2)
-    assert cbarray.shape == (3, 2)
+    g, ca, cb = growth.growth_rate, growth.c_alpha, growth.c_beta
+    garray, caarray, cbarray = growth_array.growth_rate, growth_array.c_alpha, growth_array.c_beta
 
+    assert_allclose(g, -1.6188271145399285e-09, atol=0, rtol=1e-3)
+    assert_allclose(ca, np.array([0.07198046, 0.10686043], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(cb, np.array([0.04870846, 0.19822392], dtype=np.float64), atol=0, rtol=1e-3)
+
+    assert_allclose(garray, np.array([-3.56141965e-08, -1.61882711e-09, 3.23765423e-09], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(caarray, np.array([[0, 0.17546475],
+                                       [0.07198046, 0.10686043],
+                                       [0.11207815, 0.07255827]], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(cbarray, np.array([[0, 0.28230623],
+                                       [0.04870846, 0.19822392],
+                                       [0.07722533, 0.15618276]], dtype=np.float64), atol=0, rtol=1e-3)
 
 def test_initialize_with_pycalphad_database():
     """
@@ -290,8 +388,9 @@ def test_Mob_tracer_ternary_output():
     td = NiCrAlTherm.getTracerDiffusivity([0.08, 0.1], 1073.15)
     tdarray = NiCrAlTherm.getTracerDiffusivity([[0.08, 0.1], [0.085, 0.1]], [1073.15, 1078.15])
 
-    assert td.shape == (3,)
-    assert tdarray.shape == (2, 3)
+    assert_allclose(td, np.array([8.03946597e-18, 5.46554241e-18, 1.52099350e-17], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(tdarray, np.array([[8.03946597e-18, 5.46554241e-18, 1.52099350e-17],
+                                       [9.33087557e-18, 6.51277012e-18, 1.78317544e-17]], dtype=np.float64), atol=0, rtol=1e-3)
 
 def test_Diff_ternary():
     '''
@@ -310,8 +409,10 @@ def test_Diff_ternary_output():
     dnkj = NiCrAlThermDiff.getInterdiffusivity([0.08, 0.1], 1073.15)
     dnkjarray = NiCrAlThermDiff.getInterdiffusivity([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15])
 
-    assert dnkj.shape == (2, 2)
-    assert dnkjarray.shape == (3, 2, 2)
+    assert_allclose(dnkj, np.array([[3.09930669e-08, 0.00000000e+00], [0.00000000e+00, 1.95822648e-08]], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(dnkjarray, np.array([[[3.09930669e-08, 0.00000000e+00], [0.00000000e+00, 1.95822648e-08]],
+                                         [[3.16573173e-08, 0.00000000e+00], [0.00000000e+00, 2.03078351e-08]],
+                                         [[3.23294741e-08, 0.00000000e+00], [0.00000000e+00, 2.10532167e-08]]], dtype=np.float64), atol=0, rtol=1e-3)
 
 def test_Diff_order():
     '''
@@ -342,5 +443,7 @@ def test_Diff_tracer_ternary_output():
     td = NiCrAlTherm.getTracerDiffusivity([0.08, 0.1], 1073.15)
     tdarray = NiCrAlTherm.getTracerDiffusivity([[0.08, 0.1], [0.085, 0.1]], [1073.15, 1078.15])
 
-    assert td.shape == (3,)
-    assert tdarray.shape == (2, 3)
+    assert_allclose(td, np.array([8.03946597e-18, 5.46554241e-18, 1.52099350e-17], dtype=np.float64), atol=0, rtol=1e-3)
+    assert_allclose(tdarray, np.array([[8.03946597e-18, 5.46554241e-18, 1.52099350e-17],
+                                       [9.33087557e-18, 6.51277012e-18, 1.78317544e-17]], dtype=np.float64), atol=0, rtol=1e-3)
+

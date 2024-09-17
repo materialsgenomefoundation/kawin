@@ -64,6 +64,62 @@ PARAMETER DF(FCC_A1&ZR,*:VA;0) 298.15 -2.56655 * 8.314 * T; 6000 N !
 PARAMETER DQ(FCC_A1&ZR,*:VA;0) 298.15 -242000; 6000 N !
 """
 
+ALZR_TDB_NO_MOB = """
+$Al-Zr database without any mobility parameters
+$From T. Wang, Z. Jin, J. Zhao, Journal of Phase Equilibria, 22 (2001) p. 544
+$
+TEMP_LIM 298.15 6000 !
+$Element     Standard state       mass [g/mol]     H_298      S_298
+ELEMENT  /-   ELECTRON_GAS        0.0             0.0         0.0 !
+ELEMENT  VA   VACUUM              0.0000E+00      0.0000E+00  0.0000E+00 !
+ELEMENT  AL   FCC_A1              2.6982E+01      4.5773E+03  2.8322E+01 !
+ELEMENT  ZR   HCP_A3              9.1224E+01      5.5663E+03  3.9181E+01 !
+$
+$
+ TYPE_DEFINITION % SEQ *!
+$
+$PHASE AL3ZR
+PHASE AL3ZR % 2 0.75 0.25 !
+CONST AL3ZR : AL : ZR : !
+$
+$PHASE FCC_A1
+PHASE FCC_A1 % 2 1 1 !
+CONST FCC_A1 : AL%,ZR : VA : !
+$
+$
+$
+$
+$UNARY DATA
+$
+$AL (FCC_A1)
+FUNCTION GHSERAL   298.15 -7976.15+137.093038*T-24.3671976*T*LOG(T)
+             -1.884662E-3*T**2-0.877664E-6*T**3+74092*T**(-1);
+         700.00 Y -11276.24+223.048446*T-38.5844296*T*LOG(T)
+              +18.531982E-3*T**2-5.764227E-6*T**3+74092*T**(-1);
+         933.47 Y -11278.378+188.684153*T-31.748192*T*LOG(T)
+                              -1230.524E25*T**(-9);  2900.00 N !
+$
+$ ZIRCONIUM (GHSERZR FOR HCP_A3)
+$
+FUNCTION GHSERZR 130.00 -7827.595+125.64905*T-24.1618*T*LOG(T)
+                            -4.37791E-3*T**2+34971*T**(-1);
+            2128.00 Y -26085.921+262.724183*T-42.144*T*LOG(T)
+                            -1342.895E28*T**(-9); 6000.00 N !
+
+$
+$                                                                       PHASE FCC_A1
+$
+PARAMETER G(FCC_A1,AL:VA;0) 298.15 GHSERAL; 6000.00 N !
+PARAMETER G(FCC_A1,ZR:VA;0) 298.15 7600.00-0.9*T+GHSERZR; 6000.00 N !
+PARAMETER G(FCC_A1,AL,ZR:VA;0)  298.15 -152947+21.3*T;    6000.00  N !
+
+$
+$                                                                       PHASE AL3ZR
+$
+PARAMETER G(AL3ZR,AL:ZR;0)  298.15 -47381 - 24.373*T + 3.894*T*LOG(T)
+                              +0.75*GHSERAL+0.25*GHSERZR;  6000.00  N !
+"""
+
 NICRAL_TDB = """
 
 $ The parameters of the following database follows the publication

@@ -343,7 +343,7 @@ def tracer_diffusivity(composition_set, mobility_callables = None, mobility_corr
     T = composition_set.dof[composition_set.phase_record.state_variables.index(v.T)]
     return R * T * mobility_from_composition_set(composition_set, mobility_callables, mobility_correction, parameters)
 
-def mobility_matrix(composition_set, mobility_callables = None, mobility_correction = None, parameters = {}):
+def mobility_matrix(composition_set, mobility_callables = None, mobility_correction = None, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
     Mobility matrix
     Used to obtain diffusivity when multipled with free energy hessian
@@ -355,6 +355,30 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
         Pre-computed mobility callables for each element
     mobility_correction : dict (optional)
         Factor to multiply mobility by for each given element (defaults to 1)
+    vacancy_poor_interstitial_sublattice : bool (optional)
+        Denotes whether the interstitial sublattice is to be modeled assuming that vacancy fraction is near 0 (see notes below)
+        Defaults to False
+    parameters : dict (optional)
+        Maps free parameters names to parameter values
+
+    Notes
+    -----
+    - Substitutional and interstitial components are modeled differently based off the following assumptions:
+        1. Substitutional components contribute to the volume of the alloy while interstitials have zero volume
+        2. Vacancy fraction in substitutional sublattice is near 0 while vacancy fraction in interstitial sublattice is near 1
+    
+    - Assumption 1 is accounted by considering u-fraction of other components for substitutional and accounting for reference element
+      when computing interdiffusivity. Interstitials do not account for this since they do not contribute to the volume
+
+    - Assumption 2 is accounted for by multiplying the vacancy site fraction on interstitial mobility
+        - Mobility is defined in terms of a kinetic parameter (\Omega) that describes the rate of exchange for a component given that
+          it is near a vacancy
+            - For substitutionals, we define mobility M = y_VA * \Omega, so the mobility term itself includes the vacancy fraction
+              since in practice, the vacancy fraction is near 0
+            - For interstitials, we define mobility M = \Omega, so it does not factor in the vacancy fraction. Thus we have to
+              include the vacancy fraction to represent the probability that the component is near a vacancy
+        - We can override this assumption for interstitials using the vacancy_poor_interstitial_sublattice parameter. This can
+          be useful for compounds like carbides, where the interstitial sublattice is mostly carbon and the vacancy fraction is near 0
 
     Returns
     -------
@@ -392,7 +416,10 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     mobMatrix = np.zeros((len(elements), len(elements)))
     for a in range(len(elements)):
         if elements[a] in interstitials:
-            mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
+            if vacancy_poor_interstitial_sublattice:
+                mobMatrix[a, a] = mob[a]
+            else:
+                mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
         else:
             for b in range(len(elements)):
                 if elements[b] not in interstitials:
@@ -400,6 +427,7 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
                         mobMatrix[a, b] = (1 - U[a]) * mob[b]
                     else:
                         mobMatrix[a, b] = -U[a] * mob[b]
+
     #Diffusivity requires dmu_a/dU_b; however, the free energy curvature gives dmu_a/dX_b
     #Assuming that Usum is constant and using chain-rule derivatives,
     #    the conversion from dmu_a/dX_b to dmu_a/dU_b can be done by multiplying the sum(substitutionals)
@@ -407,7 +435,7 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
 
     return mobMatrix
 
-def chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction = None, returnHessian = False, parameters = {}):
+def chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction = None, returnHessian = False, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
     Chemical diffusivity (D_kj)
         D_kj = sum((delta_ik - U_k) * U_i * M_i) * dmu_i/dU_j
@@ -431,7 +459,11 @@ def chemical_diffusivity(chemical_potentials, composition_set, mobility_callable
         free energy hessian will be None if returnHessian is False
     '''
     dmudx = partialdMudX(chemical_potentials, composition_set)
-    mobMatrix = mobility_matrix(composition_set, mobility_callables, mobility_correction, parameters)
+    mobMatrix = mobility_matrix(composition_set=composition_set, 
+                                mobility_callables=mobility_callables, 
+                                mobility_correction=mobility_correction, 
+                                vacancy_poor_interstitial_sublattice=vacancy_poor_interstitial_sublattice, 
+                                parameters=parameters)
     Dkj = np.matmul(mobMatrix, dmudx)
     
     if returnHessian:
@@ -439,7 +471,7 @@ def chemical_diffusivity(chemical_potentials, composition_set, mobility_callable
     else:
         return Dkj, None
 
-def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_callables = None, mobility_correction = None, returnHessian = False, parameters = {}):
+def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_callables = None, mobility_correction = None, returnHessian = False, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
     Interdiffusivity (D^n_ab)
 
@@ -466,7 +498,13 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
             alphabetical order excluding reference element
         free energy hessian will be None if returnHessian is False
     '''
-    Dkj, hessian = chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction, returnHessian, parameters)
+    Dkj, hessian = chemical_diffusivity(chemical_potentials=chemical_potentials, 
+                                        composition_set=composition_set, 
+                                        mobility_callables=mobility_callables, 
+                                        mobility_correction=mobility_correction, 
+                                        returnHessian=returnHessian, 
+                                        vacancy_poor_interstitial_sublattice=vacancy_poor_interstitial_sublattice, 
+                                        parameters=parameters)
     elements = list(composition_set.phase_record.nonvacant_elements)
 
     #Build Dnkj, skipping the reference element
@@ -488,7 +526,7 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
 
     return Dnkj, hessian
 
-def inverseMobility(chemical_potentials, composition_set, refElement, mobility_callables, mobility_correction = None, returnOther = True, parameters = {}):
+def inverseMobility(chemical_potentials, composition_set, refElement, mobility_callables, mobility_correction = None, returnOther = True, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
     Inverse mobility matrix for determining interfacial composition from 
         Philippe and P. W. Voorhees, Acta Materialia 61 (2013) p. 4237
@@ -513,7 +551,14 @@ def inverseMobility(chemical_potentials, composition_set, refElement, mobility_c
     (interdiffusivity, hessian, inverse mobility)
         Interdiffusivity and hessian will be None if returnOther is False
     '''
-    Dnkj, _ = interdiffusivity(chemical_potentials, composition_set, refElement, mobility_callables, mobility_correction, False, parameters)
+    Dnkj, _ = interdiffusivity(chemical_potentials=chemical_potentials, 
+                               composition_set=composition_set, 
+                               refElement=refElement, 
+                               mobility_callables=mobility_callables, 
+                               mobility_correction=mobility_correction, 
+                               returnHessian=False, 
+                               vacancy_poor_interstitial_sublattice=vacancy_poor_interstitial_sublattice, 
+                               parameters=parameters)
     totalH = dMudX(chemical_potentials, composition_set, refElement)
     if returnOther:
         return Dnkj, totalH, np.matmul(totalH, np.linalg.inv(Dnkj))
@@ -624,7 +669,11 @@ def inverseMobility_from_diffusivity(chemical_potentials, composition_set, refEl
     (interdiffusivity, hessian, inverse mobility)
         Interdiffusivity and hessian will be None if returnOther is False
     '''
-    Dnkj = interdiffusivity_from_diff(composition_set, refElement, diffusivity_callables, diffusivity_correction, parameters)
+    Dnkj = interdiffusivity_from_diff(composition_set=composition_set, 
+                                      refElement=refElement, 
+                                      diffusivity_callables=diffusivity_callables, 
+                                      diffusivity_correction=diffusivity_correction, 
+                                      parameters=parameters)
     totalH = dMudX(chemical_potentials, composition_set, refElement)
 
     if returnOther:

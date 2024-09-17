@@ -195,7 +195,9 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         else:
             Dnkj, dMudxParent, invMob = inverseMobility(chemical_potentials, cs_matrix, self.elements[0],
                                                         self.mobCallables[self.phases[0]],
-                                                        mobility_correction=self.mobility_correction, parameters=self._parameters)
+                                                        mobility_correction=self.mobility_correction,
+                                                        vacancy_poor_interstitial_sublattice=self.vacancyPoorInterstitialSublattice.get(self.phases[0], False), 
+                                                        parameters=self._parameters)
             Dtrace = tracer_diffusivity(cs_matrix, self.mobCallables[self.phases[0]], mobility_correction=self.mobility_correction, parameters=self._parameters)
 
         xMFull = np.array(cs_matrix.X)

@@ -86,7 +86,8 @@ class GeneralThermodynamics:
         if type(phases) == str:  # check if a single phase was passed as a string instead of a list of phases.
             phases = [phases]
         self.phases = phases
-        self.phaseSamplingConditions = {p: None for p in self.phases}
+        self.phaseSamplingConditions = {}
+        self.vacancyPoorInterstitialSublattice = {}
 
         self._buildThermoModels()
 
@@ -529,6 +530,7 @@ class GeneralThermodynamics:
             Dnkj, _, _ = inverseMobility(chemical_potentials, cs_matrix, 
                                          self.elements[0], self.mobCallables[phase],
                                          mobility_correction=self.mobility_correction,
+                                         vacancy_poor_interstitial_sublattice=self.vacancyPoorInterstitialSublattice.get(phase, False),
                                          parameters=self._parameters)
 
         # Sort Dnkj from alphabetical to the input order of the elements

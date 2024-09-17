@@ -28,6 +28,9 @@ NiAlCrThermDiff.setEQSamplingDensity(500)
 AlCrNiTherm.setDFSamplingDensity(2000)
 AlCrNiTherm.setEQSamplingDensity(500)
 
+def test_load_database_without_mobility():
+    therm_nomob = BinaryThermodynamics(ALZR_TDB_NO_MOB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'])
+
 def test_DG_binary():
     '''
     Checks value of binary driving force calculation

@@ -93,7 +93,7 @@ class DiffusionModel(GenericModel):
             'elements': 'elements',
             'phases': 'phases',
             'z': 'z',
-            'zLim': 'zLim',
+            'zlim': 'zlim',
             'N': 'N',
             'finalTime': 't',
             'finalX': 'x',
@@ -108,7 +108,7 @@ class DiffusionModel(GenericModel):
         Loads data from filename and returns a PrecipitateModel
         '''
         data = np.load(filename)
-        model = DiffusionModel(data['zLim'], data['N'], data['elements'], data['phases'])
+        model = DiffusionModel(data['zlim'], data['N'], data['elements'], data['phases'])
         model._loadData(data)
         model.isSetup = True
         return model
@@ -299,8 +299,8 @@ class DiffusionModel(GenericModel):
         #Adjust flux by a scale if it predicts that a composition will go below 0
         xfull = np.concatenate((np.array([1-np.sum(x[0],axis=0)]), x[0]), axis=0)
         dXdtfull = np.concatenate((np.array([-np.sum(dXdt[0],axis=0)]), dXdt[0]), axis=0)
-        xfull[xfull < self.minComposition] = self.minComposition
-        dXdtmin = (self.minComposition - xfull) / dt
+        xfull[xfull < self.parameters.minComposition] = self.parameters.minComposition
+        dXdtmin = (self.parameters.minComposition - xfull) / dt
         alpha = np.ones(xfull.shape)
         indices = dXdtfull != 0
         alpha[indices] = dXdtmin[indices] / dXdtfull[indices]
@@ -325,8 +325,8 @@ class DiffusionModel(GenericModel):
         Stores new x and t
         Records new values if recording is enabled
         '''
-        x[0][x[0] > 1-self.minComposition] = 1-3*self.minComposition
-        x[0][x[0] < 3*self.minComposition] = self.minComposition
+        x[0][x[0] > 1-self.parameters.minComposition] = 1-3*self.parameters.minComposition
+        x[0][x[0] < 3*self.parameters.minComposition] = self.parameters.minComposition
         self.t = time
         self.x = x[0]
         self.x = np.clip(self.x, self.parameters.minComposition, 1-self.parameters.minComposition)

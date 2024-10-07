@@ -80,7 +80,11 @@ class HomogenizationModel(DiffusionModel):
         '''
         vfluxes = self._getFluxes(self.t, [self.x])
         dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
-        dt = self.parameters.maxCompositionChange / np.amax(dJ[dJ!=0])
+        nonzero_dJ = dJ[dJ!=0]
+        if len(nonzero_dJ) == 0:
+            dt = 1
+        else:
+            dt = self.parameters.maxCompositionChange / np.amax(dJ[dJ!=0])
         return vfluxes, dt
     
     def getDt(self, dXdt):
@@ -89,4 +93,8 @@ class HomogenizationModel(DiffusionModel):
         This is done by finding the time interval such that the composition
             change caused by the fluxes will be lower than self.maxCompositionChange
         '''
-        return self.parameters.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
+        nonzero_dXdt = dXdt[0][dXdt[0]!=0]
+        if len(nonzero_dXdt) == 0:
+            return 1
+        else:
+            return self.parameters.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))

@@ -361,7 +361,7 @@ def compute_phase_record_func_from_dof(dof, prf, phase, symbol, parameters={}):
     return prop.func(callableInput)
 
 def mobility_from_dof_phase_record(dof, prf, phase, elements, parameters = {}):
-    return np.array([compute_phase_record_func_from_dof(dof, prf, phase, f'MQ_{e}', parameters) for e in elements], 
+    return np.array([compute_phase_record_func_from_dof(dof, prf, phase, f'MOB_{e}', parameters) for e in elements], 
                     dtype=np.float64)
 
 def activation_energy_from_dof_phase_record(dof, prf, phase, elements, parameters = {}):

@@ -533,25 +533,7 @@ class HomogenizationParameters:
         '''
         self.labyrinthFactor = np.clip(n, 1, 2)
 
-class DiffusionParameters:
-    def __init__(self, elements, 
-                 temperatureParameters = None, 
-                 boundaryCondition = None,
-                 compositionProfile = None,
-                 hashTable = None,
-                 homogenizationParameters = None,
-                 minComposition = 1e-8,
-                 maxCompositionChange = 0.002):
-        self.temperature = TemperatureParameters() if temperatureParameters is None else temperatureParameters
-        self.boundaryConditions = BoundaryConditions(elements) if boundaryCondition is None else boundaryCondition
-        self.compositionProfile = CompositionProfile(elements) if compositionProfile is None else compositionProfile
-        self.hashTable = HashTable() if hashTable is None else hashTable
-        self.homogenizationParameters = HomogenizationParameters() if homogenizationParameters is None else homogenizationParameters
-
-        self.minComposition = minComposition
-        self.maxCompositionChange = maxCompositionChange
-
-def _computeSingleMobility(therm: GeneralThermodynamics, x, T, unsortIndices, diffusionParameters: DiffusionParameters) -> MobilityData:
+def _computeSingleMobility(therm: GeneralThermodynamics, x, T, unsortIndices, hashTable : HashTable = None) -> MobilityData:
     '''
     Gets mobility data for x and T
 
@@ -571,7 +553,10 @@ def _computeSingleMobility(therm: GeneralThermodynamics, x, T, unsortIndices, di
     -------
     MobilityData
     '''
-    mobility_data = diffusionParameters.hashTable.retrieveFromHashTable(x, T)
+    mobility_data = None
+    if hashTable is not None:
+        mobility_data = hashTable.retrieveFromHashTable(x, T)
+
     if mobility_data is None:
         # Compute equilibrium
         try:
@@ -593,11 +578,13 @@ def _computeSingleMobility(therm: GeneralThermodynamics, x, T, unsortIndices, di
                 mob[p,:] *= x_to_u_frac(np.array(cs.X, dtype=np.float64)[unsortIndices], therm.elements[:-1], interstitials)
 
         mobility_data = MobilityData(mobility = mob, phases = phases, phase_fractions = phase_fracs, chemical_potentials=chemical_potentials)
-        diffusionParameters.hashTable.addToHashTable(x, T, mobility_data)
+        
+        if hashTable is not None:
+            hashTable.addToHashTable(x, T, mobility_data)
 
     return mobility_data
 
-def computeMobility(therm : GeneralThermodynamics, x, T, diffusionParameters : DiffusionParameters):
+def computeMobility(therm : GeneralThermodynamics, x, T, hashTable : HashTable = None):
     # x should always be 2d, T should always be 1d
     x = np.atleast_2d(np.squeeze(x))
     if therm._isBinary:
@@ -613,14 +600,14 @@ def computeMobility(therm : GeneralThermodynamics, x, T, diffusionParameters : D
     phase_fracs = []
     chemical_potentials = []
     for i in range(len(x)):
-        mobility_data = _computeSingleMobility(therm, x[i], T[i], unsortIndices, diffusionParameters)
+        mobility_data = _computeSingleMobility(therm, x[i], T[i], unsortIndices, hashTable)
         mob.append(mobility_data.mobility)
         phases.append(mobility_data.phases)
         phase_fracs.append(mobility_data.phase_fractions)
         chemical_potentials.append(mobility_data.chemical_potentials)
     return MobilityData(mobility=mob, phases=phases, phase_fractions=phase_fracs, chemical_potentials=chemical_potentials)
 
-def computeHomogenizationFunction(therm : GeneralThermodynamics, x, T, diffusionParameters : DiffusionParameters):
+def computeHomogenizationFunction(therm : GeneralThermodynamics, x, T, homogenizationParameters : HomogenizationParameters, hashTable : HashTable = None):
     '''
     Compute homogenization function (defined by HomogenizationParameters) for list of x,T
 
@@ -656,13 +643,30 @@ def computeHomogenizationFunction(therm : GeneralThermodynamics, x, T, diffusion
     avg_mob = np.zeros((x.shape[0], len(therm.elements)-1))
     chemical_potentials = np.zeros((x.shape[0], len(therm.elements)-1))
     for i in range(len(x)):
-        mobility_data = _computeSingleMobility(therm, x[i], T[i], unsortIndices, diffusionParameters)
+        mobility_data = _computeSingleMobility(therm, x[i], T[i], unsortIndices, hashTable)
         mob = mobility_data.mobility
         phase_fracs = mobility_data.phase_fractions
         chemical_potentials[i,:] = mobility_data.chemical_potentials
 
-        mob, phase_fracs = diffusionParameters.homogenizationParameters.postProcessFunction(therm, mob, phase_fracs, *diffusionParameters.homogenizationParameters.postProcessParameters)
-        avg_mob[i] = diffusionParameters.homogenizationParameters.homogenizationFunction(mob, phase_fracs, labyrinth_factor = diffusionParameters.homogenizationParameters.labyrinthFactor)
+        mob, phase_fracs = homogenizationParameters.postProcessFunction(therm, mob, phase_fracs, *homogenizationParameters.postProcessParameters)
+        avg_mob[i] = homogenizationParameters.homogenizationFunction(mob, phase_fracs, labyrinth_factor = homogenizationParameters.labyrinthFactor)
 
     return np.squeeze(avg_mob), np.squeeze(chemical_potentials)
 
+class DiffusionParameters:
+    def __init__(self, elements, 
+                 temperatureParameters = None, 
+                 boundaryCondition = None,
+                 compositionProfile = None,
+                 hashTable = None,
+                 homogenizationParameters = None,
+                 minComposition = 1e-8,
+                 maxCompositionChange = 0.002):
+        self.temperature = TemperatureParameters() if temperatureParameters is None else temperatureParameters
+        self.boundaryConditions = BoundaryConditions(elements) if boundaryCondition is None else boundaryCondition
+        self.compositionProfile = CompositionProfile(elements) if compositionProfile is None else compositionProfile
+        self.hashTable = HashTable() if hashTable is None else hashTable
+        self.homogenizationParameters = HomogenizationParameters() if homogenizationParameters is None else homogenizationParameters
+
+        self.minComposition = minComposition
+        self.maxCompositionChange = maxCompositionChange

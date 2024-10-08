@@ -35,7 +35,7 @@ class HomogenizationModel(DiffusionModel):
         x = x_curr[0]
         T = self.parameters.temperature(self.z, t)
 
-        avg_mob, mu = computeHomogenizationFunction(self.therm, x.T, T, self.parameters)
+        avg_mob, mu = computeHomogenizationFunction(self.therm, x.T, T, self.parameters.homogenizationParameters, self.parameters.hashTable)
         avg_mob = avg_mob.T
         mu = mu.T
 

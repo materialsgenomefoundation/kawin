@@ -1,4 +1,9 @@
+from collections import namedtuple
+
 import numpy as np
+
+GBFactorData = namedtuple('GBFactorData',
+                    ['area_factor', 'volume_factor', 'gb_removal'])
 
 class GBFactors:
     '''
@@ -26,6 +31,9 @@ class GBFactors:
         self.nucleationSiteType = self.BULK
         self.GBk = 0
 
+        # Since we default to bulk nucleation, the correction factors will not depend on GB or interfacial energy
+        self.setFactors(0, 1)
+
     def setNucleationType(self, site):
         '''
         Sets nucleation site type
@@ -46,7 +54,103 @@ class GBFactors:
         else:
             self.nucleationSiteType = self.BULK
 
-    def setFactors(self, gbEnergy, gamma):
+    def getGBRatio(self, gbEnergy, gamma):
+        '''
+        Grain boundary to interfacial energy ratio
+        '''
+        return gbEnergy / (2*gamma)
+    
+    def _createArrays(self, gbk, limit = np.inf):
+        '''
+        Creates arrays for grain boundary factors, this is done here to allow limits
+        to be placed on the grain boundary ratio
+        '''
+        gbk = np.atleast_1d(gbk)
+        indices = gbk < limit
+        valid_gbk = gbk[indices]
+
+        gbRemoval = -1*np.ones(gbk.shape, dtype=np.float64)
+        areaFactor = -1*np.ones(gbk.shape, dtype=np.float64)
+        volumeFactor = -1*np.ones(gbk.shape, dtype=np.float64)
+        
+        return gbk, valid_gbk, indices, gbRemoval, areaFactor, volumeFactor
+    
+    def _createGBData(self, areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan = True):
+        '''
+        Creates a GBFactorData object
+
+        By default, setInvalidToNan will be true, will will set all invalid indices to nan
+            This is for the user API so that it's easy to tell when a gb energy / interfacial energy
+            ratio is invalid
+        When setting factors internally, this will be set to false so it's easier to compare
+        when a value is invalid (since np.nan == np.nan will return False)
+        '''
+        if setInvalidToNan:
+            areaFactor[~indices] = np.nan
+            volumeFactor[~indices] = np.nan
+            gbRemoval[~indices] = np.nan
+        return GBFactorData(area_factor=np.squeeze(areaFactor),
+                      volume_factor=np.squeeze(volumeFactor),
+                      gb_removal=np.squeeze(gbRemoval))
+
+
+    def bulkFactors(self, gbk = None, setInvalidToNan = True):
+        '''
+        Factors for bulk nucleation. This assumes precipitate is spherical 
+        and no GB is removed
+        '''
+        gbk, valid_gbk, indices, gbRemoval, areaFactor, volumeFactor = self._createArrays(gbk, np.inf)
+
+        gbRemoval[indices] = 0
+        areaFactor[indices] = 4 * np.pi
+        volumeFactor[indices] = 4 * np.pi / 3
+        
+        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+
+    def grainBoundaryFactors(self, gbk, setInvalidToNan = True):
+        '''
+        Factors for grain boundary nucleation
+        '''
+        gbk, valid_gbk, indices, gbRemoval, areaFactor, volumeFactor = self._createArrays(gbk, 1)
+
+        gbRemoval[indices] = np.pi * (1 - valid_gbk**2)
+        areaFactor[indices] = 4 * np.pi * (1 - valid_gbk)
+        volumeFactor[indices] = (2 * np.pi / 3) * (2 - 3 * valid_gbk + valid_gbk**3)
+        
+        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+
+    def grainEdgeFactors(self, gbk, setInvalidToNan = True):
+        '''
+        Factors for grain edge nucleation
+        '''
+        gbk, valid_gbk, indices, gbRemoval, areaFactor, volumeFactor = self._createArrays(gbk, np.sqrt(3)/2)
+
+        alpha = np.arcsin(1 / (2 * np.sqrt(1 - valid_gbk**2)))
+        beta = np.arccos(valid_gbk / np.sqrt(3 * (1 - valid_gbk**2)))
+
+        gbRemoval[indices] = 3 * beta * (1 - valid_gbk**2) - valid_gbk * np.sqrt(3 - 4 * valid_gbk**2)
+        areaFactor[indices] = 12 * (np.pi / 2 - alpha - valid_gbk * beta)
+        volumeFactor[indices] = 2 * (np.pi - 2 * alpha + (valid_gbk**2 / 3) * np.sqrt(3 - 4 * valid_gbk**2) - beta * valid_gbk * (3 - valid_gbk**2))
+        
+        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+    
+    def grainCornerFactors(self, gbk, setInvalidToNan = True):
+        '''
+        Factors for grain corners nucleation
+        '''
+        gbk, valid_gbk, indices, gbRemoval, areaFactor, volumeFactor = self._createArrays(gbk, np.sqrt(2/3))
+
+        K = (4 / 3) * np.sqrt(3 / 2 - 2 * valid_gbk**2) - 2 * valid_gbk / 3
+        phi = np.arcsin(K / (2 * np.sqrt(1 - valid_gbk**2)))
+        delta = np.arccos((np.sqrt(2) - valid_gbk * np.sqrt(3 - K**2)) / (K * np.sqrt(1 - valid_gbk**2)))
+
+        gbRemoval[indices] = 3 * (2 * phi * (1 - valid_gbk**2) - K * (np.sqrt(1 - valid_gbk**2 - K**2 / 4) - K**2 / np.sqrt(8)))
+        areaFactor[indices] = 24 * (np.pi / 3 - valid_gbk * phi - delta)
+        volumeFactor[indices] = 2 * (4 * (np.pi / 3 - delta) + valid_gbk * K * (np.sqrt(1 - valid_gbk**2 - K**2 / 4) - K**2 / np.sqrt(8)) - 2 * valid_gbk * phi * (3 - valid_gbk**2))
+        
+        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+
+    def setFactors(self, gbEnergy, gamma, nucleationSiteType = None):
         '''
         Calculated area, volume and GB removal factors
 
@@ -57,67 +161,53 @@ class GBFactors:
         gamma - float
             Interfacial energy between precipitate and bulk
         '''
+        if nucleationSiteType is not None:
+            self.setNucleationType(nucleationSiteType)
+
         #Redundant storage of GB and interfacial energy, 
         #but will help in defining Rcrit and Gcrit later
         self.gbEnergy = gbEnergy
         self.gamma = gamma
-        self.GBk = gbEnergy / (2 * gamma)
+        self.GBk = self.getGBRatio(self.gbEnergy, self.gamma)
 
-        #Bulk nucleation
         if self.nucleationSiteType == self.BULK or self.nucleationSiteType == self.DISLOCATION:
-            self.gbRemoval = 0
-            self.areaFactor = 4 * np.pi
-            self.volumeFactor = 4 * np.pi / 3
-        
-        #Grain boundary area nucleation
+            gbData = self.bulkFactors(self.GBk, setInvalidToNan=False)
         elif self.nucleationSiteType == self.GRAIN_BOUNDARIES:
-            self.gbRemoval = np.pi * (1 - self.GBk**2)
-            self.areaFactor = 4 * np.pi * (1 - self.GBk)
-            self.volumeFactor = (2 * np.pi / 3) * (2 - 3 * self.GBk + self.GBk**3)
+            gbData = self.grainBoundaryFactors(self.GBk, setInvalidToNan=False)
+        elif self.nucleationSiteType == self.GRAIN_EDGES:
+            gbData = self.grainEdgeFactors(self.GBk, setInvalidToNan=False)
+        elif self.nucleationSiteType == self.GRAIN_CORNERS:
+            gbData = self.grainCornerFactors(self.GBk, setInvalidToNan=False)
 
-        #Grain edge nucleation
-        elif self.nucleationSiteType == self.GRAIN_EDGES and self.GBk < np.sqrt(3) / 2:
-            alpha = np.arcsin(1 / (2 * np.sqrt(1 - self.GBk**2)))
-            beta = np.arccos(self.GBk / np.sqrt(3 * (1 - self.GBk**2)))
-            self.gbRemoval = 3 * beta * (1 - self.GBk**2) - self.GBk * np.sqrt(3 - 4 * self.GBk**2)
-            self.areaFactor = 12 * (np.pi / 2 - alpha - self.GBk * beta)
-            self.volumeFactor = 2 * (np.pi - 2 * alpha + (self.GBk**2 / 3) * np.sqrt(3 - 4 * self.GBk**2) - beta * self.GBk * (3 - self.GBk**2))
-                
-        #Grain corner nucleation
-        elif self.nucleationSiteType == self.GRAIN_CORNERS and self.GBk < np.sqrt(2 / 3):
-            K = (4 / 3) * np.sqrt(3 / 2 - 2 * self.GBk**2) - 2 * self.GBk / 3
-            phi = np.arcsin(K / (2 * np.sqrt(1 - self.GBk**2)))
-            delta = np.arccos((np.sqrt(2) - self.GBk * np.sqrt(3 - K**2)) / (K * np.sqrt(1 - self.GBk**2)))
-            self.gbRemoval = 3 * (2 * phi * (1 - self.GBk**2) - K * (np.sqrt(1 - self.GBk**2 - K**2 / 4) - K**2 / np.sqrt(8)))
-            self.areaFactor = 24 * (np.pi / 3 - self.GBk * phi - delta)
-            self.volumeFactor = 2 * (4 * (np.pi / 3 - delta) + self.GBk * K * (np.sqrt(1 - self.GBk**2 - K**2 / 4) - K**2 / np.sqrt(8)) - 2 * self.GBk * phi * (3 - self.GBk**2))
-        
+        self.areaFactor = gbData.area_factor
+        self.volumeFactor = gbData.volume_factor
+        self.gbRemoval = gbData.gb_removal
+
         #Otherwise, set back to bulk nucleation
-        else:
+        if any([self.areaFactor == -1, self.volumeFactor == -1, self.gbRemoval == -1]):
             site = ''
+            ratio = 1
             if self.nucleationSiteType == self.GRAIN_BOUNDARIES:
                 site = 'grain boundaries'
+                ratio = 1
             elif self.nucleationSiteType == self.GRAIN_EDGES:
                 site = 'grain edges'
+                ratio = np.sqrt(3)/2
             elif self.nucleationSiteType == self.GRAIN_CORNERS:
                 site = 'grain corners'
+                ratio = np.sqrt(2/3)
 
             #Check grain boundary energy to interfacial energy ratio
             #If the ratio is too large to create a nucleation barrier, set nucleation site back to bulk
             #TODO: If the ratio is too large, then no nucleation barrier exists for nucleation on grain boundaries
             #      We need a way to handle this case rather than currently avoiding it
             print('Warning: Grain boundary to interfacial energy ratio is too large for nucleation barrier on {}'.format(site.upper()))
-            if self.nucleationSiteType == self.GRAIN_BOUNDARIES:
-                ratio = 1
-            elif self.nucleationSiteType == self.GRAIN_EDGES:
-                ratio = np.sqrt(3) / 2
-            elif self.nucleationSiteType == self.GRAIN_CORNERS:
-                ratio = np.sqrt(2 / 3)
             print('For nucleation on {}, gamma_GB / 2 * gamma must be below {:.3f}, but is currently {:.3f}'.format(site.upper(), ratio, self.GBk))
             print('Setting nucleation site to bulk.')
-            self.gbRemoval = 0
-            self.areaFactor = 4 * np.pi
-            self.volumeFactor = 4 * np.pi / 3
+            gbData = self.bulkFactors(self.GBk)
+            self.areaFactor = gbData.area_factor
+            self.volumeFactor = gbData.volume_factor
+            self.gbRemoval = gbData.gb_removal
 
     def Rcrit(self, dG):
         '''

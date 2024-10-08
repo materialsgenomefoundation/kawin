@@ -78,7 +78,7 @@ def test_HomogenizationMobility():
     binaryParameters = DiffusionParameters(['CR'])
     x = np.linspace(0.2, 0.3, N)
     T = 1073*np.ones(N)
-    mobBinary, _ = computeHomogenizationFunction(NiCrTherm, x, T, binaryParameters)
+    mobBinary, _ = computeHomogenizationFunction(NiCrTherm, x, T, binaryParameters.homogenizationParameters, binaryParameters.hashTable)
     assert(mobBinary.shape == (N,2))
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
@@ -86,7 +86,7 @@ def test_HomogenizationMobility():
     x_al = np.linspace(0.3, 0.2, N)
     x = np.array([x_cr, x_al]).T
     T = 1073*np.ones(N)
-    mobTernary, _ = computeHomogenizationFunction(NiCrAlTherm, x, T, ternaryParameters)
+    mobTernary, _ = computeHomogenizationFunction(NiCrAlTherm, x, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert(mobTernary.shape == (N,3))
 
 
@@ -132,7 +132,7 @@ def test_homogenizationSinglePhaseMobility():
 
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
     ternaryParameters.labyrinthFactor = 2
-    mob_data = computeMobility(NiCrAlTherm, x, T, ternaryParameters)
+    mob_data = computeMobility(NiCrAlTherm, x, T, ternaryParameters.hashTable)
 
     #mob_funcs = ['wiener upper', 'wiener lower', 'hashin upper', 'lab']
     mob_funcs = [HomogenizationParameters.WIENER_UPPER, HomogenizationParameters.WIENER_LOWER, 
@@ -141,7 +141,7 @@ def test_homogenizationSinglePhaseMobility():
     for f in mob_funcs:
         ternaryParameters.hashTable.clearCache()
         ternaryParameters.homogenizationParameters.setHomogenizationFunction(f)
-        mob, _ = computeHomogenizationFunction(NiCrAlTherm, x, T, ternaryParameters)
+        mob, _ = computeHomogenizationFunction(NiCrAlTherm, x, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
         assert(np.allclose(np.squeeze(mob), np.squeeze(mob_data.mobility[0]), atol=0, rtol=1e-3))
 
     # homogenizationTernary.reset()
@@ -183,10 +183,10 @@ def test_homogenization_wiener_upper():
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
     ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.WIENER_UPPER)
 
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -220,10 +220,10 @@ def test_homogenization_wiener_lower():
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
     ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.WIENER_LOWER)
     
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [4.090531e-21, 1.068474e-21, 1.756032e-21], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -257,10 +257,10 @@ def test_homogenization_hashin_upper():
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
     ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.HASHIN_UPPER)
     
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [4.114414e-22, 1.074712e-22, 1.766285e-22], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -294,10 +294,10 @@ def test_homogenization_hashin_lower():
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
     ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.HASHIN_LOWER)
     
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [9.292913e-21, 2.427370e-21, 3.989373e-21], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()
@@ -331,10 +331,10 @@ def test_homogenization_lab():
     ternaryParameters = DiffusionParameters(['CR', 'AL'])
     ternaryParameters.homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.LABYRINTH)
     
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
-    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters)
+    mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, ternaryParameters.homogenizationParameters, ternaryParameters.hashTable)
     assert_allclose(mob, [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
 
     # homogenizationTernary.clearCache()

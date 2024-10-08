@@ -1,6 +1,7 @@
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
+from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
 from kawin.precipitation.non_ideal.LebedevNodes import loadPoints
 import copy
 
@@ -905,7 +906,7 @@ class StrainEnergy:
 
     #Equilibrium aspect ratios
     #Determined by minimum of strain energy + interfacial energy
-    def eqAR_byGR(self, Rsph, gamma, shpFactor, a=1.001, b=100):
+    def eqAR_byGR(self, Rsph, gamma, shpFactor : ShapeFactor, a=1.001, b=100):
         '''
         Equilibrium aspect ratio using golden ratio search
 
@@ -920,8 +921,8 @@ class StrainEnergy:
             Min and max bounds
             Default is 1.001 and 100
         '''
-        normR = shpFactor._normalRadiiEquation
-        interfacial = shpFactor._thermoEquation if self.ifmethod == 1 else shpFactor._eqRadiusEquation
+        normR = shpFactor.description.normalRadiiFromAR
+        interfacial = shpFactor.description.thermoFactorFromAR if self.ifmethod == 1 else shpFactor.description.eqRadiusFactorFromAR
         if hasattr(Rsph, '__len__'):
             eqAR = np.ones(len(Rsph))
             for i in range(len(Rsph)):
@@ -978,7 +979,7 @@ class StrainEnergy:
         self._aspectRatios = None
         self._normEnergies = None
 
-    def eqAR_bySearch(self, Rsph, gamma, shpFactor):
+    def eqAR_bySearch(self, Rsph, gamma, shpFactor : ShapeFactor):
         '''
         Equilibrium aspect ratio by cached search
 
@@ -990,8 +991,8 @@ class StrainEnergy:
             Interfacial energy
         shpFactor : ShapeFactor object
         '''
-        normR = shpFactor._normalRadiiEquation
-        interfacial = shpFactor._thermoEquation if self.ifmethod == 1 else shpFactor._eqRadiusEquation
+        normR = shpFactor.description.normalRadiiFromAR
+        interfacial = shpFactor.description.thermoFactorFromAR if self.ifmethod == 1 else shpFactor.description.eqRadiusFactorFromAR
         if hasattr(Rsph, '__len__'):
             eqAR = np.ones(len(Rsph))
             for i in range(len(Rsph)):

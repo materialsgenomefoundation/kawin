@@ -790,15 +790,15 @@ class PrecipitateBase(GenericModel):
             Defaults to True
         '''
         index = self.phaseIndex(phase)
-        self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, training = removeCache, returnComp = True)
+        self.dG[index] = lambda x, T, removeCache = removeCache: therm.getDrivingForce(x, T, precPhase=phase, removeCache = removeCache)
         
         if self.numberOfElements == 1:
             self.interfacialComposition[index] = lambda x, T: therm.getInterfacialComposition(x, T, precPhase=phase)
             if (therm.mobCallables is not None or therm.diffCallables is not None) and addDiffusivity:
                 self.Diffusivity = lambda x, T, removeCache = removeCache: therm.getInterdiffusivity(x, T, removeCache = removeCache)
         else:
-            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache, searchDir = None: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, training = False, searchDir = searchDir)
-            self._betaFuncs[index] = lambda x, T, removeCache = removeCache: therm.impingementFactor(x, T, precPhase=phase, training = False)
+            self.interfacialComposition[index] = lambda x, T, dG, R, gExtra, removeCache = removeCache, searchDir = None: therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase=phase, removeCache = False, searchDir = searchDir)
+            self._betaFuncs[index] = lambda x, T, removeCache = removeCache, searchDir = None: therm.impingementFactor(x, T, precPhase=phase, removeCache = False, searchDir = searchDir)
 
     def setSurrogate(self, surr, phase = None):
         '''
@@ -1147,7 +1147,7 @@ class PrecipitateBase(GenericModel):
         else:
             xComp = self._currY[self.COMPOSITION][0]
             T = self._currY[self.TEMPERATURE][0]
-            beta = self._betaFuncs[p](xComp, T)
+            beta = self._betaFuncs[p](xComp, T, searchDir = self._precBetaTemp[p])
             if beta is None:
                 return self.betas[p]
             else:

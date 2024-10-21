@@ -10,34 +10,55 @@ AVOGADROS_NUMBER = 6.022e23
 BOLTZMANN_CONSTANT = GAS_CONSTANT / AVOGADROS_NUMBER
 
 class PrecipitationData:
+    ATTRIBUTES = [
+        'time', 'temperature',
+        'composition', 'xEqAlpha', 'xEqBeta',
+        'drivingForce', 'impingement', 'Gcrit', 'Rcrit', 'nucRate', 'precipitateDensity',
+        'Rnuc',  'Ravg', 'ARavg', 'volFrac', 'fconc'
+    ]
+    
     def __init__(self, phases, elements, N = 1):
+        self.phases = phases
+        self.elements = elements
         self.reset(phases, elements, N)
 
     def reset(self, phases, elements, N = 1):
+        self.n = N-1
         self.time = np.zeros(N)
         self.temperature = np.zeros(N)
         self.composition = np.zeros((N, len(elements)))
         self.xEqAlpha = np.zeros((N, len(phases), len(elements)))
         self.xEqBeta = np.zeros((N, len(phases), len(elements)))
-        
         self.drivingForce = np.zeros((N, len(phases)))
-        self.impingment = np.zeros((N, len(phases)))
+        self.impingement = np.zeros((N, len(phases)))
         self.Gcrit = np.zeros((N, len(phases)))
         self.Rcrit = np.zeros((N, len(phases)))
         self.Rnuc = np.zeros((N, len(phases)))
         self.nucRate = np.zeros((N, len(phases)))
-
+        self.precipitateDensity = np.zeros((N, len(phases)))
         self.Ravg = np.zeros((N, len(phases)))
         self.ARavg = np.zeros((N, len(phases)))
         self.volFrac = np.zeros((N, len(phases)))
         self.fconc = np.zeros((N, len(phases), len(elements)))
 
     def appendToArrays(self, newData):
-        attributes = ['time', 'temperature', 'composition', 'xEqAlpha', 'xEqBeta', 
-                      'drivingForce', 'impingement', 'Gcrit', 'Rcrit', 'Rnuc', 'nucRate',
-                      'Ravg', 'ARavg', 'volFrac', 'fconc']
-        for a in attributes:
-            setattr(self, a, np.concatenate([getattr(self, a), getattr(newData, a)], axis=0))
+        for name in self.ATTRIBUTES:
+            setattr(self, name, np.concatenate([getattr(self, name), getattr(newData, name)], axis=0))
+        self.n = len(self.time) - 1
+
+    def copySlice(self, N = 0):
+        sliceData = PrecipitationData(self.phases, self.elements, N=1)
+        for name in self.ATTRIBUTES:
+            getattr(sliceData, name)[0] = getattr(self, name)[N]
+        return sliceData
+    
+    def setSlice(self, sliceData, N = 0):
+        for name in self.ATTRIBUTES:
+            getattr(self, name)[N] = getattr(sliceData, name)[0]
+
+    def print(self, N = 0):
+        for name in self.ATTRIBUTES:
+            print(name, getattr(self, name)[0])
 
 class VolumeParameter:
     MOLAR_VOLUME = 0

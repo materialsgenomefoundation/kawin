@@ -343,63 +343,15 @@ class PrecipitateModel (PrecipitateBase):
         #  Precipitation kinetics is more on a log scale than linear (unless temperature changes are involve)
         #  Thus, we can get away with increasing the time step over time assuming that kinetics are slowing down
         #  Plus, unlike the single phase diffusion module, there's no form way to define a good time step apart from the checks here
-        dtPropose = (1 + self.dtScale) * dtPrev
+        dtPropose = (1 + self.constraints.dtScale) * dtPrev
         dtMax = self.finalTime - self.time[i]
         
         dtAll = [dtMax]
-        if self.checkPSD:
-            dtPBM = [dtMax]
-            if i > 0 and self.temperature[i] == self.temperature[i-1]:
-                dtPBM += [self.PBM[p].getDTEuler(dtMax, self.growth[p], self.dissolutionIndex[p]) for p in range(len(self.phases))]
-            dtPBM = np.amin(dtPBM)
-            dtAll.append(dtPBM)
-        
-        if self.checkNucleation:
-            dtNuc = dtMax * np.ones(len(self.phases))
-            if i > 0:
-                nRateCurr = self.nucRate[i]
-                nRatePrev = self.nucRate[i-1]
-                for p in range(len(self.phases)):
-                    if nRateCurr[p] > self.minNucleationRate and nRatePrev[p] > self.minNucleationRate and nRatePrev[p] != nRateCurr[p]:
-                        dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(nRatePrev[p] / nRateCurr[p]))
-            else:
-                for p in range(len(self.phases)):
-                    if self.nucRate[i,p] * dtPrev > 1e5:
-                        dtNuc[p] = 1e5 / self.nucRate[i,p]
-            dtNuc = np.amin(dtNuc)
-            dtAll.append(dtNuc)
-
-        #Temperature change constraint
-        if self.checkTemperature and i > 0:
-            Tchange = self.temperature[i] - self.temperature[i-1]
-            dtTemp = dtMax
-            if Tchange > self.maxNonIsothermalDT:
-                dtTemp = self.maxNonIsothermalDT * dtPrev / Tchange
-            dtAll.append(dtTemp)
-
-        if self.checkRcrit and i > 0:
-            dtRad = dtMax * np.ones(len(self.phases))
-            if not all((self.Rcrit[i-1,:] == 0) & (self.Rcrit[i,:] - self.Rcrit[i-1,:] == 0) & (self.dGs[i,:] <= 0)):
-                indices = (self.Rcrit[i-1,:] > 0) & (self.Rcrit[i,:] - self.Rcrit[i-1,:] != 0) & (self.dGs[i,:] > 0)
-                dtRad[indices] = self.maxRcritChange * dtPrev / np.abs((self.Rcrit[i,:][indices] - self.Rcrit[i-1,:][indices]) / self.Rcrit[i-1,:][indices])
-            dtRad = np.amin(dtRad)
-            dtAll.append(dtRad)
-
-        if self.checkVolumePre:
-            dV = np.zeros(len(self.phases))
-            for p in range(len(self.phases)):
-                #Calculate estimate volume change based off growth rate and nucleated particles
-                #TODO: account for non-spherical precipitates
-                dVi = self.PBM[p].PSD * self.PBM[p].PSDsize**2 * 0.5 * (self.growth[p][1:] + self.growth[p][:-1])
-                dVi[dVi < 0] = 0
-                dV = self.VmAlpha / self.VmBeta[p] * (self.GB[p].areaFactor * np.sum(dVi) + self.GB[p].volumeFactor * self.nucRate[i,p] * self.Rad[i,p]**3)
-
-            dtVol = dtMax * np.ones(len(self.phases))
-            for p in range(len(self.phases)):
-                if dV != 0:
-                    dtVol[p] = self.maxVolumeChange / (2 * np.abs(dV))
-            dtVol = np.amin(dtVol)
-            dtAll.append(dtVol)
+        dtAll.append(self.constraints.computeDTfromPSD(self.n, self.temperature, self.PBM, self.growth, self.dissolutionIndex, self.phases, dtMax))
+        dtAll.append(self.constraints.computeDTfromNucleationRate(self.n, self.nucRate, self.phases, dtPrev, dtMax))
+        dtAll.append(self.constraints.computeDTfromTemperature(self.n, self.temperature, dtPrev, dtMax))
+        dtAll.append(self.constraints.computeDTfromRcrit(self.n, self.Rcrit, self.dGs, self.phases, dtPrev, dtMax))
+        dtAll.append(self.constraints.computeDTfromVolume(self.n, self.nucRate, self.Rad, self.PBM, self.growth, self.VmAlpha, self.VmBeta, self.GB, self.phases, dtMax))
 
         dt = np.amin(dtAll)
         #If all time checks pass, then go back to previous time step and increase it slowly
@@ -419,7 +371,7 @@ class PrecipitateModel (PrecipitateBase):
         '''
         for p in range(len(self.phases)):
             x[p][:self.RdrivingForceIndex[p]+1] = 0
-            x[p][self.PBM[p].PSDsize < self.minRadius] = 0
+            x[p][self.PBM[p].PSDsize < self.constraints.minRadius] = 0
         return
     
     def _calcNucleationRate(self, t, x):
@@ -527,7 +479,7 @@ class PrecipitateModel (PrecipitateBase):
             #Only record these terms if there are non-zero number of precipitates
             #Otherwise we will be dividing by 0 for avgR and avgAR
             #   Argueably, RadSum and ARsum would be 0 if Ntot is 0, so it should be fine to do this
-            if Ntot > self.minNucleateDensity:
+            if Ntot > self.constraints.minNucleateDensity:
                 avgR[0,p] = RadSum / Ntot
                 precDens[0,p] = Ntot
                 avgAR[0,p] = ARsum / Ntot
@@ -542,7 +494,7 @@ class PrecipitateModel (PrecipitateBase):
 
         if np.sum(fBeta[0]) < 1:
             xComp[0] = (self.xComp[0] - np.sum(fConc[0], axis=0)) / (1 - np.sum(fBeta[0]))
-            xComp[0,xComp[0] < 0] = self.minComposition
+            xComp[0,xComp[0] < 0] = self.constraints.minComposition
 
         self._currY[self.VOL_FRAC] = fBeta
         self._currY[self.FCONC] = fConc
@@ -598,7 +550,7 @@ class PrecipitateModel (PrecipitateBase):
         #This will be override if createLookup is called
         T = self._currY[self.TEMPERATURE]
         self.dTemp += T - self.temperature[self.n]
-        if np.abs(self.dTemp) > self.maxTempChange:
+        if np.abs(self.dTemp) > self.constraints.maxTempChange:
             xEqAlpha, xEqBeta = self.createLookup()
         else:
             xEqAlpha, xEqBeta = np.array([self.xEqAlpha[self.n]]), np.array([self.xEqBeta[self.n]])
@@ -721,8 +673,8 @@ class PrecipitateModel (PrecipitateBase):
                     self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
                 self._growthRate()
             self.PBM[p].PSD[:self.RdrivingForceIndex[p]+1] = 0
-            self.PBM[p].PSD[self.PBM[p].PSDsize < self.minRadius] = 0
-            self.dissolutionIndex[p] = self.PBM[p].getDissolutionIndex(self.maxDissolution, self.RdrivingForceIndex[p])
+            self.PBM[p].PSD[self.PBM[p].PSDsize < self.constraints.minRadius] = 0
+            self.dissolutionIndex[p] = self.PBM[p].getDissolutionIndex(self.constraints.maxDissolution, self.RdrivingForceIndex[p])
             #self.PBM[p].PSD[:self.dissolutionIndex[p]] = 0
 
     def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):

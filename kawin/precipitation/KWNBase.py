@@ -1,10 +1,13 @@
+from dataclasses import dataclass
+from enum import Enum
+
 import numpy as np
 from kawin.precipitation.non_ideal.EffectiveDiffusion import EffectiveDiffusionFunctions
 from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
 from kawin.precipitation.non_ideal.ElasticFactors import StrainEnergy
 from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
 from kawin.GenericModel import GenericModel
-from enum import Enum
+from kawin.precipitation.PrecipitationParameters import Constraints
 
 class VolumeParameter(Enum):
     MOLAR_VOLUME = 0
@@ -310,39 +313,7 @@ class PrecipitateBase(GenericModel):
         '''
         Default values for contraints
         '''
-        self.minRadius = 3e-10
-        self.maxTempChange = 1
-
-        self.maxDTFraction = 1e-2
-        self.minDTFraction = 1e-5
-
-        #Constraints on maximum time step
-        self.checkTemperature = True
-        self.maxNonIsothermalDT = 1
-
-        self.checkPSD = True
-        self.maxDissolution = 1e-3
-
-        self.checkRcrit = True
-        self.maxRcritChange = 0.01
-
-        self.checkNucleation = True
-        self.maxNucleationRateChange = 0.5
-        self.minNucleationRate = 1e-5
-
-        self.checkVolumePre = True
-        self.maxVolumeChange = 0.001
-        
-        self.minComposition = 0
-
-        self.minNucleateDensity = 1e-10
-
-        #TODO: may want to test more to see if this value should be lower or higher
-        #This will attempt to increase the time by 0.1%
-        #This also only affects the sim if the calculated dt is extremely large
-        #So probably only when nucleation rate is 0 will this matter
-        #This roughly corresponds to 1e4 steps over 5-7 orders of magnitude on a log time scale
-        self.dtScale = 1e-3
+        self.constraints = Constraints()
 
     def setConstraints(self, **kwargs):
         '''
@@ -377,7 +348,7 @@ class PrecipitateBase(GenericModel):
         dtScale - scaling factor to attempt to progressively increase dt over time
         '''
         for key, value in kwargs.items():
-            setattr(self, key, value)
+            setattr(self.constraints, key, value)
 
     def setBetaBinary(self, functionType = 1):
         '''
@@ -884,7 +855,7 @@ class PrecipitateBase(GenericModel):
             print('Nucleation density not set.\nSetting nucleation density assuming grain size of {:.0f} um and dislocation density of {:.0e} #/m2'.format(100, 5e12))
             self.setNucleationDensity(100, 1, 5e12)
         for p in range(len(self.phases)):
-            self.Rmin[p] = self.minRadius
+            self.Rmin[p] = self.constraints.minRadius
         self._getNucleationDensity()
         self._setGBfactors()
         self._setupStrainEnergyFactors()
@@ -1212,7 +1183,7 @@ class PrecipitateBase(GenericModel):
             #If nucleates form, then calculate radius of precipitate
             #Radius is set slightly larger so precipitate
             dt = 0.01 if self.n == 0 else self.time[self.n] - self.time[self.n-1]
-            if nucRate[p]*dt >= self.minNucleateDensity and Rcrit[p] >= self.Rmin[p]:
+            if nucRate[p]*dt >= self.constraints.minNucleateDensity and Rcrit[p] >= self.Rmin[p]:
                 Rad[0,p] = Rcrit[p] + 0.5 * np.sqrt(self.kB * T / (np.pi * self.gamma[p]))
             else:
                 Rad[0,p] = 0

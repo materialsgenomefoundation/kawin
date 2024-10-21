@@ -9,6 +9,36 @@ GAS_CONSTANT = 8.314
 AVOGADROS_NUMBER = 6.022e23
 BOLTZMANN_CONSTANT = GAS_CONSTANT / AVOGADROS_NUMBER
 
+class PrecipitationData:
+    def __init__(self, phases, elements, N = 1):
+        self.reset(phases, elements, N)
+
+    def reset(self, phases, elements, N = 1):
+        self.time = np.zeros(N)
+        self.temperature = np.zeros(N)
+        self.composition = np.zeros((N, len(elements)))
+        self.xEqAlpha = np.zeros((N, len(phases), len(elements)))
+        self.xEqBeta = np.zeros((N, len(phases), len(elements)))
+        
+        self.drivingForce = np.zeros((N, len(phases)))
+        self.impingment = np.zeros((N, len(phases)))
+        self.Gcrit = np.zeros((N, len(phases)))
+        self.Rcrit = np.zeros((N, len(phases)))
+        self.Rnuc = np.zeros((N, len(phases)))
+        self.nucRate = np.zeros((N, len(phases)))
+
+        self.Ravg = np.zeros((N, len(phases)))
+        self.ARavg = np.zeros((N, len(phases)))
+        self.volFrac = np.zeros((N, len(phases)))
+        self.fconc = np.zeros((N, len(phases), len(elements)))
+
+    def appendToArrays(self, newData):
+        attributes = ['time', 'temperature', 'composition', 'xEqAlpha', 'xEqBeta', 
+                      'drivingForce', 'impingement', 'Gcrit', 'Rcrit', 'Rnuc', 'nucRate',
+                      'Ravg', 'ARavg', 'volFrac', 'fconc']
+        for a in attributes:
+            setattr(self, a, np.concatenate([getattr(self, a), getattr(newData, a)], axis=0))
+
 class VolumeParameter:
     MOLAR_VOLUME = 0
     ATOMIC_VOLUME = 1
@@ -188,6 +218,9 @@ class PrecipitateParameters:
 
 class Constraints:
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.minRadius = 3e-10
         self.maxTempChange = 1
 
@@ -221,4 +254,71 @@ class Constraints:
         #So probably only when nucleation rate is 0 will this matter
         #This roughly corresponds to 1e4 steps over 5-7 orders of magnitude on a log time scale
         self.dtScale = 1e-3
+
+    def computeDTfromPSD(self, n, temperatures, PBMs, growth, dissolutionIndex, phases, dtMax):
+        if self.checkPSD:
+            dtPBM = [dtMax]
+            # TODO: do we really need to check if we're in isothermal state? I believe this was
+            #       added before dissolution rate from negative driving forces were possible
+            if n > 0 and temperatures[n] == temperatures[n-1]:
+                dtPBM += [PBMs[p].getDTEuler(dtMax, growth[p], dissolutionIndex[p]) for p in range(len(phases))]
+            return np.amin(dtPBM)
+        else:
+            return dtMax
+
+    def computeDTfromNucleationRate(self, n, nucRate, phases, dtPrev, dtMax):
+        if self.checkNucleation:
+            dtNuc = dtMax * np.ones(len(phases))
+            if n > 0:
+                nRateCurr = nucRate[n]
+                nRatePrev = nucRate[n-1]
+                for p in range(len(phases)):
+                    if nRateCurr[p] > self.minNucleationRate and nRatePrev[p] > self.minNucleationRate and nRatePrev[p] != nRateCurr[p]:
+                        dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(nRatePrev[p] / nRateCurr[p]))
+            else:
+                for p in range(len(phases)):
+                    if nucRate[n,p] * dtPrev > 1e5:
+                        dtNuc[p] = 1e5 / nucRate[n,p]
+            return np.amin(dtNuc)
+        else:
+            return dtMax
+        
+    def computeDTfromTemperature(self, n, temperatures, dtPrev, dtMax):
+        if self.checkTemperature and n > 0:
+            Tchange = temperatures[n] - temperatures[n-1]
+            dtTemp = dtMax
+            if Tchange > self.maxNonIsothermalDT:
+                dtTemp = self.maxNonIsothermalDT * dtPrev / Tchange
+            return dtTemp
+        else:
+            return dtMax
+        
+    def computeDTfromRcrit(self, n, Rcrit, dGs, phases, dtPrev, dtMax):
+        if self.checkRcrit and n > 0:
+            dtRad = dtMax * np.ones(len(phases))
+            if not all((Rcrit[n-1,:] == 0) & (Rcrit[n,:] - Rcrit[n-1,:] == 0) & (dGs[n,:] <= 0)):
+                indices = (Rcrit[n-1,:] > 0) & (Rcrit[n,:] - Rcrit[n-1,:] != 0) & (dGs[n,:] > 0)
+                dtRad[indices] = self.maxRcritChange * dtPrev / np.abs((Rcrit[n,:][indices] - Rcrit[n-1,:][indices]) / Rcrit[n-1,:][indices])
+            return np.amin(dtRad)
+        else:
+            return dtMax
+        
+    def computeDTfromVolume(self, n, nucRate, nucRadius, PBMs, growths, VmAlpha, VmBeta, GB, phases, dtMax):
+        if self.checkVolumePre:
+            dV = np.zeros(len(phases))
+            for p in range(len(phases)):
+                #Calculate estimate volume change based off growth rate and nucleated particles
+                #TODO: account for non-spherical precipitates
+                dVi = PBMs[p].PSD * PBMs[p].PSDsize**2 * 0.5 * (growths[p][1:] + growths[p][:-1])
+                dVi[dVi < 0] = 0
+                dV = VmAlpha / VmBeta[p] * (GB[p].areaFactor * np.sum(dVi) + GB[p].volumeFactor * nucRate[n,p] * nucRadius[n,p]**3)
+
+            dtVol = dtMax * np.ones(len(phases))
+            for p in range(len(phases)):
+                if dV != 0:
+                    dtVol[p] = self.maxVolumeChange / (2 * np.abs(dV))
+            return np.amin(dtVol)
+        else:
+            return dtMax
+
 

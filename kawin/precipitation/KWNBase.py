@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
+
 from kawin.precipitation.non_ideal.EffectiveDiffusion import EffectiveDiffusionFunctions
 from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
 from kawin.precipitation.non_ideal.ElasticFactors import StrainEnergy
@@ -44,25 +45,16 @@ class PrecipitateBase(GenericModel):
         self.Rg = 8.314     #Gas constant - J/mol-K
         self.avo = 6.022e23 #Avogadro's number (/mol)
         self.kB = self.Rg / self.avo    #Boltzmann constant (J/K)
-
-        #Default variables, these terms won't have to be set before simulation
-        self.strainEnergy = [StrainEnergy() for i in self.phases]
-        self.calculateAspectRatio = [False for i in self.phases]
-        self.RdrivingForceLimit = np.zeros(len(self.phases), dtype=np.float32)
-        self.shapeFactors = [ShapeFactor() for i in self.phases]
-        self.theta = 2 * np.ones(len(self.phases), dtype=np.float32)
-        self.effDiffFuncs = EffectiveDiffusionFunctions()
-        self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
-        self.infinitePrecipitateDiffusion = [True for i in self.phases]
+        
         self.dTemp = 0
         self.iterationSinceTempChange = 0
+
+        # Matrix parameters
+        self.effDiffFuncs = EffectiveDiffusionFunctions()
+        self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
         self.GBenergy = 0.3     #J/m2
-        self.parentPhases = [[] for i in self.phases]
-        self.GB = [GBFactors() for p in self.phases]
-        
-        #Set other variables to None to throw errors if not set
+        self.theta = 2 * np.ones(len(self.phases), dtype=np.float32)
         self.xInit = None
-        self.Tparameters = None
 
         #Nucleation site density, it will default to dislocations with 5e12 /m2 density
         self._isNucleationSetup = False
@@ -71,19 +63,33 @@ class PrecipitateBase(GenericModel):
         self.GBcornerN0 = None
         self.dislocationN0 = None
         self.bulkN0 = None
-        
-        #Unit cell parameters
+
         self.aAlpha = None
         self.VaAlpha = None
         self.VmAlpha = None
         self.atomsPerCellAlpha = None
+
+        #Set other variables to None to throw errors if not set
+        self.Tparameters = None
+
+        
+        #Default variables, these terms won't have to be set before simulation
+        self.strainEnergy = [StrainEnergy() for i in self.phases]
+        self.shapeFactors = [ShapeFactor() for i in self.phases]
+        self.GB = [GBFactors() for p in self.phases]
+        self.gamma = np.empty(len(self.phases), dtype=np.float32)
+        self.calculateAspectRatio = [False for i in self.phases]
+        self.RdrivingForceLimit = np.zeros(len(self.phases), dtype=np.float32)
+        self.infinitePrecipitateDiffusion = [True for i in self.phases]
+        self.parentPhases = [[] for i in self.phases]
+        
+        #Unit cell parameters
         self.atomsPerCellBeta = np.empty(len(self.phases), dtype=np.float32)
         self.VaBeta = np.empty(len(self.phases), dtype=np.float32)
         self.VmBeta = np.empty(len(self.phases), dtype=np.float32)
         self.Rmin = np.empty(len(self.phases), dtype=np.float32)
         
         #Free energy parameters
-        self.gamma = np.empty(len(self.phases), dtype=np.float32)
         self.dG = [None for i in self.phases]
         self.interfacialComposition = [None for i in self.phases]
 
@@ -1032,7 +1038,8 @@ class PrecipitateBase(GenericModel):
             if beta is None:
                 return self.betas[p]
             else:
-                rCrit = self._currY[self.R_CRIT][0]
+                rCrit = self._currY.Rcrit[0]
+                #rCrit = self._currY[self.R_CRIT][0]
                 return (self.GB[p].areaFactor * rCrit[p]**2 / self.aAlpha**4) * beta
 
     def _incubationIsothermal(self, t, p, Z, betas):

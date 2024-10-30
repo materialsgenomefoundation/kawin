@@ -10,6 +10,7 @@ AVOGADROS_NUMBER = 6.022e23
 BOLTZMANN_CONSTANT = GAS_CONSTANT / AVOGADROS_NUMBER
 
 class PrecipitationData:
+    # Strings for each attributes to make it easier to loop accessing these terms
     ATTRIBUTES = [
         'time', 'temperature',
         'composition', 'xEqAlpha', 'xEqBeta',
@@ -17,48 +18,51 @@ class PrecipitationData:
         'Rnuc',  'Ravg', 'ARavg', 'volFrac', 'fconc'
     ]
     
-    def __init__(self, phases, elements, N = 1):
+    def __init__(self, phases: list[str], elements: list[int], N: int = 1):
         self.phases = phases
         self.elements = elements
-        self.reset(phases, elements, N)
+        self.reset(N)
 
-    def reset(self, phases, elements, N = 1):
+    def reset(self, N: int = 1):
         self.n = N-1
         self.time = np.zeros(N)
         self.temperature = np.zeros(N)
-        self.composition = np.zeros((N, len(elements)))
-        self.xEqAlpha = np.zeros((N, len(phases), len(elements)))
-        self.xEqBeta = np.zeros((N, len(phases), len(elements)))
-        self.drivingForce = np.zeros((N, len(phases)))
-        self.impingement = np.zeros((N, len(phases)))
-        self.Gcrit = np.zeros((N, len(phases)))
-        self.Rcrit = np.zeros((N, len(phases)))
-        self.Rnuc = np.zeros((N, len(phases)))
-        self.nucRate = np.zeros((N, len(phases)))
-        self.precipitateDensity = np.zeros((N, len(phases)))
-        self.Ravg = np.zeros((N, len(phases)))
-        self.ARavg = np.zeros((N, len(phases)))
-        self.volFrac = np.zeros((N, len(phases)))
-        self.fconc = np.zeros((N, len(phases), len(elements)))
+        self.composition = np.zeros((N, len(self.elements)))
+        self.xEqAlpha = np.zeros((N, len(self.phases), len(self.elements)))
+        self.xEqBeta = np.zeros((N, len(self.phases), len(self.elements)))
+        self.drivingForce = np.zeros((N, len(self.phases)))
+        self.impingement = np.zeros((N, len(self.phases)))
+        self.Gcrit = np.zeros((N, len(self.phases)))
+        self.Rcrit = np.zeros((N, len(self.phases)))
+        self.Rnuc = np.zeros((N, len(self.phases)))
+        self.nucRate = np.zeros((N, len(self.phases)))
+        self.precipitateDensity = np.zeros((N, len(self.phases)))
+        self.Ravg = np.zeros((N, len(self.phases)))
+        self.ARavg = np.zeros((N, len(self.phases)))
+        self.volFrac = np.zeros((N, len(self.phases)))
+        self.fconc = np.zeros((N, len(self.phases), len(self.elements)))
 
     def appendToArrays(self, newData):
+        '''
+        Appends data from another PrecipitationData object to current one
+        '''
         for name in self.ATTRIBUTES:
             setattr(self, name, np.concatenate([getattr(self, name), getattr(newData, name)], axis=0))
         self.n = len(self.time) - 1
 
-    def copySlice(self, N = 0):
+    def copySlice(self, N: int = 0):
         sliceData = PrecipitationData(self.phases, self.elements, N=1)
         for name in self.ATTRIBUTES:
             getattr(sliceData, name)[0] = getattr(self, name)[N]
         return sliceData
     
-    def setSlice(self, sliceData, N = 0):
+    def setSlice(self, sliceData, N: int = 0):
         for name in self.ATTRIBUTES:
             getattr(self, name)[N] = getattr(sliceData, name)[0]
 
-    def print(self, N = 0):
+    def print(self, N: int = 0):
         for name in self.ATTRIBUTES:
-            print(name, getattr(self, name)[0])
+            print(f'{name}: {getattr(self, name)[N]}')
 
 class VolumeParameter:
     MOLAR_VOLUME = 0
@@ -102,6 +106,7 @@ class NucleationParameters:
     def __init__(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
         self.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
 
+        self._isSetup = False
         self.GBareaN0 = None
         self.GBedgeN0 = None
         self.GBcornerN0 = None
@@ -168,7 +173,7 @@ class NucleationParameters:
         gbCornerN0 = self.grainCornerAmount(grainSize, grainAspectRatio)
         return gbCornerN0
 
-    def _setupNucleationDensity(self, x0, VmAlpha):
+    def setupNucleationDensity(self, x0, VmAlpha):
         self.bulkN0 = self.bulkSites(x0, VmAlpha)
         self.dislocationN0 = self.dislocationSites(VmAlpha)
         
@@ -180,6 +185,8 @@ class NucleationParameters:
             self.GBareaN0 = 0
             self.GBedgeN0 = 0
             self.GBcornerN0 = 0
+
+        self._isSetup = True
 
 class TemperatureParameters:
     def __init__(self, *args):
@@ -194,11 +201,11 @@ class TemperatureParameters:
             self.Tparameters = None
             self.Tfunction = None
 
-    def setIsothermalTemperature(self, T):
+    def setIsothermalTemperature(self, T: float):
         self.Tparameters = T
         self.Tfunction = lambda t: self.Tparameters
 
-    def setTemperatureArray(self, times, temperatures):
+    def setTemperatureArray(self, times: list[float], temperatures: list[float]):
         self.Tparameters = (times, temperatures)
         self.Tfunction = lambda t: np.interp(t/3600, self.Tparameters[0], self.Tparameters[1], self.Tparameters[1][0], self.Tparameters[1][-1])
 
@@ -217,12 +224,15 @@ class MatrixParameters:
         self.volume = VolumeParameter()
         self.nucleation = NucleationParameters()
         self.theta = 2
+        self.initComposition = None
 
 class PrecipitateParameters:
     '''
     Parameters for a single precipitate
     '''
     def __init__(self, name, phase = None):
+        # Name is the print/output name of the phase and phase is the actual name in the database
+        # If phase isn't supplied, then phase = name
         self.name = name
         if phase is None:
             phase = name
@@ -236,6 +246,8 @@ class PrecipitateParameters:
         self.calculateAspectRatio = False
         self.RdrivingForceLimit = 0
         self.infinitePrecipitateDiffusion = False
+        self.parentPhases = []
+        self.Rmin = None
 
 class Constraints:
     def __init__(self):
@@ -252,21 +264,24 @@ class Constraints:
         self.checkTemperature = True
         self.maxNonIsothermalDT = 1
 
+        #Maximum dissolution as volume fraction of the particle size distribution
         self.checkPSD = True
         self.maxDissolution = 1e-3
 
+        #Maximum change in critical radius by relative increase
         self.checkRcrit = True
         self.maxRcritChange = 0.01
 
+        #Maximum change in nucleation rate as a ratio
         self.checkNucleation = True
         self.maxNucleationRateChange = 0.5
         self.minNucleationRate = 1e-5
 
+        #Maximum volume change from nucleation
         self.checkVolumePre = True
         self.maxVolumeChange = 0.001
         
         self.minComposition = 0
-
         self.minNucleateDensity = 1e-10
 
         #TODO: may want to test more to see if this value should be lower or higher

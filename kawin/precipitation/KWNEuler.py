@@ -299,7 +299,7 @@ class PrecipitateModel (PrecipitateBase):
             #Set first index of eq composition
             for p in range(len(self.phases)):
                 #Use arbitrary dg, R and gE since only the eq compositions are needed here
-                growth_result = self.interfacialComposition[p](self.xComp[self.pData.n], self.temperature[self.pData.n], 0, 1, 0)
+                growth_result = self.interfacialComposition[p](self.pData.composition[self.pData.n], self.pData.temperature[self.pData.n], 0, 1, 0)
                 if growth_result is not None:
                     _, _, _, c_eq_alpha, c_eq_beta = growth_result
                     self.pData.xEqAlpha[self.pData.n,p] = c_eq_alpha

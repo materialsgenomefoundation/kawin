@@ -106,7 +106,7 @@ class NucleationParameters:
     def __init__(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
         self.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
 
-        self._isSetup = False
+        self._parametersSet = False
         self.GBareaN0 = None
         self.GBedgeN0 = None
         self.GBcornerN0 = None
@@ -186,10 +186,11 @@ class NucleationParameters:
             self.GBedgeN0 = 0
             self.GBcornerN0 = 0
 
-        self._isSetup = True
-
 class TemperatureParameters:
     def __init__(self, *args):
+        self.setTemperatureParameters(args)
+
+    def setTemperatureParameters(self, *args):
         if len(args) == 2:
             self.setTemperatureArray(*args)
         elif len(args) == 1:
@@ -245,9 +246,34 @@ class PrecipitateParameters:
         self.gamma = None
         self.calculateAspectRatio = False
         self.RdrivingForceLimit = 0
-        self.infinitePrecipitateDiffusion = False
+        self.infinitePrecipitateDiffusion = True
         self.parentPhases = []
         self.Rmin = None
+
+    def setup(self, gbEnergy = 0.3, minRadius = 3e-10):
+        if self.GBfactor.isGrainBoundaryNucleation:
+            self.shapeFactor.setSpherical()
+        self.GBfactor.setFactors(gbEnergy, self.gamma)
+
+        self.strainEnergy.setup()
+        if self.strainEnergy.type != StrainEnergy.CONSTANT:
+            if self.shapeFactor.particleType == ShapeFactor.SPHERE:
+                self.strainEnergy.setSpherical()
+            elif self.shapeFactor.particleType == ShapeFactor.CUBIC:
+                self.strainEnergy.setCuboidal()
+            else:
+                self.strainEnergy.setEllipsoidal()
+
+        self.Rmin = minRadius
+        
+    def computeStrainEnergyFromR(self, r):
+        return self.strainEnergy.strainEnergy(self.shapeFactor.normalRadii(r))
+    
+    def computeGibbsThomsonContribution(self, r):
+        vmbeta = self.volume.Vm
+        strain = self.computeStrainEnergyFromR(r)
+        thermoFactor = self.shapeFactor.thermoFactor(r)
+        return vmbeta * (strain + 2*thermoFactor*self.gamma / r)
 
 class Constraints:
     def __init__(self):

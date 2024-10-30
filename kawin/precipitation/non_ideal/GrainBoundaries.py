@@ -170,7 +170,7 @@ class GBFactors:
         self.gamma = gamma
         self.GBk = self.getGBRatio(self.gbEnergy, self.gamma)
 
-        if self.nucleationSiteType == self.BULK or self.nucleationSiteType == self.DISLOCATION:
+        if not self.isGrainBoundaryNucleation:
             gbData = self.bulkFactors(self.GBk, setInvalidToNan=False)
         elif self.nucleationSiteType == self.GRAIN_BOUNDARIES:
             gbData = self.grainBoundaryFactors(self.GBk, setInvalidToNan=False)
@@ -208,6 +208,17 @@ class GBFactors:
             self.areaFactor = gbData.area_factor
             self.volumeFactor = gbData.volume_factor
             self.gbRemoval = gbData.gb_removal
+
+    @property
+    def areaRemoval(self):
+        if not self.isGrainBoundaryNucleation:
+            return 1
+        else:
+            return np.sqrt(self.gbRemoval / np.pi)
+        
+    @property
+    def isGrainBoundaryNucleation(self):
+        return self.nucleationSiteType != self.BULK and self.nucleationSiteType != self.DISLOCATION
 
     def Rcrit(self, dG):
         '''

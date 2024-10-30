@@ -147,15 +147,26 @@ def plotEuler(precModel, axes, variable, bounds = None, timeUnits = 's', radius=
 
     scale = []
     for p in range(len(precModel.phases)):
-        if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+        # if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+        #     if radius == 'spherical':
+        #         scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+        #     else:
+        #         scale.append(1/precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+        #         if radius == 'long':
+        #             scale.append(precModel.shapeFactors[p].aspectRatio(precModel.PBM[p].PSDbounds) / precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+        # else:
+        #     scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+
+        if not precModel.precipitateParameters[p].GBfactor.isGrainBoundaryNucleation:
             if radius == 'spherical':
-                scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+                scale.append(precModel.precipitateParameters[p].GBfactor.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
             else:
-                scale.append(1/precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+                scale.append(1/precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
                 if radius == 'long':
-                    scale.append(precModel.shapeFactors[p].aspectRatio(precModel.PBM[p].PSDbounds) / precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+                    scale.append(precModel.precipitateParameters[p].shapeFactor.aspectRatio(precModel.PBM[p].PSDbounds) / precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
         else:
-            scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+            scale.append(precModel.precipitateParameters[p].GBfactor.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
+
 
     if variable in compositionVariables:
         plotEulerComposition(precModel, variable, axes, *args, **kwargs)
@@ -272,13 +283,20 @@ def plotSingleVariables(precModel, timeScale, radius, labels, variable, axes, *a
     elif variable == 'Average Radius':
         plotVariable = precModel.pData.Ravg
         for p in range(len(precModel.phases)):
-            if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+            # if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+            #     if radius != 'spherical':
+            #         plotVariable[p] /= precModel.shapeFactors[p].eqRadiusFactor(precModel.pData.Ravg[p])
+            #     if radius == 'long':
+            #         plotVariable[p] *= precModel.pData.ARavg[p]
+            # else:
+            #     plotVariable[p] *= precModel._GBareaRemoval(p)
+            if not precModel.precipitateParameters[p].GBfactor.isGrainBoundaryNucleation:
                 if radius != 'spherical':
-                    plotVariable[p] /= precModel.shapeFactors[p].eqRadiusFactor(precModel.pData.Ravg[p])
+                    plotVariable[p] /= precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.pData.Ravg[p])
                 if radius == 'long':
                     plotVariable[p] *= precModel.pData.ARavg[p]
             else:
-                plotVariable[p] *= precModel._GBareaRemoval(p)
+                plotVariable[p] *= precModel.precipitateParameters[p].GBfactor.areaRemoval
     elif variable == 'Volume Average Radius':
         plotVariable = np.zeros(precModel.pData.volFrac.shape)
         indices = precModel.pData.precipitateDensity > 0

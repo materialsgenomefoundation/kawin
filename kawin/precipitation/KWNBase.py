@@ -127,14 +127,17 @@ class PrecipitateBase(GenericModel):
         This does not reset the model parameters, however, it will clear any stopping conditions
         '''
         self._resetArrays()
-        self.xComp[0] = self.xInit
+        self.pData.composition[0] = self.matrixParameters.initComposition
+        self.pData.temperature[0] = self.temperatureParameters(0)
+        #self.xComp[0] = self.xInit
         self.dTemp = 0
+        self.iterationSinceTempChange = 0
 
         self._isSetup = False
         self._currY = None
 
         #Reset temperature array
-        self.temperatureParameters.setTemperatureParameters(self.temperatureParameters.Tparameters)
+        #self.temperatureParameters.setTemperatureParameters(self.temperatureParameters.Tparameters)
         # if np.isscalar(self.Tparameters):
         #     self.setTemperature(self.Tparameters)
         # elif len(self.Tparameters) == 2:
@@ -539,7 +542,7 @@ class PrecipitateBase(GenericModel):
         #self.theta[index] = theta
         self.matrixParameters.theta = theta
 
-    def setTemperature(self, temperature):
+    def setTemperature(self, *args):
         '''
         Sets temperature parameter
 
@@ -557,10 +560,10 @@ class PrecipitateBase(GenericModel):
         '''
         #self.Tparameters = temperature
         #self.pData.temperature[0] = self.getTemperature(0)
-        self.temperatureParameters.setTemperatureParameters(temperature)
+        self.temperatureParameters.setTemperatureParameters(*args)
         self.pData.temperature[0] = self.temperatureParameters(0)
         #self.temperature[0] = self.getTemperature(0)
-        if np.isscalar(temperature):
+        if self.temperatureParameters._isIsothermal:
             self._incubation = self._incubationIsothermal
         else:
             self._incubation = self._incubationNonIsothermal

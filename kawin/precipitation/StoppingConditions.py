@@ -32,7 +32,6 @@ class PrecipitationStoppingCondition:
         self._satisfiedTime = -1
         self._phase = phase
         self._element = element
-        self._modelVar = None
 
     def reset(self):
         '''
@@ -40,6 +39,9 @@ class PrecipitationStoppingCondition:
         '''
         self._isSatisfied = False
         self._satisfiedTime = -1
+
+    def _getData(self, model):
+        raise NotImplementedError()
 
     def _poll(self, model, n):
         '''
@@ -54,7 +56,8 @@ class PrecipitationStoppingCondition:
         Returns value (float) of attribute at n,p
         '''
         p = model.phaseIndex(self._phase)
-        return getattr(model, self._modelVar)[n,p]
+        data = self._getData(model)
+        return data[n,p]
     
     def _testCondition(self, model):
         '''
@@ -105,33 +108,42 @@ class PrecipitationStoppingCondition:
 class VolumeFractionCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
-        self._modelVar = 'betaFrac'
+
+    def _getData(self, model):
+        return model.pData.volFrac
 
 class AverageRadiusCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
-        self._modelVar = 'avgR'
+
+    def _getData(self, model):
+        return model.pData.Ravg
         
 class DrivingForceCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
-        self._modelVar = 'dGs'
+
+    def _getData(self, model):
+        return model.pData.drivingForce
 
 class NucleationRateCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
-        self._modelVar = 'nucRate'
+
+    def _getData(self, model):
+        return model.pData.nucRate
 
 class PrecipitateDensityCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
-        self._modelVar = 'precipitateDensity'
+
+    def _getData(self, model):
+        return model.pData.precipitateDensity
 
 class CompositionCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, element = None):
         super().__init__(condition, value, element = element)
-        self._modelVar = 'xComp'
 
     def _poll(self, model, n):
         e = 0 if self._element is None else model.elements.index(self._element)
-        return getattr(model, self._modelVar)[n,e]
+        return model.pData.composition[n,e]

@@ -174,7 +174,8 @@ class NucleationParameters:
         return gbCornerN0
 
     def setupNucleationDensity(self, x0, VmAlpha):
-        self.bulkN0 = self.bulkSites(x0, VmAlpha)
+        if self.bulkN0 is None:
+            self.bulkN0 = self.bulkSites(x0, VmAlpha)
         self.dislocationN0 = self.dislocationSites(VmAlpha)
         
         if self.grainSize != np.inf:
@@ -189,9 +190,11 @@ class NucleationParameters:
 class TemperatureParameters:
     def __init__(self, *args):
         self.setTemperatureParameters(args)
+        self._isIsothermal = True
 
     def setTemperatureParameters(self, *args):
         if len(args) == 2:
+            print(args)
             self.setTemperatureArray(*args)
         elif len(args) == 1:
             if callable(args[0]):
@@ -203,14 +206,17 @@ class TemperatureParameters:
             self.Tfunction = None
 
     def setIsothermalTemperature(self, T: float):
+        self._isIsothermal = True
         self.Tparameters = T
         self.Tfunction = lambda t: self.Tparameters
 
     def setTemperatureArray(self, times: list[float], temperatures: list[float]):
+        self._isIsothermal = False
         self.Tparameters = (times, temperatures)
         self.Tfunction = lambda t: np.interp(t/3600, self.Tparameters[0], self.Tparameters[1], self.Tparameters[1][0], self.Tparameters[1][-1])
 
     def setTemperatureFunction(self, func):
+        self._isIsothermal = False
         self.Tparameters = func
         self.Tfunction = lambda t: self.Tparameters(t)
 

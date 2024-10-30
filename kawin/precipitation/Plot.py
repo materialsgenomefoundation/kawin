@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def getTimeAxis(precModel, timeUnits='s', bounds=None):
+def getTimeAxis(time, timeUnits='s', bounds=None):
         '''
         Returns scaling factor, label and x-limits depending on units of time
 
@@ -22,7 +22,7 @@ def getTimeAxis(precModel, timeUnits='s', bounds=None):
             timeLabel = 'Time (hrs)'
 
         if bounds is None:
-            bounds = [timeScale*1e-5*precModel.pData.time[-1], timeScale * precModel.pData.time[-1]]
+            bounds = [timeScale*1e-5*time[-1], timeScale * time[-1]]
 
         return timeScale, timeLabel, bounds
 
@@ -58,7 +58,7 @@ def plotBase(precModel, axes, variable, bounds = None, timeUnits = 's', radius='
         Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
     *args, **kwargs - extra arguments for plotting
     '''
-    timeScale, timeLabel, bounds = getTimeAxis(precModel, timeUnits, bounds)
+    timeScale, timeLabel, bounds = getTimeAxis(precModel.pData.time, timeUnits, bounds)
 
     axes.set_xlabel(timeLabel)
     axes.set_xlim(bounds)

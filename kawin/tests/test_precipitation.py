@@ -1,5 +1,6 @@
 from kawin.tests.datasets import ALZR_TDB, NICRAL_TDB, ALMGSI_DB
-from kawin.precipitation import PrecipitateModel, VolumeParameter
+from kawin.precipitation import PrecipitateModel
+from kawin.precipitation.PrecipitationParameters import VolumeParameter
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 import numpy as np
 from numpy.testing import assert_allclose
@@ -166,7 +167,7 @@ def test_multiphase_precipitation_x_shape():
 
     lowTemp = 175+273.15
     highTemp = 250+273.15
-    model.setTemperature(([0, 16, 17], [lowTemp, lowTemp, highTemp]))
+    model.setTemperature([0, 16, 17], [lowTemp, lowTemp, highTemp])
 
     gamma = {
         'MGSI_B_P': 0.18,

@@ -1,19 +1,7 @@
-from dataclasses import dataclass
-from enum import Enum
-
 import numpy as np
 
-from kawin.precipitation.non_ideal.EffectiveDiffusion import EffectiveDiffusionFunctions
-from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
-from kawin.precipitation.non_ideal.ElasticFactors import StrainEnergy
-from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
 from kawin.GenericModel import GenericModel
 from kawin.precipitation.PrecipitationParameters import Constraints, PrecipitationData, MatrixParameters, PrecipitateParameters, TemperatureParameters
-
-# class VolumeParameter(Enum):
-#     MOLAR_VOLUME = 0
-#     ATOMIC_VOLUME = 1
-#     LATTICE_PARAMETER = 2
 
 class PrecipitateBase(GenericModel):
     '''
@@ -53,45 +41,6 @@ class PrecipitateBase(GenericModel):
         self.temperatureParameters = TemperatureParameters()
         self.precipitateParameters = [PrecipitateParameters(phases[p]) for p in range(len(phases))]
 
-        # # Matrix parameters
-        # self.effDiffFuncs = EffectiveDiffusionFunctions()
-        # self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
-        # self.GBenergy = 0.3     #J/m2
-        # self.theta = 2 * np.ones(len(self.phases), dtype=np.float32)
-        # self.xInit = None
-
-        # #Nucleation site density, it will default to dislocations with 5e12 /m2 density
-        # self._isNucleationSetup = False
-        # self.GBareaN0 = None
-        # self.GBedgeN0 = None
-        # self.GBcornerN0 = None
-        # self.dislocationN0 = None
-        # self.bulkN0 = None
-
-        # self.aAlpha = None
-        # self.VaAlpha = None
-        # self.VmAlpha = None
-        # self.atomsPerCellAlpha = None
-
-        # #Set other variables to None to throw errors if not set
-        # self.Tparameters = None
-        
-        # #Default variables, these terms won't have to be set before simulation
-        # self.strainEnergy = [StrainEnergy() for i in self.phases]
-        # self.shapeFactors = [ShapeFactor() for i in self.phases]
-        # self.GB = [GBFactors() for p in self.phases]
-        # self.gamma = np.empty(len(self.phases), dtype=np.float32)
-        # self.calculateAspectRatio = [False for i in self.phases]
-        # self.RdrivingForceLimit = np.zeros(len(self.phases), dtype=np.float32)
-        # self.infinitePrecipitateDiffusion = [True for i in self.phases]
-        # self.parentPhases = [[] for i in self.phases]
-        
-        # #Unit cell parameters
-        # self.atomsPerCellBeta = np.empty(len(self.phases), dtype=np.float32)
-        # self.VaBeta = np.empty(len(self.phases), dtype=np.float32)
-        # self.VmBeta = np.empty(len(self.phases), dtype=np.float32)
-        # self.Rmin = np.empty(len(self.phases), dtype=np.float32)
-        
         #Free energy parameters
         self.dG = [None for i in self.phases]
         self.interfacialComposition = [None for i in self.phases]
@@ -129,21 +78,11 @@ class PrecipitateBase(GenericModel):
         self._resetArrays()
         self.pData.composition[0] = self.matrixParameters.initComposition
         self.pData.temperature[0] = self.temperatureParameters(0)
-        #self.xComp[0] = self.xInit
         self.dTemp = 0
         self.iterationSinceTempChange = 0
 
         self._isSetup = False
         self._currY = None
-
-        #Reset temperature array
-        #self.temperatureParameters.setTemperatureParameters(self.temperatureParameters.Tparameters)
-        # if np.isscalar(self.Tparameters):
-        #     self.setTemperature(self.Tparameters)
-        # elif len(self.Tparameters) == 2:
-        #     self.setTemperatureArray(*self.Tparameters)
-        # elif self.Tparameters is not None:
-        #     self.setNonIsothermalTemperature(self.Tparameters)
 
         #Reset stopping conditions
         for sc in self._stoppingConditions:
@@ -274,10 +213,8 @@ class PrecipitateBase(GenericModel):
             Initial composition of parent matrix phase in atomic fraction
             Use float for binary system and array of solutes for multicomponent systems
         '''
-        #self.xInit = xInit
         self.matrixParameters.initComposition = xInit
         self.pData.composition[0] = xInit
-        #self.xComp[0] = xInit
         
     def setInterfacialEnergy(self, gamma, phase = None):
         '''
@@ -289,7 +226,6 @@ class PrecipitateBase(GenericModel):
             Phase to input interfacial energy (defaults to first precipitate in list)
         '''
         index = self.phaseIndex(phase)
-        #self.gamma[index] = gamma
         self.precipitateParameters[index].gamma = gamma
         
     def resetAspectRatio(self, phase = None):
@@ -300,7 +236,6 @@ class PrecipitateBase(GenericModel):
             Phase to consider (defaults to first precipitate in list)
         '''
         index = self.phaseIndex(phase)
-        #self.shapeFactors[index].setSpherical()
         self.precipitateParameters[index].shapeFactor.setSpherical()
 
     def setPrecipitateShape(self, precipitateShape, phase = None, ratio = 1):
@@ -319,35 +254,7 @@ class PrecipitateBase(GenericModel):
             If function, must take in radius as input and output float greater than 1
         '''
         index = self.phaseIndex(phase)
-        #self.shapeFactors[index].setPrecipitateShape(precipitateShape, ratio)
         self.precipitateParameters[index].shapeFactor.setPrecipitateShape(precipitateShape, ratio)
-
-    # def _setVolume(self, value, valueType: VolumeParameter, atomsPerCell):
-    #     '''
-    #     Private function that returns Vm, Va, a, atomsPerCell given a VolumeParameter and atomsPerCell
-
-    #     Parameters
-    #     ----------
-    #     value : float
-    #         Value for volume parameters (lattice parameter, atomic (unit cell) volume or molar volume)
-    #     valueType : VolumeParameter
-    #         States what volume term that value is
-    #     atomsPerCell : int
-    #         Number of atoms in the unit cell
-    #     '''
-    #     if valueType == VolumeParameter.MOLAR_VOLUME:
-    #         Vm = value
-    #         Va = atomsPerCell * Vm / self.avo
-    #         a = np.cbrt(Va)
-    #     elif valueType == VolumeParameter.ATOMIC_VOLUME:
-    #         Va = value
-    #         Vm = Va * self.avo / atomsPerCell
-    #         a = np.cbrt(Va)
-    #     elif valueType == VolumeParameter.LATTICE_PARAMETER:
-    #         a = value
-    #         Va = a**3
-    #         Vm = Va * self.avo / atomsPerCell
-    #     return Vm, Va, a, atomsPerCell
     
     def setVolumeAlpha(self, value, valueType, atomsPerCell):
         '''
@@ -362,7 +269,6 @@ class PrecipitateBase(GenericModel):
         atomsPerCell : int
             Number of atoms in the unit cell
         '''
-        #self.VmAlpha, self.VaAlpha, self.aAlpha, self.atomsPerCellAlpha = self._setVolume(value, valueType, atomsPerCell)
         self.matrixParameters.volume.setVolume(value, valueType, atomsPerCell)
 
     def setVolumeBeta(self, value, valueType, atomsPerCell, phase = None):
@@ -381,7 +287,6 @@ class PrecipitateBase(GenericModel):
             Phase to consider (defaults to first precipitate in list)
         '''
         index = self.phaseIndex(phase)
-        #self.VmBeta[index], self.VaBeta[index], _, self.atomsPerCellBeta[index] = self._setVolume(value, valueType, atomsPerCell)
         self.precipitateParameters[index].volume.setVolume(value, valueType, atomsPerCell)
 
     def setNucleationDensity(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
@@ -401,52 +306,8 @@ class PrecipitateBase(GenericModel):
             By default (None), this is calculated by the number of lattice sites containing a solute atom
             However, for calibration purposes, it may be better to set the nucleation site density manually
         '''
-        # self.grainSize = grainSize * 1e-6
-        # self.grainAspectRatio = aspectRatio
-        # self.dislocationDensity = dislocationDensity
-
-        # self.bulkN0 = bulkN0
-        # self._isNucleationSetup = True
         self.matrixParameters.nucleation.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
         self.matrixParameters.nucleation._parametersSet = True
-
-    # def _getNucleationDensity(self):
-    #     '''
-    #     Calculates nucleation density
-    #     This is separated from setting nucleation density to
-    #         allow it to be called right before the simulation starts
-    #     '''
-    #     #Set bulk nucleation site to the number of solutes per unit volume
-    #     #   This is the represent that any solute atom can be a nucleation site
-    #     #NOTE: some texts will state the bulk nucleation sites to just be the number
-    #     #       of lattice sites per unit volume. The justification for this would be 
-    #     #       the solutes can diffuse around to any lattice site and nucleate there
-    #     if self.bulkN0 is None:
-    #         if self.numberOfElements == 1:
-    #             self.bulkN0 = self.pData.composition[0] * (self.avo / self.VmAlpha)
-    #             #self.bulkN0 = self.xComp[0] * (self.avo / self.VmAlpha)
-    #         else:
-    #             self.bulkN0 = np.amin(self.pData.composition[0]) * (self.avo / self.VmAlpha)
-    #             #self.bulkN0 = np.amin(self.xComp[0,:]) * (self.avo / self.VmAlpha)
-
-    #     self.dislocationN0 = self.dislocationDensity * (self.avo / self.VmAlpha)**(1/3)
-        
-    #     if self.grainSize != np.inf:
-    #         #Number of lattice sites on grain boundaries (#/m3)
-    #         if self.GBareaN0 is None:
-    #             self.GBareaN0 = (6 * np.sqrt(1 + 2 * self.grainAspectRatio**2) + 1 + 2 * self.grainAspectRatio) / (4 * self.grainAspectRatio * self.grainSize)
-    #             self.GBareaN0 *= (self.avo / self.VmAlpha)**(2/3)
-    #         #Number of lattice sites on grain edges (#/m3)
-    #         if self.GBedgeN0 is None:
-    #             self.GBedgeN0 = 2 * (np.sqrt(2) + 2 * np.sqrt(1 + self.grainAspectRatio**2)) / (self.grainAspectRatio * self.grainSize**2)
-    #             self.GBedgeN0 *= (self.avo / self.VmAlpha)**(1/3)
-    #         #Number of lattice sites on grain corners (which is just the number of corners) (#/m3)
-    #         if self.GBcornerN0 is None:
-    #             self.GBcornerN0 = 12 / (self.grainAspectRatio * self.grainSize**3)
-    #     else:
-    #         self.GBareaN0 = 0
-    #         self.GBedgeN0 = 0
-    #         self.GBcornerN0 = 0
         
     def setNucleationSite(self, site, phase = None):
         '''
@@ -462,36 +323,7 @@ class PrecipitateBase(GenericModel):
             Phase to consider (defaults to first precipitate in list)
         '''
         index = self.phaseIndex(phase)
-
-        # self.GB[index].setNucleationType(site)
-        
-        # if self.GB[index].nucleationSiteType != GBFactors.BULK and self.GB[index].nucleationSiteType != GBFactors.DISLOCATION:
-        #     self.shapeFactors[index].setSpherical()
-
         self.precipitateParameters[index].GBfactor.setNucleationType(site)
-            
-    # def _setGBfactors(self):
-    #     '''
-    #     Calcualtes factors for bulk or grain boundary nucleation
-    #     This is separated from setting the nucleation sites to allow
-    #     it to be called right before simulation
-    #     '''
-    #     for p in range(len(self.phases)):
-    #         self.GB[p].setFactors(self.GBenergy, self.gamma[p])
-                    
-    # def _GBareaRemoval(self, p):
-    #     '''
-    #     Returns factor to multiply radius by to give the equivalent radius of circles representing the area of grain boundary removal
-
-    #     Parameters
-    #     ----------
-    #     p : int
-    #         Index for phase
-    #     '''
-    #     if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
-    #         return 1
-    #     else:
-    #         return np.sqrt(self.GB[p].gbRemoval / np.pi)
             
     def setParentPhases(self, phase, parentPhases):
         '''
@@ -506,7 +338,6 @@ class PrecipitateBase(GenericModel):
         '''
         index = self.phaseIndex(phase)
         for p in parentPhases:
-            #self.parentPhases[index].append(self.phaseIndex(p))
             self.precipitateParameters[index].parentPhases.append(self.phaseIndex(p))
            
     def setGrainBoundaryEnergy(self, energy):
@@ -521,10 +352,9 @@ class PrecipitateBase(GenericModel):
         Default upon initialization is 0.3
         Note: GBenergy of 0 is equivalent to bulk precipitation
         '''
-        #self.GBenergy = energy
         self.matrixParameters.GBenergy = energy
         
-    def setTheta(self, theta, phase = None):
+    def setTheta(self, theta):
         '''
         This is a scaling factor for the incubation time calculation, default is 2
 
@@ -538,8 +368,6 @@ class PrecipitateBase(GenericModel):
         phase : str (optional)
             Phase to consider (defaults to first precipitate in list)
         '''
-        #index = self.phaseIndex(phase)
-        #self.theta[index] = theta
         self.matrixParameters.theta = theta
 
     def setTemperature(self, *args):
@@ -558,45 +386,9 @@ class PrecipitateBase(GenericModel):
                     Temperature starts at 100 and ramps to 500, reaching it at 15 hours
                     Then temperature will drop to 400, reaching it at 20 hours
         '''
-        #self.Tparameters = temperature
-        #self.pData.temperature[0] = self.getTemperature(0)
         self.temperatureParameters.setTemperatureParameters(*args)
         self.pData.temperature[0] = self.temperatureParameters(0)
-        #self.temperature[0] = self.getTemperature(0)
-        if self.temperatureParameters._isIsothermal:
-            self._incubation = self._incubationIsothermal
-        else:
-            self._incubation = self._incubationNonIsothermal
-
-    # def getTemperature(self, t):
-    #     '''
-    #     Gets temperature at time t
-
-    #     Options:
-    #         Options:
-    #         temperature : float
-    #             Returns temperature
-    #         temperature : function
-    #             Returns evaluated temperature function at time t
-    #         temperature : [times, temps]
-    #             If t < time[0] -> return first temperature
-    #             If t > time[-1] -> return last temperature
-    #             Else, find the two times that t is between and interpolate
-    #     '''
-    #     if np.isscalar(self.Tparameters):
-    #         return self.Tparameters
-    #     elif len(self.Tparameters) == 2:
-    #         if t/3600 < self.Tparameters[0][0]:
-    #             return self.Tparameters[1][0]
-    #         for i in range(len(self.Tparameters[0])-1):
-    #             if t/3600 >= self.Tparameters[0][i] and t/3600 < self.Tparameters[0][i+1]:
-    #                 t0, tf, T0, Tf = self.Tparameters[0][i], self.Tparameters[0][i+1], self.Tparameters[1][i], self.Tparameters[1][i+1]
-    #                 return (Tf - T0) / (tf - t0) * (t/3600 - t0) + T0
-    #         return self.Tparameters[1][-1]
-    #     elif self.Tparameters is not None:
-    #         return self.Tparameters(t)
-    #     else:
-    #         return None
+        self._incubation = self._incubationIsothermal if self.temperatureParameters._isIsothermal else self._incubationNonIsothermal
         
     def setStrainEnergy(self, strainEnergy, phase = None, calculateAspectRatio = False):
         '''
@@ -611,25 +403,8 @@ class PrecipitateBase(GenericModel):
             Will use strain energy to get aspect ratio if True
         '''
         index = self.phaseIndex(phase)
-        #self.strainEnergy[index] = strainEnergy
-        #self.calculateAspectRatio[index] = calculateAspectRatio
         self.precipitateParameters[index].strainEnergy = strainEnergy
         self.precipitateParameters[index].calculateAspectRatio = calculateAspectRatio
-
-    # def _setupStrainEnergyFactors(self):
-    #     ''''
-    #     For each phase, the strain energy calculation will be set to assume
-    #     a spherical, cubic or ellipsoidal shape depending on the defined shape factors
-    #     '''
-    #     for i in range(len(self.phases)):
-    #         self.strainEnergy[i].setup()
-    #         if self.strainEnergy[i].type != StrainEnergy.CONSTANT:
-    #             if self.shapeFactors[i].particleType == ShapeFactor.SPHERE:
-    #                 self.strainEnergy[i].setSpherical()
-    #             elif self.shapeFactors[i].particleType == ShapeFactor.CUBIC:
-    #                 self.strainEnergy[i].setCuboidal()
-    #             else:
-    #                 self.strainEnergy[i].setEllipsoidal()
 
     def setDiffusivity(self, diffusivity):
         '''
@@ -716,7 +491,6 @@ class PrecipitateBase(GenericModel):
         '''
         index = self.phaseIndex(phase)
         return self.precipitateParameters[index].computeGibbsThomsonContribution(radius)
-        #return self.VmBeta[index] * (self.strainEnergy[index].strainEnergy(self.shapeFactors[index].normalRadii(radius)) + 2 * self.shapeFactors[index].thermoFactor(radius) * self.gamma[index] / radius)
 
     def neglectEffectiveDiffusionDistance(self, neglect = True):
         '''
@@ -729,7 +503,6 @@ class PrecipitateBase(GenericModel):
             If True (default), will assume effective diffusion distance is particle radius
             If False, will calculate correction factor from Chen, Jeppson and Agren (2008)
         '''
-        #self.effDiffDistance = self.effDiffFuncs.noDiffusionDistance if neglect else self.effDiffFuncs.effectiveDiffusionDistance
         self.matrixParameters.effDiffDistance = self.matrixParameters.effDiffFuncs.noDiffusionDistance if neglect else self.matrixParameters.effDiffFuncs.effectiveDiffusionDistance
 
     def addStoppingCondition(self, condition, mode = 'or'):
@@ -767,20 +540,14 @@ class PrecipitateBase(GenericModel):
         if self._isSetup:
             return
         
-        #if not self._isNucleationSetup:
         if not self.matrixParameters.nucleation._parametersSet:
             #Set nucleation density assuming grain size of 100 um and dislocation density of 5e12 m/m3 (Thermocalc default)
             print('Nucleation density not set.\nSetting nucleation density assuming grain size of {:.0f} um and dislocation density of {:.0e} #/m2'.format(100, 5e12))
-            #self.setNucleationDensity(100, 1, 5e12)
             self.matrixParameters.nucleation.setNucleationDensity(100, 1, 5e12)
             self.matrixParameters.nucleation._parametersSet = True
         self.matrixParameters.nucleation.setupNucleationDensity(self.matrixParameters.initComposition, self.matrixParameters.volume.Vm)
         for p in range(len(self.phases)):
-            #self.Rmin[p] = self.constraints.minRadius
             self.precipitateParameters[p].setup()
-        #self._getNucleationDensity()
-        #self._setGBfactors()
-        #self._setupStrainEnergyFactors()
         self._isSetup = True
 
     def printHeader(self):
@@ -818,7 +585,6 @@ class PrecipitateBase(GenericModel):
         #Print status of each phase
         print('\tPhase\tPrec Density (#/m3)\tVolume Frac\tAvg Radius (m)\tDriving Force (J/mol)')
         for p in range(len(self.phases)):
-            #print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.pData.precipitateDensity[i,p], 100*self.pData.volFrac[i,p], self.pData.Ravg[i,p], self.pData.drivingForce[i,p]*self.VmBeta[p]))
             print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.pData.precipitateDensity[i,p], 100*self.pData.volFrac[i,p], self.pData.Ravg[i,p], self.pData.drivingForce[i,p]*self.precipitateParameters[p].volume.Vm))
         print('')
 
@@ -850,13 +616,9 @@ class PrecipitateBase(GenericModel):
         if self._currY is None:
             #print('start iteration')
             self._currY = self.pData.copySlice(self.pData.n)
-            #self._currY = [np.array([self.varList[i][self.n]]) for i in range(self.NUM_TERMS)]
         else:
             self._currY.time = np.array([t])
-            #self._currY.temperature = np.array([self.getTemperature(t)])
             self._currY.temperature = np.array([self.temperatureParameters(t)])
-            #self._currY[self.TIME] = np.array([t])
-            #self._currY[self.TEMPERATURE] = np.array([self.getTemperature(t)])
             self._calcMassBalance(t, x)
             self._calcDrivingForce(t, x)
             self._growthRate()
@@ -883,7 +645,6 @@ class PrecipitateBase(GenericModel):
         5) Return new values and whether to stop the model
         '''
         self._calculateDependentTerms(t, x)
-        #print(self._currY.time[0], self._currY.nucRate[0], self._currY.Ravg[0], self._currY.Rnuc[0])
         self._appendArrays(self._currY)
 
         #Update particle size distribution (this includes adding bins, resizing bins, etc)
@@ -948,31 +709,14 @@ class PrecipitateBase(GenericModel):
         Gcrit = np.zeros((1,len(self.phases)))
         xComp = np.squeeze(self._currY.composition[0])
         T = self._currY.temperature[0]
-        #if self.numberOfElements == 1:
-        #    xComp = self._currY[self.COMPOSITION][0,0]
-        #else:
-        #    xComp = self._currY[self.COMPOSITION][0]
-        #T = self._currY[self.TEMPERATURE][0]
 
         for p in range(len(self.phases)):
             precParams = self.precipitateParameters[p]
             dGs[0,p], self._precBetaTemp[p] = self.dG[p](xComp, T)
-            #dGs[0,p] /= self.VmBeta[p]
-            #dGs[0,p] -= self.strainEnergy[p].strainEnergy(self.shapeFactors[p].normalRadii(self.pData.Rcrit[self.pData.n, p]))
             dGs[0,p] /= precParams.volume.Vm
             dGs[0,p] -= precParams.computeStrainEnergyFromR(self.pData.Rcrit[self.pData.n, p])
             if self.pData.volFrac[self.pData.n, p] < 1 and dGs[0,p] >= 0:
                 #Calculate critical radius
-                # #For bulk or dislocation nucleation sites, use previous critical radius to get aspect ratio
-                # if self.GB[p].nucleationSiteType == GBFactors.BULK or self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
-                #     Rcrit[0,p] = np.amax((2 * self.shapeFactors[p].thermoFactor(self.pData.Rcrit[self.pData.n, p]) * self.gamma[p] / dGs[0,p], self.Rmin[p]))
-                #     Gcrit[0,p] = (4 * np.pi / 3) * self.gamma[p] * Rcrit[0,p]**2
-
-                # #If nucleation is on a grain boundary, then use the critical radius as defined by the grain boundary type    
-                # else:
-                #     Rcrit[0,p] = np.amax((self.GB[p].Rcrit(dGs[0,p]), self.Rmin[p]))
-                #     Gcrit[0,p] = self.GB[p].Gcrit(dGs[0,p], Rcrit[0,p])
-                
                 #For bulk or dislocation nucleation sites, use previous critical radius to get aspect ratio
                 if not precParams.GBfactor.isGrainBoundaryNucleation:
                     Rcrit[0,p] = np.amax((2*precParams.shapeFactor.thermoFactor(self.pData.Rcrit[self.pData.n, p]) * precParams.gamma / dGs[0,p], precParams.Rmin))
@@ -985,9 +729,6 @@ class PrecipitateBase(GenericModel):
         self._currY.drivingForce = dGs
         self._currY.Rcrit = Rcrit
         self._currY.Gcrit = Gcrit
-        #self._currY[self.DRIVING_FORCE] = dGs
-        #self._currY[self.R_CRIT] = Rcrit
-        #self._currY[self.G_CRIT] = Gcrit
 
     def _calcNucleationRate(self, t, x):
         '''
@@ -996,9 +737,6 @@ class PrecipitateBase(GenericModel):
         gCrit = self._currY.Gcrit[0]
         T = self._currY.temperature[0]
         dg = self._currY.drivingForce[0]
-        #gCrit = self._currY[self.G_CRIT][0]
-        #T = self._currY[self.TEMPERATURE][0]
-        #dg = self._currY[self.DRIVING_FORCE][0]
 
         betas = np.zeros((1,len(self.phases)))
         nucRate = np.zeros((1,len(self.phases)))
@@ -1023,8 +761,6 @@ class PrecipitateBase(GenericModel):
 
         self._currY.impingement = betas
         self._currY.nucRate = nucRate
-        #self._currY[self.IMPINGEMENT] = betas
-        #self._currY[self.NUC_RATE] = nucRate
 
     def _Zeldovich(self, p):
         '''
@@ -1032,11 +768,8 @@ class PrecipitateBase(GenericModel):
         '''
         rCrit = self._currY.Rcrit[0]
         T = self._currY.temperature[0]
-        #rCrit = self._currY[self.R_CRIT][0]
-        #T = self._currY[self.TEMPERATURE][0]
         if rCrit[p] == 0:
             return 0
-        #return np.sqrt(3 * self.GB[p].volumeFactor / (4 * np.pi)) * self.VmBeta[p] * np.sqrt(self.gamma[p] / (self.kB * T)) / (2 * np.pi * self.avo * rCrit[p]**2)
         volFactor = self.precipitateParameters[p].GBfactor.volumeFactor
         vm = self.precipitateParameters[p].volume.Vm
         gamma = self.precipitateParameters[p].gamma
@@ -1049,10 +782,6 @@ class PrecipitateBase(GenericModel):
         rCrit = self._currY.Rcrit[0]
         xComp = np.squeeze(self._currY.composition[0])
         T = self._currY.temperature[0]
-        #rCrit = self._currY[self.R_CRIT][0]
-        #xComp = self._currY[self.COMPOSITION][0][0]
-        #T = self._currY[self.TEMPERATURE][0]
-        #return self.GB[p].areaFactor * rCrit[p]**2 * np.squeeze(self.pData.composition[0]) * self.Diffusivity(xComp, T) / self.aAlpha**4
         areaFactor = self.precipitateParameters[p].GBfactor.areaFactor
         a = self.matrixParameters.volume.a
         return areaFactor * rCrit[p]**2 * np.squeeze(self.pData.composition[0]) * self.Diffusivity(xComp, T) / a**4
@@ -1067,14 +796,8 @@ class PrecipitateBase(GenericModel):
         xEqBeta = self._currY.xEqBeta[0]
         rCrit = self._currY.Rcrit[0]
         T = self._currY.temperature[0]
-        #xComp = self._currY[self.COMPOSITION][0][0]
-        #xEqAlpha = self._currY[self.EQ_COMP_ALPHA][0]
-        #xEqBeta = self._currY[self.EQ_COMP_BETA][0]
-        #rCrit = self._currY[self.R_CRIT][0]
-        #T = self._currY[self.TEMPERATURE][0]
         D = self.Diffusivity(xComp, T)
         Dfactor = (xEqBeta[p] - xEqAlpha[p])**2 / (xEqAlpha[p]*D) + (xEqBeta[p] - xEqAlpha[p])**2 / ((1 - xEqAlpha[p])*D)
-        #return self.GB[p].areaFactor * rCrit[p]**2 * (1/Dfactor) / self.aAlpha**4
         areaFactor = self.precipitateParameters[p].GBfactor.areaFactor
         a = self.matrixParameters.volume.a
         return areaFactor * rCrit[p]**2 * (1/Dfactor) / a**4
@@ -1088,16 +811,11 @@ class PrecipitateBase(GenericModel):
         else:
             xComp = self._currY.composition[0]
             T = self._currY.temperature[0]
-            #xComp = self._currY[self.COMPOSITION][0]
-            #T = self._currY[self.TEMPERATURE][0]
             beta = self._betaFuncs[p](xComp, T, searchDir = self._precBetaTemp[p])
             if beta is None:
-                #return self.betas[p]
                 return self._currY.impingement[0,p]
             else:
                 rCrit = self._currY.Rcrit[0]
-                #rCrit = self._currY[self.R_CRIT][0]
-                #return (self.GB[p].areaFactor * rCrit[p]**2 / self.aAlpha**4) * beta
                 areaFactor = self.precipitateParameters[p].GBfactor.areaFactor
                 a = self.matrixParameters.volume.a
                 return (areaFactor * rCrit[p]**2 / a**4) * beta
@@ -1106,7 +824,6 @@ class PrecipitateBase(GenericModel):
         '''
         Incubation time for isothermal conditions
         '''
-        #tau = 1 / (self.theta[p] * (betas[p] * Z**2))
         tau = 1 / (self.matrixParameters.theta * (betas[p] * Z**2))
         return np.exp(-tau / t)
         
@@ -1119,17 +836,12 @@ class PrecipitateBase(GenericModel):
 
         Then it's exp(-tau/t) like the isothermal behavior
         '''
-        #T = self._currY[self.TEMPERATURE][0]
         T = self._currY.temperature[0]
-        #startIndex = int(self.incubationOffset[p])
         startIndex = 0
-        #LHS = 1 / (self.theta[p] * Z**2 * (T / self.pData.temperature[startIndex:self.pData.n+1]))
         LHS = 1 / (self.matrixParameters.theta * Z**2 * (T / self.pData.temperature[startIndex:self.pData.n+1]))
 
-        #RHS = np.cumsum(self.betas[startIndex+1:self.pData.n+1,p] * (self.time[startIndex+1:self.pData.n+1] - self.time[startIndex:self.pData.n]))
         RHS = np.cumsum(self.pData.impingement[startIndex+1:self.pData.n+1,p] * (self.pData.time[startIndex+1:self.pData.n+1] - self.pData.time[startIndex:self.pData.n]))
         if len(RHS) == 0:
-            #RHS = self.betas[self.pData.n,p] * (self.time[startIndex:] - self.time[startIndex])
             RHS = self.pData.impingement[self.pData.n,p] * (self.pData.time[startIndex:] - self.pData.time[startIndex])
         else:
             RHS = np.concatenate((RHS, [RHS[-1] + betas[p] * (t - self.pData.time[startIndex])]))
@@ -1159,27 +871,15 @@ class PrecipitateBase(GenericModel):
         '''
         nucRate = self._currY.nucRate[0]
         T = self._currY.temperature[0]
-        #dt = t - self.pData.time[self.pData.n]
         Rcrit = self._currY.Rcrit[0]
-        #nucRate = self._currY[self.NUC_RATE][0]
-        #T = self._currY[self.TEMPERATURE][0]
-        #dt = t - self.time[self.n]
-        #Rcrit = self._currY[self.R_CRIT][0]
         Rad = np.zeros((1,len(self.phases)))
         dt = 0.01 if self.pData.n == 0 else self.pData.time[self.pData.n] - self.pData.time[self.pData.n-1]
         for p in range(len(self.phases)):
-            #If nucleates form, then calculate radius of precipitate
-            #Radius is set slightly larger so precipitate
-            #dt = 0.01 if self.pData.n == 0 else self.pData.time[self.pData.n] - self.pData.time[self.pData.n-1]
-            # if nucRate[p]*dt >= self.constraints.minNucleateDensity and Rcrit[p] >= self.Rmin[p]:
-            #     Rad[0,p] = Rcrit[p] + 0.5 * np.sqrt(self.kB * T / (np.pi * self.gamma[p]))
-            # else:
-            #     Rad[0,p] = 0
-
+            #If nucleates form, then calculate radius of precipitate to be slightly larger
+            #than Rcrit so that precipitates will be passed the nucleation barrier and grow
             if nucRate[p]*dt >= self.constraints.minNucleateDensity and Rcrit[p] >= self.precipitateParameters[p].Rmin:
                 Rad[0,p] = Rcrit[p] + 0.5 * np.sqrt(self.kB * T / (np.pi * self.precipitateParameters[p].gamma))
             else:
                 Rad[0,p] = 0
 
         self._currY.Rnuc = Rad
-        #self._currY[self.R_NUC] = Rad

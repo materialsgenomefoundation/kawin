@@ -1,4 +1,5 @@
-from kawin.precipitation import PrecipitateModel, VolumeParameter
+from kawin.precipitation import PrecipitateModel
+from kawin.precipitation.PrecipitationParameters import VolumeParameter
 from kawin.diffusion import SinglePhaseModel
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.GenericModel import GenericModel, Coupler

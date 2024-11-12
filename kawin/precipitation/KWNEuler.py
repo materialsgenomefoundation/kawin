@@ -447,16 +447,17 @@ class PrecipitateModel (PrecipitateBase):
         for p in range(len(self.phases)):
             precParams = self.precipitateParameters[p]
             volRatio = self.matrixParameters.volume.Vm / precParams.volume.Vm
-            Ntot = self.PBM[p].ZeroMomentFromN(x[p])
+            Y.precipitateDensity[0,p] = self.PBM[p].ZeroMomentFromN(x[p])
             #If no precipitates, then avgR, avgAR, precDens, fConc and fBeta for phase p is all 0
-            if Ntot < self.constraints.minNucleateDensity:
+            if Y.precipitateDensity[0,p] < self.constraints.minNucleateDensity:
+                Y.Ravg[0,p] = 0
+                Y.ARavg[0,p] = 0
+                Y.fconc[0,p] = np.zeros(Y.fconc[0,p].shape)
+                Y.volFrac[0,p] = 0
                 continue
 
-            RadSum = self.PBM[p].MomentFromN(x[p], 1)
-            ARsum = self.PBM[p].WeightedMomentFromN(x[p], 0, precParams.shapeFactor.aspectRatio(self.PBM[p].PSDsize))
-            Y.Ravg[0,p] = RadSum / Ntot
-            Y.ARavg[0,p] = ARsum / Ntot
-            Y.precipitateDensity[0,p] = Ntot
+            Y.Ravg[0,p] = self.PBM[p].MomentFromN(x[p], 1) / Y.precipitateDensity[0,p]
+            Y.ARavg[0,p] = self.PBM[p].WeightedMomentFromN(x[p], 0, precParams.shapeFactor.aspectRatio(self.PBM[p].PSDsize)) / Y.precipitateDensity[0,p]
             Y.volFrac[0,p] = np.amin([volRatio * precParams.GBfactor.volumeFactor * self.PBM[p].ThirdMomentFromN(x[p]), 1])
             #Not sure if needed, but just in case
             if self.pData.volFrac[self.pData.n,p] == 1:
@@ -495,12 +496,12 @@ class PrecipitateModel (PrecipitateBase):
         '''
         return [self.PBM[p].getdXdtEuler(growth[p], Y.nucRate[0,p], Y.Rnuc[0,p], x[p]) for p in range(len(self.phases))]
 
-    def correctdXdt(self, dt, x, dXdt):
+    def _correctdXdt(self, dt, x, dXdt, Y : PrecipitationData, growth):
         '''
         Corrects dXdt with the newly found dt, this adjusts the fluxes at the ends of the PBM so that we don't get negative bins
         '''
         for p in range(len(self.phases)):
-            dXdt[p] = self.PBM[p].correctdXdtEuler(dt, self.growth[p], self._currY.nucRate[0,p], self._currY.Rnuc[0,p], x[p])
+            dXdt[p] = self.PBM[p].correctdXdtEuler(dt, growth[p], Y.nucRate[0,p], Y.Rnuc[0,p], x[p])
 
     def _growthRate(self, Y : PrecipitationData):
         if self.numberOfElements == 1:

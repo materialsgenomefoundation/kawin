@@ -214,7 +214,6 @@ class TemperatureParameters:
         self._isIsothermal = False
         self.Tparameters = (times, temperatures)
         self.Tfunction = lambda t: np.interp(t/3600, self.Tparameters[0], self.Tparameters[1], self.Tparameters[1][0], self.Tparameters[1][-1])
-        print(self.Tfunction(0))
 
     def setTemperatureFunction(self, func):
         self._isIsothermal = False

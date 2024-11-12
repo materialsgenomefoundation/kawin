@@ -63,7 +63,7 @@ def test_coupler_shape():
     Flattening the arrays will result in a 1D array of [bins + elements*cells]
     '''
     #Create model
-    p_model = PrecipitateModel()
+    p_model = PrecipitateModel(phases=['AL3ZR'])
     bins = 75
     minBins = 50
     maxBins = 100
@@ -80,8 +80,9 @@ def test_coupler_shape():
 
     D0 = 0.0768         #Diffusivity pre-factor (m2/s)
     Q = 242000          #Activation energy (J/mol)
-    Diff = lambda x, T: D0 * np.exp(-Q / (8.314 * T))
-    p_model.setDiffusivity(Diff)
+    Diff = lambda T: D0 * np.exp(-Q / (8.314 * T))
+    AlZrTherm.setDiffusivity(Diff, 'FCC_A1')
+    #p_model.setDiffusivity(Diff)
 
     a = 0.405e-9        #Lattice parameter
     Va = a**3           #Atomic volume of FCC-Al
@@ -95,7 +96,8 @@ def test_coupler_shape():
     p_model.setNucleationSite('dislocations')
 
     #Set thermodynamic functions
-    p_model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    #p_model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    p_model.setThermodynamics(AlZrTherm)
 
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
     #Since we defined L12, the disordered phase as DIS_ attached to the front

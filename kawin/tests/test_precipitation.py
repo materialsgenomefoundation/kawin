@@ -25,7 +25,7 @@ def test_binary_precipitation_dxdt():
     This uses the parameters from 01_Binary_Precipitation example
     '''
     #Create model
-    model = PrecipitateModel()
+    model = PrecipitateModel(phases=['AL3ZR'])
     bins = 75
     minBins = 50
     maxBins = 100
@@ -42,8 +42,9 @@ def test_binary_precipitation_dxdt():
 
     D0 = 0.0768         #Diffusivity pre-factor (m2/s)
     Q = 242000          #Activation energy (J/mol)
-    Diff = lambda x, T: D0 * np.exp(-Q / (8.314 * T))
-    model.setDiffusivity(Diff)
+    Diff = lambda T: D0 * np.exp(-Q / (8.314 * T))
+    AlZrTherm.setDiffusivity(Diff, 'FCC_A1')
+    #model.setDiffusivity(Diff)
 
     a = 0.405e-9        #Lattice parameter
     Va = a**3           #Atomic volume of FCC-Al
@@ -57,7 +58,8 @@ def test_binary_precipitation_dxdt():
     model.setNucleationSite('dislocations')
 
     #Set thermodynamic functions
-    model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    #model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    model.setThermodynamics(AlZrTherm)
 
     #This roughly follows the steps in model.solve so we can get dxdt
     model.setup()
@@ -92,7 +94,7 @@ def test_multi_precipitation_dxdt():
 
     This uses the parameters from 02_Multicomponent_Precipitation example
     '''
-    model = PrecipitateModel(elements=['Al', 'Cr'])
+    model = PrecipitateModel(elements=['Al', 'Cr'], phases=['FCC_L12'])
     bins = 75
     minBins = 50
     maxBins = 100
@@ -180,7 +182,8 @@ def test_multiphase_precipitation_x_shape():
     for i in range(len(phases)-1):
         model.setInterfacialEnergy(gamma[phases[i+1]], phase=phases[i+1])
         model.setVolumeBeta(1e-5, VolumeParameter.MOLAR_VOLUME, 4, phase=phases[i+1])
-        model.setThermodynamics(AlMgSitherm, phase=phases[i+1])
+        #model.setThermodynamics(AlMgSitherm, phase=phases[i+1])
+    model.setThermodynamics(AlMgSitherm)
 
     model.setup()
     t, x = model.getCurrentX()

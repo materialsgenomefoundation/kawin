@@ -241,10 +241,10 @@ class PrecipitateParameters:
     def __init__(self, name, phase = None):
         # Name is the print/output name of the phase and phase is the actual name in the database
         # If phase isn't supplied, then phase = name
-        self.name = name
+        self.name = str(name)
         if phase is None:
             phase = name
-        self.phase = phase
+        self.phase = str(phase)
 
         self.strainEnergy = StrainEnergy()
         self.shapeFactor = ShapeFactor()

@@ -157,14 +157,12 @@ class GeneralThermodynamics:
             param_search = self.db.search
             param_query_mob = (
                 (where('phase_name') == p) & \
-                (where('parameter_type') == 'MQ') | \
-                (where('parameter_type') == 'MF')
+                ((where('parameter_type') == 'MQ') | (where('parameter_type') == 'MF'))
             )
 
             param_query_diff = (
                 (where('phase_name') == p) & \
-                (where('parameter_type') == 'DQ') | \
-                (where('parameter_type') == 'DF')
+                ((where('parameter_type') == 'DQ') | (where('parameter_type') == 'DF'))
             )
             phase_mob_params[p] = param_search(param_query_mob)
             phase_diff_params[p] = param_search(param_query_diff)
@@ -281,9 +279,14 @@ class GeneralThermodynamics:
         '''
         self.pDens = density
 
-    def setMobility(self, mobility):
+    def _generateTdependentFunction(self, func):
+        index = self.stateVariables.index(v.T)
+        return lambda dof: func(dof[index])
+
+    def setMobility(self, mobility, phase, element = None):
         '''
         Allows user to define mobility functions
+        Functions will assume that mobility is only a function of temperature
 
         mobility : dict
             Dictionary of functions for each element (including reference)
@@ -292,9 +295,15 @@ class GeneralThermodynamics:
         Optional - only required for multicomponent systems where
             mobility terms are not defined in the TDB database
         '''
-        self.mobCallables = mobility
+        if element is None:
+            if isinstance(mobility, dict):
+                self.mobCallables[phase] = {e: self._generateTdependentFunction(mobility[e]) for e in mobility}
+            else:
+                self.mobCallables[phase] = {e: self._generateTdependentFunction(mobility) for e in list(set(self.elements) - {'VA'})}
+        else:
+            self.mobCallables[phase][element] = self._generateTdependentFunction(mobility[element])
 
-    def setDiffusivity(self, diffusivity):
+    def setDiffusivity(self, diffusivity, phase, element = None):
         '''
         Allows user to define diffusivity functions
 
@@ -306,7 +315,13 @@ class GeneralThermodynamics:
             diffusivity terms are not defined in the TDB database
             and if mobility terms are not defined
         '''
-        self.diffCallables = diffusivity
+        if element is None:
+            if isinstance(diffusivity, dict):
+                self.diffCallables[phase] = {e: self._generateTdependentFunction(diffusivity[e]) for e in diffusivity}
+            else:
+                self.diffCallables[phase] = {e: self._generateTdependentFunction(diffusivity) for e in list(set(self.elements) - {'VA'})}
+        else:
+            self.diffCallables[phase][element] = self._generateTdependentFunction(diffusivity[element])
 
     def setMobilityCorrection(self, element, factor):
         '''
@@ -326,7 +341,7 @@ class GeneralThermodynamics:
         else:
             self.mobility_correction[element] = factor
 
-    def _process_x(self, x):
+    def process_x(self, x):
         '''
         Processes x to always be an array for len(elements) - 1
         If x in len(elements), then we assume that the first item is the solute
@@ -336,7 +351,7 @@ class GeneralThermodynamics:
             x = x[1:]
         return x
     
-    def _process_xT_arrays(self, x, T):
+    def process_xT_arrays(self, x, T, squeeze_X = True):
         '''
         Converts x, T to np.array
 
@@ -346,6 +361,8 @@ class GeneralThermodynamics:
         x = np.atleast_2d(x)
         if self._isBinary:
             x = x.T
+        if squeeze_X:
+            x = np.squeeze(x)
         T = np.atleast_1d(T)
         return x, T
 
@@ -362,7 +379,7 @@ class GeneralThermodynamics:
         gExtra : float (optional)
             Gibbs free energy to add to phase. Defaults to 0
         '''
-        x = self._process_x(x)
+        x = self.process_x(x)
         cond = {v.X(self.elements[i+1]): x[i] for i in range(len(x))}
         cond.update({v.GE: gExtra, v.N: 1, v.P: 101325, v.T: T})
         return cond
@@ -500,7 +517,7 @@ class GeneralThermodynamics:
             For multicomponent - matrix or array of matrices
         '''
         dnkj = []
-        x, T = self._process_xT_arrays(x, T)
+        x, T = self.process_xT_arrays(x, T, False)
         dnkj = [self._interdiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(dnkj)
 
@@ -577,7 +594,7 @@ class GeneralThermodynamics:
         tracer diffusivity - will return array if T is an array
         '''
         td = []
-        x, T = self._process_xT_arrays(x, T)
+        x, T = self.process_xT_arrays(x, T, False)
         td = [self._tracerDiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(td)
 
@@ -650,8 +667,8 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        x, T = self._process_xT_arrays(x, T)
-        dgArray, compArray = zip(*[self._drivingForce(xi, Ti, precPhase, removeCache) for xi, Ti in zip(x, T)])
+        x, T = self.process_xT_arrays(x, T, False)
+        dgArray, compArray = zip(*[self._drivingForce(xi, Ti, precPhase, removeCache, local_phase_sampling_conditions) for xi, Ti in zip(x, T)])
         return np.squeeze(dgArray), np.squeeze(compArray)
     
     def _resetDrivingForceCache(self, phase, removeCache):
@@ -804,7 +821,7 @@ class GeneralThermodynamics:
         Precipitate composition will be None if driving force is negative
         '''
         precPhase = self.phases[1] if precPhase is None else precPhase
-        x = self._process_x(x)
+        x = self.process_x(x)
 
         cs_results = self._getCompositionSetsForDF(x, T, precPhase)
         if cs_results is None:

@@ -378,7 +378,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             matrix and precipitate composition will be array or 2D array based
                 off shape of R
         '''
-        x = self._process_x(x)
+        x = self.process_x(x)
         R = np.atleast_1d(R)
         gExtra = np.atleast_1d(gExtra)
 

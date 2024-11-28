@@ -91,13 +91,14 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         '''
         gExtra = np.atleast_1d(gExtra)
         T = np.atleast_1d(T)
+        precPhase = self._getPrecipitatePhase(precPhase)
         if len(T) == 1:
             T = T*np.ones(gExtra.shape, dtype=np.float64)
         
         caArray, cbArray = zip(*[self._interfacialComposition(x, T[i], gExtra[i], precPhase) for i in range(len(gExtra))])
         return np.squeeze(caArray), np.squeeze(cbArray)
 
-    def _interfacialComposition(self, x, T, gExtra = 0, precPhase = None):
+    def _interfacialComposition(self, x, T, gExtra, precPhase):
         '''
         Gets interfacial composition, will return None, None if composition is in single phase region
 
@@ -118,8 +119,6 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
-
         wks = self.getEq(x, T, gExtra, precPhase)
         mu = np.squeeze(wks.eq.MU)
 
@@ -144,7 +143,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         return -1*np.ones(len(self.elements[:-1]), dtype=np.float64), -1*np.ones(len(self.elements[:-1]), dtype=np.float64)
     
-    def _curvatureFactorFromEq(self, chemical_potentials, cs_matrix, cs_precip, precPhase=None):
+    def _curvatureFactorFromEq(self, chemical_potentials, cs_matrix, cs_precip, precPhase):
         '''
         Curvature factor (from Phillipes and Voorhees - 2013)
 
@@ -178,7 +177,6 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             Ca - interfacial composition of matrix phase
             Cb - interfacial composition of precipitate phase
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
         non_va_elements = list(cs_matrix.phase_record.nonvacant_elements)
         refIndex = non_va_elements.index(self.elements[0])
 
@@ -289,7 +287,8 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 return self._curvature_outputs[precPhase]
             
         # Get composition sets for equilibrium between matrix and precipitate
-        precPhase = self.phases[1] if precPhase is None else precPhase
+        #precPhase = self.phases[1] if precPhase is None else precPhase
+        precPhase = self._getPrecipitatePhase(precPhase)
         eq_results = self._getCompositionSetsEq(x, T, precPhase, self._compset_cache_curvature)
         if eq_results is None:
             return _process_invalid_eq('cached')
@@ -381,6 +380,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         x = self.process_x(x)
         R = np.atleast_1d(R)
         gExtra = np.atleast_1d(gExtra)
+        precPhase = self._getPrecipitatePhase(precPhase)
 
         curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
@@ -429,12 +429,13 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         -------
         beta - impingement factor
         '''
+        precPhase = self._getPrecipitatePhase(precPhase)
         curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
             return self._curvature_outputs[precPhase].beta
         return curv_results.beta
     
-    def _curvatureWithSearch(self, x, T, precPhase = None, removeCache = True):
+    def _curvatureWithSearch(self, x, T, precPhase, removeCache = True):
         '''
         Performs driving force calculation to get xb, which can be used to find
         curvature factors when driving force is negative. Main use is for the surrogate model

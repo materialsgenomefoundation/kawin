@@ -1,5 +1,5 @@
 from kawin.precipitation import PrecipitateModel
-from kawin.diffusion.Diffusion import DiffusionModel
+from kawin.diffusion.Diffusion import DiffusionModel, CompositionProfile
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -59,10 +59,17 @@ def test_precipitate_plotting():
 
 def test_diffusion_plotting():
     #Single phase and Homogenizaton model goes through the same path for plotting
-    binary_single = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B'], phases=['alpha'])
-    binary_multi = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B'], phases=['alpha', 'beta', 'gamma'])
-    ternary_single = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B', 'C'], phases=['alpha'])
-    ternary_multi = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B', 'C'], phases=['alpha', 'beta', 'gamma'])
+    profile_binary = CompositionProfile()
+    profile_binary.addStepCompositionStep('B', 0.1, 0.9, 0.5)
+
+    profile_ternary = CompositionProfile()
+    profile_ternary.addStepCompositionStep('B', 0.1, 0.9, 0.5)
+    profile_ternary.addStepCompositionStep('C', 0.2, 0.01, 0.5)
+
+    binary_single = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B'], phases=['alpha'], compositionProfile=profile_binary)
+    binary_multi = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B'], phases=['alpha', 'beta', 'gamma'], compositionProfile=profile_binary)
+    ternary_single = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B', 'C'], phases=['alpha'], compositionProfile=profile_ternary)
+    ternary_multi = DiffusionModel(zlim=[-1,1], N=100, elements=['A', 'B', 'C'], phases=['alpha', 'beta', 'gamma'], compositionProfile=profile_ternary)
 
     models = [
         (binary_single, 2, 1),
@@ -73,7 +80,7 @@ def test_diffusion_plotting():
 
     for m in models:
         #m[0].setTemperature(900)
-        m[0].parameters.temperature.setIsothermalTemperature(900)
+        m[0].setTemperature(900)
 
         #For each plot, check that the number of lines correspond to number of elements or phases
         #For 'plot', number of lines should be elements (with or without reference) or a single element

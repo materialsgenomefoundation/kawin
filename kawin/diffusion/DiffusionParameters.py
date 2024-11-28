@@ -1,7 +1,9 @@
 import copy
 from collections import namedtuple
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Union
+import warnings
+
 import numpy as np
 
 from kawin.thermo import GeneralThermodynamics
@@ -10,7 +12,7 @@ from kawin.thermo.Mobility import mobility_from_composition_set, x_to_u_frac, in
 MobilityData = namedtuple('MobilityData',
                          ['mobility', 'phases', 'phase_fractions', 'chemical_potentials'])
 
-def wienerUpper(mobility, phase_fracs, *args, **kwargs):
+def wienerUpper(mobility: np.array, phase_fracs: np.array, *args, **kwargs) -> np.array:
     '''
     Upper wiener bounds for average mobility
 
@@ -27,7 +29,7 @@ def wienerUpper(mobility, phase_fracs, *args, **kwargs):
     avg_mob = np.sum(np.multiply(phase_fracs[:,np.newaxis], modified_mob), axis=0)
     return avg_mob
 
-def wienerLower(mobility, phase_fracs, *args, **kwargs):
+def wienerLower(mobility: np.array, phase_fracs: np.array, *args, **kwargs) -> np.array:
     '''
     Lower wiener bounds for average mobility
 
@@ -44,7 +46,7 @@ def wienerLower(mobility, phase_fracs, *args, **kwargs):
     avg_mob = 1/np.sum(np.multiply(phase_fracs[:,np.newaxis], 1/(modified_mob)), axis=0)
     return avg_mob
 
-def labyrinth(mobility, phase_fracs, *args, **kwargs):
+def labyrinth(mobility: np.array, phase_fracs: np.array, *args, **kwargs) -> np.array:
     '''
     Labyrinth mobility
 
@@ -62,7 +64,7 @@ def labyrinth(mobility, phase_fracs, *args, **kwargs):
     avg_mob = np.sum(np.multiply(np.power(phase_fracs[:,np.newaxis], labyrinth_factor), modified_mob), axis=0)
     return avg_mob
 
-def _hashinShtrikmanGeneral(mobility, phase_fracs, extreme_mob):
+def _hashinShtrikmanGeneral(mobility: np.array, phase_fracs: np.array, extreme_mob: np.array) -> np.array:
     '''
     General hashin shtrikman bounds
 
@@ -84,7 +86,7 @@ def _hashinShtrikmanGeneral(mobility, phase_fracs, extreme_mob):
     avg_mob = extreme_mob + Ak / (1 - Ak / (3*extreme_mob))
     return avg_mob
 
-def hashinShtrikmanUpper(mobility, phase_fracs, *args, **kwargs):
+def hashinShtrikmanUpper(mobility: np.array, phase_fracs: np.array, *args, **kwargs) -> np.array:
     '''
     Upper hashin shtrikman bounds for average mobility
 
@@ -101,7 +103,7 @@ def hashinShtrikmanUpper(mobility, phase_fracs, *args, **kwargs):
     max_mob = np.amax(modified_mob, axis=0)    # (p, e) -> (e,)
     return _hashinShtrikmanGeneral(modified_mob, phase_fracs, max_mob)
 
-def hashinShtrikmanLower(mobility, phase_fracs, *args, **kwargs):
+def hashinShtrikmanLower(mobility: np.array, phase_fracs: np.array, *args, **kwargs) -> np.array:
     '''
     Lower hashin shtrikman bounds for average mobility
 
@@ -118,10 +120,10 @@ def hashinShtrikmanLower(mobility, phase_fracs, *args, **kwargs):
     min_mob = np.amin(modified_mob, axis=0)    # (p, e) -> (e,)
     return _hashinShtrikmanGeneral(modified_mob, phase_fracs, min_mob)
 
-def _postProcessDoNothing(therm, mobility, phase_fracs, *args, **kwargs):
+def _postProcessDoNothing(therm: GeneralThermodynamics, mobility: np.array, phase_fracs: np.array, *args, **kwargs):
     return mobility, phase_fracs
 
-def _postProcessPredefinedMatrixPhase(therm, mobility, phase_fracs, *args, **kwargs):
+def _postProcessPredefinedMatrixPhase(therm: GeneralThermodynamics, mobility: np.array, phase_fracs: np.array, *args, **kwargs):
     '''
     User will supply a predefined "alpha" phase, which the mobility is taken
     from for all undefined mobility
@@ -136,7 +138,7 @@ def _postProcessPredefinedMatrixPhase(therm, mobility, phase_fracs, *args, **kwa
         mobility[:,i][mobility[:,i] == -1] = alpha_mob[i]
     return mobility, phase_fracs
 
-def _postProcessMajorityPhase(therm, mobility, phase_fracs, *args, **kwargs):
+def _postProcessMajorityPhase(therm: GeneralThermodynamics, mobility: np.array, phase_fracs: np.array, *args, **kwargs):
     '''
     Takes the majority phase and applies the mobility for all other phases
     with undefined mobility
@@ -146,7 +148,7 @@ def _postProcessMajorityPhase(therm, mobility, phase_fracs, *args, **kwargs):
         mobility[:,i][mobility[:,i] == -1] = mobility[max_idx,i]
     return mobility, phase_fracs
 
-def _postProcessExcludePhases(therm, mobility, phase_fracs, *args, **kwargs):
+def _postProcessExcludePhases(therm: GeneralThermodynamics, mobility: np.array, phase_fracs: np.array, *args, **kwargs):
     '''
     For all excluded phases, the mobility and phase fraction will be set to 0
     This assumes that user knows the excluded phases to be minor or that the
@@ -158,6 +160,16 @@ def _postProcessExcludePhases(therm, mobility, phase_fracs, *args, **kwargs):
         phase_fracs[p] = 0
     return mobility, phase_fracs
 
+def _validateDictionary(inputDict: dict[str, float], elements: list[str]):
+    stepElements = list(inputDict.keys())
+    extraElements = list(set(stepElements) - set(elements))
+    missingElements = list(set(elements) - set(stepElements))
+
+    if len(missingElements) > 0:
+        raise ValueError(f"Composition profile needs to be defined for {elements}. Profile steps for only {stepElements} are found.")
+    if len(extraElements) > 0:
+        warnings.warn(f"Composition profile is defined for {stepElements} but only {elements} will be used.")
+
 class HashTable:
     '''
     Implements a hash table that stores mobility, phases, phase fractions and
@@ -168,13 +180,13 @@ class HashTable:
         self.cachedData = {}
         self.setHashSensitivity(4)
 
-    def enableCaching(self, is_caching):
+    def enableCaching(self, is_caching: bool):
         self._cache = is_caching
 
     def clearCache(self):
         self.cachedData = {}
 
-    def setHashSensitivity(self, s):
+    def setHashSensitivity(self, s: int):
         '''
         Sets sensitivity of the hash table by significant digits
 
@@ -190,7 +202,7 @@ class HashTable:
         '''
         self.hash_sensitivity = np.power(10, int(s))
 
-    def _hashingFunction(self, x, T):
+    def _hashingFunction(self, x: np.array, T: np.array):
         '''
         Gets hash value for a (compostion, temperature) pair
 
@@ -201,7 +213,7 @@ class HashTable:
         '''
         return hash(tuple((np.concatenate((x, [T]))*self.hash_sensitivity).astype(np.int32)))
 
-    def retrieveFromHashTable(self, x, T):
+    def retrieveFromHashTable(self, x: np.array, T: np.array):
         '''
         Attempts to retrieve a stored value from the hash table
 
@@ -220,7 +232,7 @@ class HashTable:
             hash_value = self._hashingFunction(x, T)
             return self.cachedData.get(hash_value, None)
         
-    def addToHashTable(self, x, T, value):
+    def addToHashTable(self, x: np.array, T: np.array, value: any):
         '''
         Attempts to add a value to the hash table
         If no hash table, then this will not do anything
@@ -247,12 +259,11 @@ class BoundaryConditions:
     LEFT = 3
     RIGHT = 4
 
-    def __init__(self, elements):
-        self.elements = elements
-        self.leftBCtype, self.rightBCtype = self.FLUX_BC*np.ones(len(elements)), self.FLUX_BC*np.ones(len(elements))
-        self.leftBC, self.rightBC = np.zeros(len(elements)), np.zeros(len(elements))
+    def __init__(self):
+        self.leftBCtype, self.rightBCtype = {}, {}
+        self.leftBC, self.rightBC = {}, {}
 
-    def setBoundaryCondition(self, side, bc_type, value, element):
+    def setBoundaryCondition(self, side: int, bcType: int, value: float, element: str):
         '''
         Sets left boundary condition
 
@@ -263,28 +274,35 @@ class BoundaryConditions:
         value : float
         element : str
         '''
-        if element not in self.elements:
-            print(f'Warning: {element} not in {self.elements}')
-            return
-        index = self.elements.index(element)
         if side == self.LEFT:
-            self.leftBCtype[index] = bc_type
-            self.leftBC[index] = value
+            self.leftBCtype[element] = bcType
+            self.leftBC[element] = value
         elif side == self.RIGHT:
-            self.rightBCtype[index] = bc_type
-            self.rightBC[index] = value
+            self.rightBCtype[element] = bcType
+            self.rightBC[element] = value
 
-    def applyBoundaryConditionsToInitialProfile(self, x, z):
-        for e in range(len(self.elements)):
+    def _setupBoundary(self, element: str, boundaryType: dict[str, int], boundaryValue: dict[str, int]):
+        if element not in boundaryType:
+            boundaryType[element] = self.FLUX_BC
+        if element not in boundaryValue:
+            boundaryValue[element] = 0
+
+    def setupDefaults(self, elements: list[str]):
+        for e in elements:
+            self._setupBoundary(e, self.leftBCtype, self.leftBC)
+            self._setupBoundary(e, self.rightBCtype, self.rightBC)
+
+    def applyBoundaryConditionsToInitialProfile(self, elements: list[str], x: np.array, z: np.array):
+        for i, e in enumerate(elements):
             if self.leftBCtype[e] == self.COMPOSITION_BC:
-                x[e,0] = self.leftBC[e]
+                x[i,0] = self.leftBC[e]
             if self.rightBCtype[e] == self.COMPOSITION_BC:
-                x[e,-1] = self.rightBC[e]
+                x[i,-1] = self.rightBC[e]
 
-    def applyBoundaryConditionsToFluxes(self, fluxes):
-        for e in range(len(self.elements)):
-            fluxes[e,0] = self.leftBC[e] if self.leftBCtype[e] == self.FLUX_BC else fluxes[e,1]
-            fluxes[e,-1] = self.rightBC[e] if self.rightBCtype[e] == self.FLUX_BC else fluxes[e,-2]
+    def applyBoundaryConditionsToFluxes(self, elements: list[str], fluxes: np.array):
+        for i, e in enumerate(elements):
+            fluxes[i,0] = self.leftBC[e] if self.leftBCtype[e] == self.FLUX_BC else fluxes[i,1]
+            fluxes[i,-1] = self.rightBC[e] if self.rightBCtype[e] == self.FLUX_BC else fluxes[i,-2]
 
 class CompositionProfile:
     '''
@@ -301,70 +319,65 @@ class CompositionProfile:
     FUNCTION = 4
     PROFILE = 5
     
-    def __init__(self, elements):
-        self.elements = elements
-        self.compositionSteps = [[] for _ in self.elements]
+    def __init__(self):
+        self.compositionSteps = {}
 
-    def _getElementIndex(self, element):
-        if element not in self.elements:
-            print(f'Warning: {element} not in {self.elements}')
-            return None
-        return self.elements.index(element)
+    def addCompositionBuildStep(self, element: str, profile_type: int, *args, **kwargs):
+        if element in self.compositionSteps:
+            self.compositionSteps[element].append((profile_type, args, kwargs))
+        else:
+            self.compositionSteps[element] = [(profile_type, args, kwargs)]
 
-    def addCompositionBuildStep(self, element, profile_type, *args, **kwargs):
-        index = self._getElementIndex(element)
-        if index is not None:
-            self.compositionSteps[index].append((profile_type, args, kwargs))
-
-    def clearCompositionBuildSteps(self, element = None):
+    def clearCompositionBuildSteps(self, element: str = None):
         if element is None:
-            self.compositionSteps = [[] for _ in self.elements]
+            self.compositionSteps = {}
+        else:
+            if element in self.compositionSteps:
+                self.compositionSteps.pop(element)
 
-        index = self._getElementIndex(element)
-        if index is not None:
-            self.compositionSteps[index].clear()
-
-    def addLinearCompositionStep(self, element, left_value, right_value):
+    def addLinearCompositionStep(self, element: str, left_value: float, right_value: float):
         self.addCompositionBuildStep(element, self.LINEAR, left_value=left_value, right_value=right_value)
 
-    def addStepCompositionStep(self, element, left_value, right_value, z_value):
+    def addStepCompositionStep(self, element: str, left_value: float, right_value: float, z_value: float):
         self.addCompositionBuildStep(element, self.STEP, left_value=left_value, right_value=right_value, z_value=z_value)
 
-    def addSingleCompositionStep(self, element, value, z_value):
+    def addSingleCompositionStep(self, element: str, value: float, z_value: float):
         self.addCompositionBuildStep(element, self.SINGLE, value=value, z_value=z_value)
 
-    def addBoundedCompositionStep(self, element, value, left_z, right_z):
+    def addBoundedCompositionStep(self, element: str, value: float, left_z: float, right_z: float):
         self.addCompositionBuildStep(element, self.BOUNDED, value=value, left_z=left_z, right_z=right_z)
 
-    def addFunctionCompositionStep(self, element, function):
+    def addFunctionCompositionStep(self, element: str, function: Callable):
         self.addCompositionBuildStep(element, self.FUNCTION, function=function)
 
-    def addProfileCompositionStep(self, element, x_list, z_list):
+    def addProfileCompositionStep(self, element: str, x_list: list[float], z_list: list[float]):
         self.addCompositionBuildStep(element, self.PROFILE, x_list=x_list, z_list=z_list)
 
-    def _setLinearComposition(self, element_idx, x, z, left_value, right_value):
+    def _setLinearComposition(self, element_idx: int, x: np.array, z: np.array, left_value: float, right_value: float):
         x[element_idx,:] = np.linspace(left_value, right_value, len(z))
 
-    def _setStepComposition(self, element_idx, x, z, left_value, right_value, z_value):
+    def _setStepComposition(self, element_idx: int, x: np.array, z: np.array, left_value: float, right_value: float, z_value: float):
         left_indices = z <= z_value
         x[element_idx,left_indices] = left_value
         x[element_idx,~left_indices] = right_value
 
-    def _setSingleComposition(self, element_idx, x, z, value, z_value):
+    def _setSingleComposition(self, element_idx: int, x: np.array, z: np.array, value: float, z_value: float):
         z_idx = np.argmin(np.abs(z - z_value))
         x[element_idx,z_idx] = value
 
-    def _setBoundedComposition(self, element_idx, x, z, value, left_z, right_z):
+    def _setBoundedComposition(self, element_idx: int, x: np.array, z: np.array, value: float, left_z: float, right_z: float):
         z_indices = (z >= left_z) & (z <= right_z)
         x[element_idx,z_indices] = value
 
-    def _setFunctionComposition(self, element_idx, x, z, function):
+    def _setFunctionComposition(self, element_idx: int, x: np.array, z: np.array, function: Callable):
         x[element_idx,:] = function(z)
 
-    def _setProfileComposition(self, element_idx, x, z, x_list, z_list):
+    def _setProfileComposition(self, element_idx: int, x: np.array, z: np.array, x_list: list[float], z_list: list[float]):
         x[element_idx,:] = np.interp(z, z_list, x_list, x_list[0], x_list[-1])
 
-    def buildProfile(self, x, z):
+    def buildProfile(self, elements: list[str], x: np.array, z: np.array):
+        _validateDictionary(self.compositionSteps, elements)
+
         build_functions = {
             self.LINEAR: self._setLinearComposition,
             self.STEP: self._setStepComposition,
@@ -374,9 +387,10 @@ class CompositionProfile:
             self.PROFILE: self._setProfileComposition
         }
 
-        for i in range(len(self.elements)):
-            for step_info in self.compositionSteps[i]:
-                build_functions[step_info[0]](i, x, z, *step_info[1], **step_info[2])
+        for i in range(len(elements)):
+            if elements[i] in self.compositionSteps:
+                for step_info in self.compositionSteps[elements[i]]:
+                    build_functions[step_info[0]](i, x, z, *step_info[1], **step_info[2])
 
 class TemperatureParameters:
     def __init__(self, *args):
@@ -391,19 +405,19 @@ class TemperatureParameters:
             self.Tparameters = None
             self.Tfunction = None
 
-    def setIsothermalTemperature(self, T):
+    def setIsothermalTemperature(self, T: float):
         self.Tparameters = T
         self.Tfunction = lambda z, t: self.Tparameters*np.ones(len(z))
 
-    def setTemperatureArray(self, times, temperatures):
+    def setTemperatureArray(self, times: float, temperatures: list[float]):
         self.Tparameters = (times, temperatures)
         self.Tfunction = lambda z, t: np.interp(t/3600, self.Tparameters[0], self.Tparameters[1], self.Tparameters[1][0], self.Tparameters[1][-1]) * np.ones(len(z))
 
-    def setTemperatureFunction(self, func):
+    def setTemperatureFunction(self, func: Callable):
         self.Tparameters = func
         self.Tfunction = lambda z, t: self.Tparameters(z, t)
 
-    def __call__(self, z, t):
+    def __call__(self, z: float, t: float):
         return self.Tfunction(z, t)
 
 class HomogenizationParameters:
@@ -419,23 +433,23 @@ class HomogenizationParameters:
     EXCLUDE = 8
 
     def __init__(self, 
-                 homogenizationFunction = None, 
-                 labyrinthFactor = 1, 
-                 eps = 0.05,
-                 postProcessFunction = None,
+                 homogenizationFunction: Callable = None, 
+                 labyrinthFactor: float = 1, 
+                 eps: float = 0.05,
+                 postProcessFunction: Callable = None,
                  postProcessArgs = None):
         if homogenizationFunction is None:
             homogenizationFunction = self.WIENER_UPPER
         self.setHomogenizationFunction(homogenizationFunction)
 
-        self.labyrinthFactor: float = labyrinthFactor
+        self.labyrinthFactor = labyrinthFactor
 
         if postProcessFunction is None:
             postProcessFunction = self.NO_POST
         self.setPostProcessFunction(postProcessFunction, postProcessArgs)
         self.eps = eps
 
-    def setPostProcessFunction(self, functionName, functionArgs = None):
+    def setPostProcessFunction(self, functionName: Union[str, int], functionArgs = None):
         '''
         Returns post process function
         '''
@@ -445,7 +459,7 @@ class HomogenizationParameters:
         else:
             self._setPostProcessFunctionByID(functionName)
 
-    def _setPostProcessFunctionByStr(self, functionName):
+    def _setPostProcessFunctionByStr(self, functionName: str):
         keywords_map = {
             'none': self.NO_POST,
             'predefined': self.PREDEFINED,
@@ -458,7 +472,7 @@ class HomogenizationParameters:
         str_options = ', '.join(list(keywords_map.keys()))
         raise Exception(f'Error: post process function by str should be {str_options}')
 
-    def _setPostProcessFunctionByID(self, functionName):
+    def _setPostProcessFunctionByID(self, functionName: int):
         if functionName == self.NO_POST:
             self.postProcessFunction = _postProcessDoNothing
         elif functionName == self.PREDEFINED:
@@ -472,7 +486,7 @@ class HomogenizationParameters:
             int_options = ', '.join([f'HomogenizationParameters.{t}' for t in func_types])
             raise Exception(f'Error: post process function by ID should be {int_options}')
             
-    def setHomogenizationFunction(self, function):
+    def setHomogenizationFunction(self, function: Union[str, int]):
         '''
         Sets averaging function to use for mobility
 
@@ -488,7 +502,7 @@ class HomogenizationParameters:
         else:
             self._setHomogenizationFunctionByID(function)
 
-    def _setHomogenizationFunctionByStr(self, function):
+    def _setHomogenizationFunctionByStr(self, function: str):
         keywords_map = {
             self.WIENER_UPPER: ['wiener', 'upper'],
             self.WIENER_LOWER: ['wiener', 'lower'],
@@ -505,7 +519,7 @@ class HomogenizationParameters:
         str_options = ', '.join(func_types)
         raise Exception(f'Error: homogenization function by str should be {str_options}')
 
-    def _setHomogenizationFunctionByID(self, function):
+    def _setHomogenizationFunctionByID(self, function: int):
         if function == self.WIENER_UPPER:
             self.homogenizationFunction = wienerUpper
         elif function == self.WIENER_LOWER:
@@ -521,7 +535,7 @@ class HomogenizationParameters:
             int_options = ', '.join([f'HomogenizationParameters.{t}' for t in func_types])
             raise Exception(f'Error: homogenization function by ID should be {int_options}')
 
-    def setLabyrinthFactor(self, n):
+    def setLabyrinthFactor(self, n: float):
         '''
         Labyrinth factor
 
@@ -533,7 +547,7 @@ class HomogenizationParameters:
         '''
         self.labyrinthFactor = np.clip(n, 1, 2)
 
-def _computeSingleMobility(therm: GeneralThermodynamics, x, T, unsortIndices, hashTable : HashTable = None) -> MobilityData:
+def _computeSingleMobility(therm: GeneralThermodynamics, x: np.array, T: np.array, unsortIndices: np.array, hashTable : HashTable = None) -> MobilityData:
     '''
     Gets mobility data for x and T
 
@@ -652,6 +666,24 @@ def computeHomogenizationFunction(therm : GeneralThermodynamics, x, T, homogeniz
         avg_mob[i] = homogenizationParameters.homogenizationFunction(mob, phase_fracs, labyrinth_factor = homogenizationParameters.labyrinthFactor)
 
     return np.squeeze(avg_mob), np.squeeze(chemical_potentials)
+
+class DiffusionConstraints:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        # Minimum composition that a node can take
+        self.minComposition = 1e-8
+
+        # Factor to ensure numerical stability in the single phase diffusion model
+        # In theory, from von Neumann stability analysis for the heat equation, this can be 0.5
+        # But I will use 0.4 to be safe
+        self.vonNeumannThreshold = 0.4
+
+        # Max composition change a node can see per iteration in the homogenization model
+        # There is not an analagous method for von Neumann stability as we have for the single
+        # phase diffusion model, so this is a naive approach to numerical stability
+        self.maxCompositionChange = 0.002
 
 class DiffusionParameters:
     def __init__(self, elements, 

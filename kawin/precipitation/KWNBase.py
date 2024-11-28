@@ -30,40 +30,42 @@ class PrecipitateBase(GenericModel):
                 Also, the list here should just be the solutes while the Thermodynamics module needs also the parent element
         If binary system, then default is ['solute']
     '''
-    def __init__(self, phases = ['beta'], elements = ['solute']):
+    def __init__(self, phases = None, elements = None, 
+                 thermodynamics = None,
+                 matrixParameters = None, 
+                 temperatureParameters = None, 
+                 precipitateParameters = None, 
+                 constraints = None):
         super().__init__()
-        self.elements = elements
-        self.numberOfElements = len(elements)
-        self.phases = np.array(phases)
 
-        self._resetArrays()
-        self.resetConstraints()
-        self._isSetup = False
-        self._currY = None
+        self.constraints = constraints if constraints is not None else Constraints()
+        self.temperatureParameters = temperatureParameters if temperatureParameters is not None else TemperatureParameters()
+        if phases is None and precipitateParameters is None:
+            raise ValueError("Either phases or precipitateParameters must be defined")
+        if precipitateParameters is not None:
+            self.precipitateParameters = precipitateParameters
+            self.phases = np.array([p.phase for p in self.precipitateParameters])
+        else:
+            self.precipitateParameters = [PrecipitateParameters(p) for p in phases]
+            self.phases = np.array(phases)
 
-        #Constants
-        self.Rg = 8.314     #Gas constant - J/mol-K
-        self.avo = 6.022e23 #Avogadro's number (/mol)
-        self.kB = self.Rg / self.avo    #Boltzmann constant (J/K)
-        
+        if elements is None and matrixParameters is None:
+            raise ValueError("Either elements or matrixParameters must be defined")
+        if matrixParameters is not None:
+            self.matrixParameters = matrixParameters
+            self.elements = self.matrixParameters.solutes
+        else:
+            self.matrixParameters = MatrixParameters(elements)
+            self.elements = elements
+        self.numberOfElements = len(self.elements)
+
         self.dTemp = 0
         self.iterationSinceTempChange = 0
 
-        self.matrixParameters = MatrixParameters()
-        self.temperatureParameters = TemperatureParameters()
-        self.precipitateParameters = [PrecipitateParameters(phases[p]) for p in range(len(phases))]
+        self._resetArrays()
+        self._isSetup = False
+        self._currY = None
 
-        #Free energy parameters
-        self.dG = [None for i in self.phases]
-        self.interfacialComposition = [None for i in self.phases]
-
-        # #Beta function for nucleation rate
-        # if self.numberOfElements == 1:
-        #     self._Beta = self._BetaBinary1
-        # else:
-        #     self._Beta = self._BetaMulti
-        #     self._betaFuncs = [None for p in phases]
-        #     self._defaultBeta = 20
         self.setBetaBinary()
 
         #Stopping conditions
@@ -71,6 +73,8 @@ class PrecipitateBase(GenericModel):
 
         #Coupling models
         self.clearCouplingModels()
+
+        self.setThermodynamics(thermodynamics)
 
     def phaseIndex(self, phase = None):
         '''
@@ -152,12 +156,6 @@ class PrecipitateBase(GenericModel):
         I suppose we could make a list of str for each variable and call setattr
         '''
         self.pData.appendToArrays(newVals)
-
-    def resetConstraints(self):
-        '''
-        Default values for contraints
-        '''
-        self.constraints = Constraints()
 
     def setConstraints(self, **kwargs):
         '''
@@ -312,8 +310,7 @@ class PrecipitateBase(GenericModel):
             By default (None), this is calculated by the number of lattice sites containing a solute atom
             However, for calibration purposes, it may be better to set the nucleation site density manually
         '''
-        self.matrixParameters.nucleation.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
-        self.matrixParameters.nucleation._parametersSet = True
+        self.matrixParameters.nucleationSites.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
         
     def setNucleationSite(self, site, phase = None):
         '''
@@ -329,7 +326,7 @@ class PrecipitateBase(GenericModel):
             Phase to consider (defaults to first precipitate in list)
         '''
         index = self.phaseIndex(phase)
-        self.precipitateParameters[index].GBfactor.setNucleationType(site)
+        self.precipitateParameters[index].nucleation.setNucleationType(site)
             
     def setParentPhases(self, phase, parentPhases):
         '''
@@ -497,12 +494,12 @@ class PrecipitateBase(GenericModel):
         if self._isSetup:
             return
         
-        if not self.matrixParameters.nucleation._parametersSet:
+        if not self.matrixParameters.nucleationSites._parametersSet:
             #Set nucleation density assuming grain size of 100 um and dislocation density of 5e12 m/m3 (Thermocalc default)
             print('Nucleation density not set.\nSetting nucleation density assuming grain size of {:.0f} um and dislocation density of {:.0e} #/m2'.format(100, 5e12))
-            self.matrixParameters.nucleation.setNucleationDensity(100, 1, 5e12)
-            self.matrixParameters.nucleation._parametersSet = True
-        self.matrixParameters.nucleation.setupNucleationDensity(self.matrixParameters.initComposition, self.matrixParameters.volume.Vm)
+            self.matrixParameters.nucleationSites.setNucleationDensity(100, 1, 5e12)
+            self.matrixParameters.nucleationSites._parametersSet = True
+        self.matrixParameters.nucleationSites.setupNucleationDensity(self.matrixParameters.initComposition, self.matrixParameters.volume.Vm)
         for p in range(len(self.phases)):
             self.precipitateParameters[p].setup()
 
@@ -580,7 +577,7 @@ class PrecipitateBase(GenericModel):
             self._currY.time = np.array([t])
             self._currY.temperature = np.array([self.temperatureParameters(t)])
             self._currY = self._calcMassBalance(t, x, self._currY)
-            self._currY = self._calcNucleationRateAlt(t, x, self._currY)
+            self._currY = self._calcNucleationRate(t, x, self._currY)
             self.growth, self._currY = self._growthRate(self._currY)
 
     def getdXdt(self, t, x):
@@ -657,7 +654,7 @@ class PrecipitateBase(GenericModel):
     def _growthRate(self):
         raise NotImplementedError()
     
-    def _calcNucleationRateAlt(self, t, x, Y : PrecipitationData):
+    def _calcNucleationRate(self, t, x, Y : PrecipitationData):
         xComp = np.squeeze(Y.composition[0])
         T = Y.temperature[0]
         for p in range(len(self.precipitateParameters)):

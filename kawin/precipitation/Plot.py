@@ -157,15 +157,15 @@ def plotEuler(precModel, axes, variable, bounds = None, timeUnits = 's', radius=
         # else:
         #     scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
 
-        if not precModel.precipitateParameters[p].GBfactor.isGrainBoundaryNucleation:
+        if not precModel.precipitateParameters[p].nucleation.isGrainBoundaryNucleation:
             if radius == 'spherical':
-                scale.append(precModel.precipitateParameters[p].GBfactor.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
+                scale.append(precModel.precipitateParameters[p].nucleation.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
             else:
                 scale.append(1/precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
                 if radius == 'long':
                     scale.append(precModel.precipitateParameters[p].shapeFactor.aspectRatio(precModel.PBM[p].PSDbounds) / precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
         else:
-            scale.append(precModel.precipitateParameters[p].GBfactor.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
+            scale.append(precModel.precipitateParameters[p].nucleation.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
 
 
     if variable in compositionVariables:
@@ -290,13 +290,13 @@ def plotSingleVariables(precModel, timeScale, radius, labels, variable, axes, *a
             #         plotVariable[p] *= precModel.pData.ARavg[p]
             # else:
             #     plotVariable[p] *= precModel._GBareaRemoval(p)
-            if not precModel.precipitateParameters[p].GBfactor.isGrainBoundaryNucleation:
+            if not precModel.precipitateParameters[p].nucleation.isGrainBoundaryNucleation:
                 if radius != 'spherical':
                     plotVariable[p] /= precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.pData.Ravg[p])
                 if radius == 'long':
                     plotVariable[p] *= precModel.pData.ARavg[p]
             else:
-                plotVariable[p] *= precModel.precipitateParameters[p].GBfactor.areaRemoval
+                plotVariable[p] *= precModel.precipitateParameters[p].nucleation.areaRemoval
     elif variable == 'Volume Average Radius':
         plotVariable = np.zeros(precModel.pData.volFrac.shape)
         indices = precModel.pData.precipitateDensity > 0

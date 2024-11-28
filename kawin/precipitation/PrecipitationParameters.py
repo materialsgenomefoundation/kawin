@@ -3,7 +3,7 @@ import numpy as np
 from kawin.precipitation.non_ideal.EffectiveDiffusion import EffectiveDiffusionFunctions
 from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
 from kawin.precipitation.non_ideal.ElasticFactors import StrainEnergy
-from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
+from kawin.precipitation.non_ideal.NucleationBarrier import NucleationBarrierParameters
 
 GAS_CONSTANT = 8.314
 AVOGADROS_NUMBER = 6.022e23
@@ -83,26 +83,26 @@ class VolumeParameter:
         ----------
         value : float
             Value for volume parameters (lattice parameter, atomic (unit cell) volume or molar volume)
-        valueType : VolumeParameter
+        valueType : VolumeParameter or str
             States what volume term that value is
         atomsPerCell : int
             Number of atoms in the unit cell
         '''
         self.atomsPerCell = atomsPerCell
-        if volumeType == self.MOLAR_VOLUME:
+        if volumeType == self.MOLAR_VOLUME or volumeType == 'VM':
             self.Vm = value
             self.Va = atomsPerCell * self.Vm / AVOGADROS_NUMBER
             self.a = np.cbrt(self.Va)
-        elif volumeType == self.ATOMIC_VOLUME:
+        elif volumeType == self.ATOMIC_VOLUME or volumeType == 'VA':
             self.Va = value
             self.Vm = self.Va * AVOGADROS_NUMBER / atomsPerCell
             self.a = np.cbrt(self.Va)
-        elif volumeType == self.LATTICE_PARAMETER:
+        elif volumeType == self.LATTICE_PARAMETER or volumeType == 'a':
             self.a = value
             self.Va = self.a**3
             self.Vm = self.Va * AVOGADROS_NUMBER / atomsPerCell
 
-class NucleationParameters:
+class NucleationSiteParameters:
     def __init__(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
         self.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
 
@@ -133,6 +133,7 @@ class NucleationParameters:
         self.grainAspectRatio = aspectRatio
         self.dislocationDensity = dislocationDensity
         self.bulkN0 = bulkN0
+        self._parametersSet = True
 
     def bulkSites(self, x0, VmAlpha):
         #Set bulk nucleation site to the number of solutes per unit volume
@@ -189,7 +190,7 @@ class NucleationParameters:
 
 class TemperatureParameters:
     def __init__(self, *args):
-        self.setTemperatureParameters(args)
+        self.setTemperatureParameters(*args)
         self._isIsothermal = True
 
     def setTemperatureParameters(self, *args):
@@ -224,12 +225,13 @@ class TemperatureParameters:
         return self.Tfunction(t)
 
 class MatrixParameters:
-    def __init__(self):
+    def __init__(self, solutes):
+        self.solutes = solutes
         self.effDiffFuncs = EffectiveDiffusionFunctions()
         self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
         self.GBenergy = 0.3
         self.volume = VolumeParameter()
-        self.nucleation = NucleationParameters()
+        self.nucleationSites = NucleationSiteParameters()
         self.theta = 2
         self.initComposition = None
 
@@ -247,7 +249,7 @@ class PrecipitateParameters:
 
         self.strainEnergy = StrainEnergy()
         self.shapeFactor = ShapeFactor()
-        self.GBfactor = GBFactors()
+        self.nucleation = NucleationBarrierParameters()
         self.volume = VolumeParameter()
         self.gamma = None
         self.calculateAspectRatio = False
@@ -257,9 +259,9 @@ class PrecipitateParameters:
         self.Rmin = None
 
     def setup(self, gbEnergy = 0.3, minRadius = 3e-10):
-        if self.GBfactor.isGrainBoundaryNucleation:
+        if self.nucleation.isGrainBoundaryNucleation:
             self.shapeFactor.setSpherical()
-        self.GBfactor.setFactors(gbEnergy, self.gamma)
+        self.nucleation.setFactors(gbEnergy, self.gamma)
 
         self.strainEnergy.setup()
         if self.strainEnergy.type != StrainEnergy.CONSTANT:

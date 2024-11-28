@@ -319,7 +319,7 @@ class GrainGrowthModel(GenericModel):
             Ntot = model.PBM[p].ZeroMomentFromN(x[p])
             RadSum = model.PBM[p].MomentFromN(x[p], 1)
             #fBeta = np.amin([volRatio * model.GB[p].volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
-            fBeta = np.amin([volRatio * model.precipitateParameters[p].GBfactor.volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
+            fBeta = np.amin([volRatio * model.precipitateParameters[p].nucleation.volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
             avgR = 0 if Ntot == 0 else RadSum / Ntot
 
             if avgR > 0:

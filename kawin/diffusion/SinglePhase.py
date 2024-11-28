@@ -25,13 +25,13 @@ class SinglePhaseModel(DiffusionModel):
         '''
         #Calculate diffusivity at cell centers
         x = x_curr[0]
-        T = self.parameters.temperature(self.z, t)
+        T = self.temperatureParameters(self.z, t)
         d = np.zeros(self.N) if len(self.elements) == 1 else np.zeros((self.N, len(self.elements), len(self.elements)))
         for i in range(self.N):
-            inter_diff = self.parameters.hashTable.retrieveFromHashTable(x[:,i], T[i])
+            inter_diff = self.hashTable.retrieveFromHashTable(x[:,i], T[i])
             if inter_diff is None:
                 inter_diff = self.therm.getInterdiffusivity(x[:,i], T[i], phase=self.phases[0])
-                self.parameters.hashTable.addToHashTable(x[:,i], T[i], inter_diff)
+                self.hashTable.addToHashTable(x[:,i], T[i], inter_diff)
             d[i] = inter_diff
         
         #Get diffusivity and composition gradient at cell boundaries
@@ -47,10 +47,10 @@ class SinglePhaseModel(DiffusionModel):
             fluxes[:,1:-1] = -np.matmul(dmid, np.transpose(dxdz, (2,1,0)))[:,:,0].T
 
         #Boundary condition
-        self.parameters.boundaryConditions.applyBoundaryConditionsToFluxes(fluxes)
+        self.boundaryConditions.applyBoundaryConditionsToFluxes(self.elements, fluxes)
 
         #Time step from von Neumann analysis (using 0.4 instead of 0.5 to be safe)
-        self._currdt = 0.4 * self.dz**2 / np.amax(np.abs(dmid))
+        self._currdt = self.constraints.vonNeumannThreshold * self.dz**2 / np.amax(np.abs(dmid))
 
         return fluxes
 

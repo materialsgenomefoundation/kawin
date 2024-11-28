@@ -1,8 +1,8 @@
 import numpy as np
-from kawin.precipitation.PrecipitationParameters import PrecipitationData
+from kawin.precipitation.PrecipitationParameters import PrecipitationData, AVOGADROS_NUMBER
 from kawin.precipitation.KWNBase import PrecipitateBase
 from kawin.precipitation.PopulationBalance import PopulationBalanceModel
-from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
+from kawin.precipitation.non_ideal.NucleationBarrier import NucleationBarrierParameters
 from kawin.precipitation.Plot import plotEuler
 
 class PrecipitateModel (PrecipitateBase):
@@ -19,8 +19,16 @@ class PrecipitateModel (PrecipitateBase):
         Note: order of elements must correspond to order of elements set in Thermodynamics module
         If binary system, then defualt is ['solute']
     '''
-    def __init__(self, phases = ['beta'], elements = ['solute']):
-        super().__init__(phases, elements)
+    def __init__(self, phases=None, elements=None,
+                 thermodynamics = None,
+                 matrixParameters = None,
+                 temperatureParameters = None,
+                 precipitateParameters = None):
+        super().__init__(phases=phases, elements=elements, 
+                         thermodynamics=thermodynamics,
+                         matrixParameters=matrixParameters, 
+                         temperatureParameters=temperatureParameters, 
+                         precipitateParameters=precipitateParameters)
         
         #self._Beta = self._BetaBinary1 if self.numberOfElements == 1 else self._BetaMulti
         self.eqAspectRatio = [None for p in range(len(self.phases))]
@@ -296,12 +304,8 @@ class PrecipitateModel (PrecipitateBase):
                     self.pData.xEqBeta[self.pData.n,p] = c_eq_beta
 
         x = [self.PBM[p].PSD for p in range(len(self.phases))]
-        Y = self._calcNucleationRateAlt(self.pData.time[self.pData.n], x, Y)
+        Y = self._calcNucleationRate(self.pData.time[self.pData.n], x, Y)
         self.growth, Y = self._growthRate(Y)
-        # Y = self._calcDrivingForce(self.pData.time[self.pData.n], x, Y)
-        # Y = self._calcNucleationRate(self.pData.time[self.pData.n], x, Y)
-        # Y = self._setNucleateRadius(self.pData.time[self.pData.n], Y)
-        # self.growth, Y = self._growthRate(Y)
         self.pData.setSlice(Y, self.pData.n)
     
     def _interpolateAspectRatio(self, R, p):
@@ -350,8 +354,8 @@ class PrecipitateModel (PrecipitateBase):
         
         VmAlpha = self.matrixParameters.volume.Vm
         VmBetas = [self.precipitateParameters[p].volume.Vm for p in range(len(self.phases))]
-        GBs = [self.precipitateParameters[p].GBfactor for p in range(len(self.phases))]
-        dtAll.append(self.constraints.computeDTfromVolume(self.pData.n, self.pData.nucRate, self.pData.Rnuc, self.PBM, self.growth, VmAlpha, VmBetas, GBs, self.phases, dtMax))
+        nucParams = [self.precipitateParameters[p].nucleation for p in range(len(self.phases))]
+        dtAll.append(self.constraints.computeDTfromVolume(self.pData.n, self.pData.nucRate, self.pData.Rnuc, self.PBM, self.growth, VmAlpha, VmBetas, nucParams, self.phases, dtMax))
 
         dt = np.amin(dtAll)
         #If all time checks pass, then go back to previous time step and increase it slowly
@@ -390,27 +394,31 @@ class PrecipitateModel (PrecipitateBase):
                 Grain boundaries - number of sites filled along the faces (assumes average cross sectional area of precipitates)
         '''
         VmBetas = [self.precipitateParameters[p2].volume.Vm for p2 in range(len(self.precipitateParameters))]
-        GBs = [self.precipitateParameters[p2].GBfactor for p2 in range(len(self.precipitateParameters))]
+        nucParams = [self.precipitateParameters[p2].nucleation for p2 in range(len(self.precipitateParameters))]
         parentPhases = [self.precipitateParameters[p2].parentPhases for p2 in range(len(self.precipitateParameters))]
 
         #If parent phases exists, then calculate the number of potential nucleation sites on the parent phase
         # #This is the number of lattice sites on the total surface area of the parent precipitate
-        nucleationSites = np.sum([4*np.pi*self.PBM[p2].SecondMomentFromN(x[p2]) * (self.avo/VmBetas[p2])**(2/3) for p2 in parentPhases[p]])
-        if GBs[p].nucleationSiteType == GBFactors.BULK:
-            bulkPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if GBs[p2].nucleationSiteType == GBFactors.BULK])
-            nucleationSites += self.matrixParameters.nucleation.bulkN0 - bulkPrec
-        elif GBs[p].nucleationSiteType == GBFactors.DISLOCATION:
-            bulkPrec = np.sum([self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if GBs[p2].nucleationSiteType == GBFactors.DISLOCATION])
-            nucleationSites += self.matrixParameters.nucleation.dislocationN0 - bulkPrec * (self.avo / self.matrixParameters.volume.Vm)**(1/3)
-        elif GBs[p].nucleationSiteType == GBFactors.GRAIN_BOUNDARIES:
-            boundPrec = np.sum([GBs[p2].gbRemoval * self.PBM[p2].SecondMomentFromN(x[p2]) for p2 in range(len(self.phases)) if GBs[p2].nucleationSiteType == GBFactors.GRAIN_BOUNDARIES])
-            nucleationSites += self.matrixParameters.nucleation.GBareaN0 - boundPrec * (self.avo / self.matrixParameters.volume.Vm)**(2/3)
-        elif GBs[p].nucleationSiteType == GBFactors.GRAIN_EDGES:
-            edgePrec = np.sum([np.sqrt(1 - GBs[p2].GBk**2) * self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if GBs[p2].nucleationSiteType == GBFactors.GRAIN_EDGES])
-            nucleationSites += self.matrixParameters.nucleation.GBedgeN0 - edgePrec * (self.avo / self.matrixParameters.volume.Vm)**(1/3)
-        elif GBs[p].nucleationSiteType == GBFactors.GRAIN_CORNERS:
-            cornerPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if GBs[p2].nucleationSiteType == GBFactors.GRAIN_CORNERS])
-            nucleationSites += self.matrixParameters.nucleation.GBcornerN0 - cornerPrec
+        nucleationSites = np.sum([4*np.pi*self.PBM[p2].SecondMomentFromN(x[p2]) * (AVOGADROS_NUMBER/VmBetas[p2])**(2/3) for p2 in parentPhases[p]])
+        if nucParams[p].nucleationSiteType == NucleationBarrierParameters.BULK:
+            bulkPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.BULK])
+            nucleationSites += self.matrixParameters.nucleationSites.bulkN0 - bulkPrec
+
+        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.DISLOCATION:
+            bulkPrec = np.sum([self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.DISLOCATION])
+            nucleationSites += self.matrixParameters.nucleationSites.dislocationN0 - bulkPrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(1/3)
+
+        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.GRAIN_BOUNDARIES:
+            boundPrec = np.sum([nucParams[p2].gbRemoval * self.PBM[p2].SecondMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.GRAIN_BOUNDARIES])
+            nucleationSites += self.matrixParameters.nucleationSites.GBareaN0 - boundPrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(2/3)
+
+        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.GRAIN_EDGES:
+            edgePrec = np.sum([np.sqrt(1 - nucParams[p2].GBk**2) * self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.GRAIN_EDGES])
+            nucleationSites += self.matrixParameters.nucleationSites.GBedgeN0 - edgePrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(1/3)
+
+        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.GRAIN_CORNERS:
+            cornerPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.GRAIN_CORNERS])
+            nucleationSites += self.matrixParameters.nucleationSites.GBcornerN0 - cornerPrec
 
         return np.amax([nucleationSites, 0])
     
@@ -458,7 +466,7 @@ class PrecipitateModel (PrecipitateBase):
 
             Y.Ravg[0,p] = self.PBM[p].MomentFromN(x[p], 1) / Y.precipitateDensity[0,p]
             Y.ARavg[0,p] = self.PBM[p].WeightedMomentFromN(x[p], 0, precParams.shapeFactor.aspectRatio(self.PBM[p].PSDsize)) / Y.precipitateDensity[0,p]
-            Y.volFrac[0,p] = np.amin([volRatio * precParams.GBfactor.volumeFactor * self.PBM[p].ThirdMomentFromN(x[p]), 1])
+            Y.volFrac[0,p] = np.amin([volRatio * precParams.nucleation.volumeFactor * self.PBM[p].ThirdMomentFromN(x[p]), 1])
             #Not sure if needed, but just in case
             if self.pData.volFrac[self.pData.n,p] == 1:
                 Y.volFrac[0,p] = 1
@@ -468,13 +476,13 @@ class PrecipitateModel (PrecipitateBase):
                 # f_conc = r_vol * vol_factor * sum(n_i * R_i^3 * x_i^beta)
                 compAvg = 0.5 * (self.PSDXbeta[p][:-1] + self.PSDXbeta[p][1:])
                 for e in range(self.numberOfElements):
-                    Y.fconc[0,p,e] = volRatio * precParams.GBfactor.volumeFactor * self.PBM[p].WeightedMomentFromN(x[p], 3, compAvg[:,e])
+                    Y.fconc[0,p,e] = volRatio * precParams.nucleation.volumeFactor * self.PBM[p].WeightedMomentFromN(x[p], 3, compAvg[:,e])
             else:
                 # d(f_conc)/dt = r_vol * vol_factor * sum(d(n_i)/dt * R_i^3 * x_i^beta)
                 # where dt cancels out, so d(f_conc) = r_vol * vol_factor * sum((new_psd - curr_psd) * R_i^3 * x_i^beta)
                 midX = (self.PSDXbeta[p][1:] + self.PSDXbeta[p][:-1]) / 2
                 for e in range(self.numberOfElements):
-                    y = volRatio * precParams.GBfactor.volumeFactor * np.sum((self.PBM[p].PSDsize**3*(x[p] - self.PBM[p].PSD))*midX[:,e])
+                    y = volRatio * precParams.nucleation.volumeFactor * np.sum((self.PBM[p].PSDsize**3*(x[p] - self.PBM[p].PSD))*midX[:,e])
                     Y.fconc[0,p,e] = self.pData.fconc[self.pData.n,p,e] + y
 
         if np.sum(Y.volFrac[0]) < 1:

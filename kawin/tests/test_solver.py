@@ -63,7 +63,7 @@ def test_coupler_shape():
     Flattening the arrays will result in a 1D array of [bins + elements*cells]
     '''
     #Create model
-    p_model = PrecipitateModel(phases=['AL3ZR'])
+    p_model = PrecipitateModel(phases=['AL3ZR'], elements=['ZR'])
     bins = 75
     minBins = 50
     maxBins = 100
@@ -107,12 +107,12 @@ def test_coupler_shape():
     #Define Cr and Al composition, with step-wise change at z=0
     #d_model.setCompositionLinear(0.077, 0.359, 'CR')
     #d_model.setCompositionLinear(0.054, 0.062, 'AL')
-    d_model.parameters.compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
-    d_model.parameters.compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
+    d_model.setCompositionLinear(0.077, 0.359, 'CR')
+    d_model.setCompositionLinear(0.054, 0.062, 'AL')
 
     d_model.setThermodynamics(NiAlCrTherm)
     #d_model.setTemperature(1200 + 273.15)
-    d_model.parameters.temperature.setIsothermalTemperature(1200+273.15)
+    d_model.setTemperature(1200+273.15)
 
     coupled_model = Coupler([p_model, d_model])
     coupled_model.setup()

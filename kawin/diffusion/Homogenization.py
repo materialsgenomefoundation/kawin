@@ -1,21 +1,40 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
 from kawin.thermo.Mobility import mobility_from_composition_set, interstitials, x_to_u_frac
-from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction
+from kawin.diffusion.DiffusionParameters import HomogenizationParameters, computeHomogenizationFunction
 import copy
 
-class HomogenizationModel(DiffusionModel):    
+class HomogenizationModel(DiffusionModel): 
+    def __init__(self, zlim, N, elements, phases, 
+                 thermodynamics = None,
+                 temperatureParameters = None, 
+                 boundaryConditions = None,
+                 compositionProfile = None,
+                 constraints = None,
+                 homogenizationParameters = None,
+                 hashTable = None,
+                 record = True):
+        super().__init__(zlim=zlim, N=N, elements=elements, phases=phases, 
+                         thermodynamics=thermodynamics,
+                         temperatureParameters=temperatureParameters, 
+                         boundaryConditions=boundaryConditions, 
+                         compositionProfile=compositionProfile, 
+                         constraints=constraints, 
+                         hashTable=hashTable, 
+                         record=record)
+        self.homogenizationParameters = homogenizationParameters if homogenizationParameters is not None else HomogenizationParameters()
+
     def setMobilityFunction(self, function):
-        self.parameters.homogenizationParameters.setHomogenizationFunction(function)
+        self.homogenizationParameters.setHomogenizationFunction(function)
 
     def setLabyrinthFactor(self, n):
-        self.parameters.homogenizationParameters.setLabyrinthFactor(n)
+        self.homogenizationParameters.setLabyrinthFactor(n)
 
     def setMobilityPostProcessFunction(self, function, functionArgs = None):
-        self.parameters.homogenizationParameters.setPostProcessFunction(function, functionArgs)
+        self.homogenizationParameters.setPostProcessFunction(function, functionArgs)
 
     def setIdealEps(self, eps):
-        self.parameters.homogenizationParameters.eps = eps
+        self.homogenizationParameters.eps = eps
     
     def _getFluxes(self, t, x_curr):
         '''
@@ -33,9 +52,9 @@ class HomogenizationModel(DiffusionModel):
                 If fixed composition condition (Dirichlet) - then use nearby flux (this will keep the composition fixed after apply the fluxes)
         '''
         x = x_curr[0]
-        T = self.parameters.temperature(self.z, t)
+        T = self.temperatureParameters(self.z, t)
 
-        avg_mob, mu = computeHomogenizationFunction(self.therm, x.T, T, self.parameters.homogenizationParameters, self.parameters.hashTable)
+        avg_mob, mu = computeHomogenizationFunction(self.therm, x.T, T, self.homogenizationParameters, self.hashTable)
         avg_mob = avg_mob.T
         mu = mu.T
 
@@ -63,14 +82,14 @@ class HomogenizationModel(DiffusionModel):
         Tmidfull = Tmid[np.newaxis,:]
         for i in range(fluxes.shape[0]-1):
             Tmidfull = np.concatenate((Tmidfull, Tmid[np.newaxis,:]), axis=0)
-        fluxes[nonzeroComp] += -self.parameters.homogenizationParameters.eps * avg_mob[nonzeroComp] * 8.314 * Tmidfull[nonzeroComp] * dudz[nonzeroComp] / avgU[nonzeroComp]
+        fluxes[nonzeroComp] += -self.homogenizationParameters.eps * avg_mob[nonzeroComp] * 8.314 * Tmidfull[nonzeroComp] * dudz[nonzeroComp] / avgU[nonzeroComp]
 
         #Flux in a volume fixed frame: J_vi = J_i - x_i * sum(J_j)
         vfluxes = np.zeros((len(self.elements), self.N+1))
         vfluxes[:,1:-1] = fluxes[1:,:] - avgU[1:,:] * np.sum([fluxes[i] for i in range(len(self.allElements)) if self.allElements[i] not in interstitials], axis=0)
 
         #Boundary conditions
-        self.parameters.boundaryConditions.applyBoundaryConditionsToFluxes(vfluxes)
+        self.boundaryConditions.applyBoundaryConditionsToFluxes(self.elements, vfluxes)
 
         return vfluxes
 
@@ -80,7 +99,7 @@ class HomogenizationModel(DiffusionModel):
         '''
         vfluxes = self._getFluxes(self.t, [self.x])
         dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
-        dt = self.parameters.maxCompositionChange / np.amax(dJ[dJ!=0])
+        dt = self.constraints.maxCompositionChange / np.amax(dJ[dJ!=0])
         return vfluxes, dt
     
     def getDt(self, dXdt):
@@ -89,4 +108,4 @@ class HomogenizationModel(DiffusionModel):
         This is done by finding the time interval such that the composition
             change caused by the fluxes will be lower than self.maxCompositionChange
         '''
-        return self.parameters.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
+        return self.constraints.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))

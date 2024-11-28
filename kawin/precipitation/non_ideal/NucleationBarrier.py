@@ -2,10 +2,10 @@ from collections import namedtuple
 
 import numpy as np
 
-GBFactorData = namedtuple('GBFactorData',
+NucleationFactorData = namedtuple('NucleationFactorData',
                     ['area_factor', 'volume_factor', 'gb_removal'])
 
-class GBFactors:
+class NucleationBarrierParameters:
     '''
     Defines nucleation factors for bulk, dislocation, 
     surface, edge and corner nucleation
@@ -43,16 +43,19 @@ class GBFactors:
         site - int
             Index for site type based off list on top of this file
         '''
-        if site.upper() == 'GRAIN_BOUNDARIES':
-            self.nucleationSiteType = self.GRAIN_BOUNDARIES
-        elif site.upper() == 'GRAIN_EDGES':
-            self.nucleationSiteType = self.GRAIN_EDGES
-        elif site.upper() == 'GRAIN_CORNERS':
-            self.nucleationSiteType = self.GRAIN_CORNERS
-        elif site.upper() == 'DISLOCATIONS':
-            self.nucleationSiteType = self.DISLOCATION
+        if isinstance(site, str):
+            if site.upper() == 'GRAIN_BOUNDARIES':
+                self.nucleationSiteType = self.GRAIN_BOUNDARIES
+            elif site.upper() == 'GRAIN_EDGES':
+                self.nucleationSiteType = self.GRAIN_EDGES
+            elif site.upper() == 'GRAIN_CORNERS':
+                self.nucleationSiteType = self.GRAIN_CORNERS
+            elif site.upper() == 'DISLOCATIONS':
+                self.nucleationSiteType = self.DISLOCATION
+            else:
+                self.nucleationSiteType = self.BULK
         else:
-            self.nucleationSiteType = self.BULK
+            self.nucleationSiteType = site
 
     def getGBRatio(self, gbEnergy, gamma):
         '''
@@ -75,9 +78,9 @@ class GBFactors:
         
         return gbk, valid_gbk, indices, gbRemoval, areaFactor, volumeFactor
     
-    def _createGBData(self, areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan = True):
+    def _createNucleationFactors(self, areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan = True):
         '''
-        Creates a GBFactorData object
+        Creates a NucleationFactorData object
 
         By default, setInvalidToNan will be true, will will set all invalid indices to nan
             This is for the user API so that it's easy to tell when a gb energy / interfacial energy
@@ -89,7 +92,7 @@ class GBFactors:
             areaFactor[~indices] = np.nan
             volumeFactor[~indices] = np.nan
             gbRemoval[~indices] = np.nan
-        return GBFactorData(area_factor=np.squeeze(areaFactor),
+        return NucleationFactorData(area_factor=np.squeeze(areaFactor),
                       volume_factor=np.squeeze(volumeFactor),
                       gb_removal=np.squeeze(gbRemoval))
 
@@ -105,7 +108,7 @@ class GBFactors:
         areaFactor[indices] = 4 * np.pi
         volumeFactor[indices] = 4 * np.pi / 3
         
-        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+        return self._createNucleationFactors(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
 
     def grainBoundaryFactors(self, gbk, setInvalidToNan = True):
         '''
@@ -117,7 +120,7 @@ class GBFactors:
         areaFactor[indices] = 4 * np.pi * (1 - valid_gbk)
         volumeFactor[indices] = (2 * np.pi / 3) * (2 - 3 * valid_gbk + valid_gbk**3)
         
-        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+        return self._createNucleationFactors(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
 
     def grainEdgeFactors(self, gbk, setInvalidToNan = True):
         '''
@@ -132,7 +135,7 @@ class GBFactors:
         areaFactor[indices] = 12 * (np.pi / 2 - alpha - valid_gbk * beta)
         volumeFactor[indices] = 2 * (np.pi - 2 * alpha + (valid_gbk**2 / 3) * np.sqrt(3 - 4 * valid_gbk**2) - beta * valid_gbk * (3 - valid_gbk**2))
         
-        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+        return self._createNucleationFactors(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
     
     def grainCornerFactors(self, gbk, setInvalidToNan = True):
         '''
@@ -148,7 +151,7 @@ class GBFactors:
         areaFactor[indices] = 24 * (np.pi / 3 - valid_gbk * phi - delta)
         volumeFactor[indices] = 2 * (4 * (np.pi / 3 - delta) + valid_gbk * K * (np.sqrt(1 - valid_gbk**2 - K**2 / 4) - K**2 / np.sqrt(8)) - 2 * valid_gbk * phi * (3 - valid_gbk**2))
         
-        return self._createGBData(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
+        return self._createNucleationFactors(areaFactor, volumeFactor, gbRemoval, indices, setInvalidToNan)
 
     def setFactors(self, gbEnergy, gamma, nucleationSiteType = None):
         '''

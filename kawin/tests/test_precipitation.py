@@ -25,7 +25,7 @@ def test_binary_precipitation_dxdt():
     This uses the parameters from 01_Binary_Precipitation example
     '''
     #Create model
-    model = PrecipitateModel(phases=['AL3ZR'])
+    model = PrecipitateModel(phases=['AL3ZR'], elements=['ZR'])
     bins = 75
     minBins = 50
     maxBins = 100

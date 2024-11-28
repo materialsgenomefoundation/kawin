@@ -3,7 +3,7 @@ from collections import namedtuple
 import numpy as np
 
 from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
-from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
+from kawin.precipitation.non_ideal.NucleationBarrier import NucleationBarrierParameters
 from kawin.precipitation.PrecipitationParameters import MatrixParameters, PrecipitateParameters, AVOGADROS_NUMBER, BOLTZMANN_CONSTANT
 
 NucleationData = namedtuple('NucleationData', [
@@ -32,7 +32,7 @@ def nucleationBarrier(volumeDrivingForce, precipitate : PrecipitateParameters, a
     For bulk and dislocation nucleation
         Rcrit = 2*f*gamma / dG  (where f is the thermodynamic correction factor from the precipitate shape)
         Gcrit = (4*pi/3)*gamma*Rcrit^2
-    For grain boundary, edge or corner nucleation, critical G and R is computed to in GBFactors to account for grain boundary energy
+    For grain boundary, edge or corner nucleation, critical G and R is computed to in NucleationBarrierParameters to account for grain boundary energy
     '''
     volumeDrivingForce = np.atleast_1d(volumeDrivingForce)
     indices = volumeDrivingForce > 0
@@ -41,15 +41,15 @@ def nucleationBarrier(volumeDrivingForce, precipitate : PrecipitateParameters, a
     Rcrit = np.zeros(volumeDrivingForce.shape)
     Gcrit = np.zeros(volumeDrivingForce.shape)
 
-    if not precipitate.GBfactor.isGrainBoundaryNucleation:
+    if not precipitate.nucleation.isGrainBoundaryNucleation:
         RcritProposal = 2*precipitate.shapeFactor.description.thermoFactorFromAR(aspectRatio) * precipitate.gamma / volumeDrivingForce[indices]
         Rcrit[indices] = np.amax([RcritProposal, Rmin[indices]], axis=0)
         Gcrit[indices] = (4*np.pi/3) * precipitate.gamma * Rcrit[indices]**2
 
     else:
-        RcritProposal = precipitate.GBfactor.Rcrit(volumeDrivingForce[indices])
+        RcritProposal = precipitate.nucleation.Rcrit(volumeDrivingForce[indices])
         Rcrit[indices] = np.amax([RcritProposal, Rmin[indices]], axis=0)
-        Gcrit[indices] = precipitate.GBfactor.Gcrit(volumeDrivingForce[indices], Rcrit[indices])
+        Gcrit[indices] = precipitate.nucleation.Gcrit(volumeDrivingForce[indices], Rcrit[indices])
 
     return np.squeeze(Rcrit), np.squeeze(Gcrit)
 
@@ -63,7 +63,7 @@ def zeldovich(T, Rcrit, precipitate : PrecipitateParameters):
     indices = Rcrit != 0
 
     Z = np.zeros(Rcrit.shape)
-    Z[indices] = np.sqrt(3 * precipitate.GBfactor.volumeFactor / (4 * np.pi)) * precipitate.volume.Vm * np.sqrt(precipitate.gamma / (BOLTZMANN_CONSTANT * T[indices]))
+    Z[indices] = np.sqrt(3 * precipitate.nucleation.volumeFactor / (4 * np.pi)) * precipitate.volume.Vm * np.sqrt(precipitate.gamma / (BOLTZMANN_CONSTANT * T[indices]))
     Z[indices] /= (2 * np.pi * AVOGADROS_NUMBER * Rcrit[indices]**2)
     return np.squeeze(Z)
 
@@ -80,7 +80,7 @@ def betaBinary1(therm : BinaryThermodynamics, x, T, Rcrit, matrix : MatrixParame
 
     beta = np.zeros(Rcrit.shape)
     D = np.atleast_2d(therm.getTracerDiffusivity(x[indices], T[indices], removeCache=removeCache))
-    beta[indices] = precipitate.GBfactor.areaFactor * Rcrit[indices]**2 * x[indices] * D[:,1] / matrix.volume.a**4
+    beta[indices] = precipitate.nucleation.areaFactor * Rcrit[indices]**2 * x[indices] * D[:,1] / matrix.volume.a**4
     return np.squeeze(beta)
 
 def betaBinary2(therm : BinaryThermodynamics, x, T, Rcrit, matrix : MatrixParameters, precipitate : PrecipitateParameters, xEqAlpha = None, xEqBeta = None, removeCache = False):
@@ -101,7 +101,7 @@ def betaBinary2(therm : BinaryThermodynamics, x, T, Rcrit, matrix : MatrixParame
     beta = np.zeros(Rcrit.shape)
     D = np.atleast_2d(therm.getTracerDiffusivity(x[indices], T[indices], removeCache=removeCache))
     Dfactor = (xEqBeta - xEqAlpha)**2 / (xEqAlpha*D[:,1]) + (xEqBeta - xEqAlpha)**2 / ((1 - xEqAlpha)*D[:,0])
-    beta[indices] = precipitate.GBfactor.areaFactor * Rcrit[indices]**2 * (1/Dfactor) / matrix.volume.a**4
+    beta[indices] = precipitate.nucleation.areaFactor * Rcrit[indices]**2 * (1/Dfactor) / matrix.volume.a**4
     return np.squeeze(beta)
 
 def betaMulti(therm : MulticomponentThermodynamics, x, T, Rcrit,  matrix : MatrixParameters, precipitate : PrecipitateParameters, removeCache = False, searchDir = None):
@@ -118,7 +118,7 @@ def betaMulti(therm : MulticomponentThermodynamics, x, T, Rcrit,  matrix : Matri
 
     beta = np.zeros(Rcrit.shape)
     beta[indices] = np.array([therm.impingementFactor(xi, Ti, precPhase=precipitate.phase, removeCache=removeCache, searchDir=searchDir) for xi, Ti in zip(x[indices], T[indices])])
-    beta[indices] *= (precipitate.GBfactor.areaFactor * Rcrit[indices]**2 / matrix.volume.a**4)
+    beta[indices] *= (precipitate.nucleation.areaFactor * Rcrit[indices]**2 / matrix.volume.a**4)
     return np.squeeze(beta)
 
 def incubationTime(beta, Z, matrix : MatrixParameters):

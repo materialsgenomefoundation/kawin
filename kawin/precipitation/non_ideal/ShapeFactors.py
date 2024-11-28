@@ -282,13 +282,16 @@ class ShapeFactor:
 
         Defualts to spherical
         '''
-        if precipitateShape == ShapeFactor.NEEDLE:
+        if precipitateShape.upper() == 'NEEDLE' or precipitateShape == ShapeFactor.NEEDLE:
             self.setNeedleShape(ar)
-        elif precipitateShape == ShapeFactor.PLATE:
+        elif precipitateShape.upper() == 'PLATE' or precipitateShape == ShapeFactor.PLATE:
             self.setPlateShape(ar)
-        elif precipitateShape == ShapeFactor.CUBIC:
+        elif precipitateShape.upper() == 'CUBIC' or precipitateShape == ShapeFactor.CUBIC:
             self.setCuboidalShape(ar)
+        elif precipitateShape.upper() == 'SPHERE' or precipitateShape == ShapeFactor.SPHERE:
+            self.setSpherical(ar)
         else:
+            print(f'No value found for {precipitateShape}. Setting to spherical')
             self.setSpherical(ar)
             
     def setSpherical(self, ar = 1):

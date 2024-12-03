@@ -3,6 +3,7 @@ from collections import namedtuple
 import numpy as np
 
 from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
+from kawin.thermo.utils import _process_xT_arrays
 from kawin.precipitation.non_ideal.NucleationBarrier import NucleationBarrierParameters
 from kawin.precipitation.PrecipitationParameters import MatrixParameters, PrecipitateParameters, AVOGADROS_NUMBER, BOLTZMANN_CONSTANT
 
@@ -18,7 +19,8 @@ def volumetricDrivingForce(therm: GeneralThermodynamics, x, T, precipitate: Prec
         In the case where the matrix is prestrained and the precipitate will relax the matrix, then the strain
         energy is negative
     '''
-    x, T = therm.process_xT_arrays(x, T, squeeze_X=True)
+    x, T = _process_xT_arrays(x, T, therm._isBinary)
+    x = np.squeeze(x)
 
     chemDGs, betaComp = therm.getDrivingForce(x, T, precPhase=precipitate.phase, removeCache=removeCache)
     volDGs = chemDGs / precipitate.volume.Vm
@@ -201,7 +203,8 @@ def nucleationRadius(T, Rcrit, precipitateParameters: PrecipitateParameters):
     return np.squeeze(Rad)
 
 def computeSteadyStateNucleation(therm : GeneralThermodynamics, x, T, precipitate: PrecipitateParameters, matrix : MatrixParameters, betaFunc = None, aspectRatio = 1, removeCache = False):
-    x, T = therm.process_xT_arrays(x, T, squeeze_X=True)
+    x, T = _process_xT_arrays(x, T, therm._isBinary)
+    x = np.squeeze(x)
     chemDGs, volDGs, betaComp = volumetricDrivingForce(therm, x, T, precipitate, aspectRatio = aspectRatio, removeCache = removeCache)
     Rcrit, Gcrit = nucleationBarrier(volDGs, precipitate, aspectRatio = aspectRatio)
     Z = zeldovich(T, Rcrit, precipitate)

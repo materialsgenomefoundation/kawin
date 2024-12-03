@@ -9,6 +9,7 @@ from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import extract_parameters
 
+from kawin.thermo.utils import _process_xT_arrays, _getMatrixPhase, _getPrecipitatePhase
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
 from kawin.thermo.Mobility import MobilityModel, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
@@ -341,12 +342,6 @@ class GeneralThermodynamics:
         else:
             self.mobility_correction[element] = factor
 
-    def _getMatrixPhase(self, phase = None):
-        return self.phases[0] if phase is None else phase
-    
-    def _getPrecipitatePhase(self, phase = None):
-        return self.phases[1] if phase is None else phase
-
     def process_x(self, x):
         '''
         Processes x to always be an array for len(elements) - 1
@@ -356,21 +351,6 @@ class GeneralThermodynamics:
         if len(x) == len(self.elements) - 1:
             x = x[1:]
         return x
-    
-    def process_xT_arrays(self, x, T, squeeze_X = True):
-        '''
-        Converts x, T to np.array
-
-        Shape of x is (N,1) if binary or (N,e-1) if multicomponent
-        Shape of T is (N,)
-        '''
-        x = np.atleast_2d(x)
-        if self._isBinary:
-            x = x.T
-        if squeeze_X:
-            x = np.squeeze(x)
-        T = np.atleast_1d(T)
-        return x, T
 
     def _getConditions(self, x, T, gExtra = 0):
         '''
@@ -523,7 +503,7 @@ class GeneralThermodynamics:
             For multicomponent - matrix or array of matrices
         '''
         dnkj = []
-        x, T = self.process_xT_arrays(x, T, False)
+        x, T = _process_xT_arrays(x, T, self._isBinary)
         dnkj = [self._interdiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(dnkj)
 
@@ -546,7 +526,7 @@ class GeneralThermodynamics:
         '''
         # Compute local equilibrium on phase
         #phase = self.phases[0] if phase is None else phase
-        phase = self._getMatrixPhase(phase)
+        phase = _getMatrixPhase(self.phases, phase)
         comp_sets = self._diffusivity_cache.get(phase, None)
         result, comp_sets = self.getLocalEq(x, T, 0, [phase], composition_sets=comp_sets)
         cs_matrix = comp_sets[0]
@@ -601,7 +581,7 @@ class GeneralThermodynamics:
         tracer diffusivity - will return array if T is an array
         '''
         td = []
-        x, T = self.process_xT_arrays(x, T, False)
+        x, T = _process_xT_arrays(x, T, self._isBinary)
         td = [self._tracerDiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(td)
 
@@ -624,7 +604,7 @@ class GeneralThermodynamics:
         '''
         # Compute local equilibrium on phase
         #phase = self.phases[0] if phase is None else phase
-        phase = self._getMatrixPhase(phase)
+        phase = _getMatrixPhase(self.phases, phase)
         comp_sets = self._diffusivity_cache.get(phase, None)
         result, comp_sets = self.getLocalEq(x, T, 0, [phase], composition_sets=comp_sets)
         cs_matrix = comp_sets[0]
@@ -675,8 +655,8 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        x, T = self.process_xT_arrays(x, T, False)
-        precPhase = self._getPrecipitatePhase(precPhase)
+        x, T = _process_xT_arrays(x, T, self._isBinary)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
         dgArray, compArray = zip(*[self._drivingForce(xi, Ti, precPhase, removeCache, local_phase_sampling_conditions) for xi, Ti in zip(x, T)])
         return np.squeeze(dgArray), np.squeeze(compArray)
     
@@ -826,8 +806,6 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        x = self.process_x(x)
-
         cs_results = self._getCompositionSetsForDF(x, T, precPhase)
         if cs_results is None:
             return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache, local_phase_sampling_conditions=local_phase_sampling_conditions)

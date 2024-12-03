@@ -4,6 +4,7 @@ import numpy as np
 
 from pycalphad import variables as v
 
+from kawin.thermo.utils import _getPrecipitatePhase
 from kawin.thermo.Thermodynamics import GeneralThermodynamics
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
@@ -91,7 +92,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         '''
         gExtra = np.atleast_1d(gExtra)
         T = np.atleast_1d(T)
-        precPhase = self._getPrecipitatePhase(precPhase)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
         if len(T) == 1:
             T = T*np.ones(gExtra.shape, dtype=np.float64)
         
@@ -288,7 +289,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             
         # Get composition sets for equilibrium between matrix and precipitate
         #precPhase = self.phases[1] if precPhase is None else precPhase
-        precPhase = self._getPrecipitatePhase(precPhase)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
         eq_results = self._getCompositionSetsEq(x, T, precPhase, self._compset_cache_curvature)
         if eq_results is None:
             return _process_invalid_eq('cached')
@@ -380,7 +381,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         x = self.process_x(x)
         R = np.atleast_1d(R)
         gExtra = np.atleast_1d(gExtra)
-        precPhase = self._getPrecipitatePhase(precPhase)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
 
         curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
@@ -429,7 +430,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         -------
         beta - impingement factor
         '''
-        precPhase = self._getPrecipitatePhase(precPhase)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
         curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
             return self._curvature_outputs[precPhase].beta

@@ -1,7 +1,10 @@
-from kawin.thermo.Thermodynamics import GeneralThermodynamics
 import numpy as np
+
 from pycalphad import Workspace, equilibrium, calculate, variables as v
 from pycalphad.core.composition_set import CompositionSet
+
+from kawin.thermo.utils import _process_TG_arrays, _getPrecipitatePhase
+from kawin.thermo.Thermodynamics import GeneralThermodynamics
 from kawin.thermo.FreeEnergyHessian import dMudX
 
 class BinaryThermodynamics (GeneralThermodynamics):
@@ -102,10 +105,9 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        gExtra = np.atleast_1d(gExtra)
-        T = np.atleast_1d(T)
-        precPhase = self._getPrecipitatePhase(precPhase)
-        if len(T) == 1:
+        T, gExtra = _process_TG_arrays(T, gExtra)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if len(np.unique(T)) == 1:
             caArray, cbArray = self._interfacialComposition(T[0], gExtra, precPhase)
         else:
             caArray, cbArray = zip(*[self._interfacialComposition(T[i], gExtra[i], precPhase) for i in range(len(T))])

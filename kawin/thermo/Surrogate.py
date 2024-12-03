@@ -1,8 +1,12 @@
+from abc import ABC, abstractmethod
+
 import numpy as np
 import pickle
-from scipy.interpolate import Rbf
+from scipy.interpolate import Rbf, RBFInterpolator
 import scipy.spatial.distance as spd
 
+from kawin.thermo.utils import _process_TG_arrays, _process_xT_arrays, _getMatrixPhase, _getPrecipitatePhase
+from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.thermo.MultiTherm import CurvatureOutput, GrowthRateOutput
 
 def generateTrainingPoints(*arrays):
@@ -52,6 +56,261 @@ def _filter_points(inputs, outputs, tol = 1e-3):
         newOutputs.append(np.delete(outputs[i], indices, axis=0))
 
     return newInputs, newOutputs
+
+class SurrogateKernel(ABC):
+    @abstractmethod
+    def __init__(self, x, y, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def predict(self, x):
+        pass
+
+class RBFKernel(SurrogateKernel):
+    def __init__(self, x, y, *args, **kwargs):
+        if kwargs.get('normalize', False):
+            self.xoffset = np.amin(x, axis=0)
+            self.scale = (np.amax(x, axis=0) - np.amin(x, axis=0)) / len(x)
+        else:
+            self.xoffset = np.zeros(x.shape[1])
+            self.scale = np.ones(x.shape[1])
+
+        kwargs.pop('normalize', None)
+        self.rbfModel = RBFInterpolator((x - self.xoffset[np.newaxis,:]) / self.scale[np.newaxis,:], y, *args, **kwargs)
+
+    def predict(self, x):
+        return self.rbfModel((x - self.xoffset[np.newaxis,:]) / self.scale[np.newaxis,:])
+    
+class GeneralSurrogate:
+    def __init__(self, thermodynamics: GeneralThermodynamics, kernel: SurrogateKernel = RBFKernel, kernelKwargs = {}):
+        self.therm = thermodynamics
+        self._isBinary = self.therm._isBinary
+        self.phases = self.therm.phases
+
+        self.drivingForceData = {}
+        self.drivingForceModels = {}
+
+        self.diffusivityData = {}
+        self.diffusivityModels = {}
+
+        self.kernel = kernel
+        self.kernelKwargs = kernelKwargs
+
+    def _processCompositionInput(self, x, T, broadcast = False):
+        '''
+        Makes sure x and T are np arrays
+        If broadcasting, then x and T will be computed as a grid
+        '''
+        x = np.atleast_2d(x)
+        if self._isBinary:
+            x = x.T
+        T = np.atleast_1d(T)
+        singleX, singleT = len(x) == 1, len(T) == 1
+        if broadcast:
+            xsize, Tsize = len(x), len(T)
+            x = np.tile(x, (Tsize,1))
+            T = np.repeat(T, xsize, axis=0)
+        return x, T, singleX, singleT
+    
+    def _createInput(self, xs, singleXs):
+        '''
+        Create input data for the surrogate model
+        '''
+        xIn = []
+        for i in range(len(xs)):
+            if not singleXs[i]:
+                xIn.append(xs[i])
+        if len(xIn) == 0:
+            raise ValueError('Must have more than 1 datapoint for training')
+        else:
+            return np.concatenate(xIn, axis=1)
+        
+    def trainDrivingForce(self, x, T, precPhase=None, logX = False, broadcast=True):
+        # Get x,T arrays and precipitate phase and compute driving force and precipitate composition
+        x, T, singleX, singleT = self._processCompositionInput(x, T, broadcast=broadcast)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        dg, xp = self.therm.getDrivingForce(np.squeeze(x), T, precPhase=precPhase, removeCache=True)
+        self.drivingForceData[precPhase] = {
+            'x': x, 'T': T, 'dg': dg, 'xp': xp, 'logX': logX, 'singleX': singleX, 'singleT': singleT
+        }
+
+        # Format x and T and training data. If x or T is a single training point, then don't use for
+        # training data as it will create a non-full rank matrix
+        xFit = np.atleast_2d(x)
+        if logX:
+            xFit = np.log(xFit)
+        TFit = np.atleast_2d(T).T
+        xTrain = self._createInput([xFit, TFit], [singleX, singleT])
+        
+        # Format driving force and precipitate composition arrays
+        dgFit = np.atleast_2d(dg).T
+        xpFit = np.atleast_2d(xp)
+        if self._isBinary:
+            xpFit = xpFit.T
+        yTrain = np.concatenate((dgFit, xpFit), axis=1)
+
+        # Create surrogate model
+        self.drivingForceModels[precPhase] = self.kernel(xTrain, yTrain, **self.kernelKwargs)
+
+    def getDrivingForce(self, x, T, precPhase=None, *args, **kwargs):
+        # Check if precipitate phase has been trained on and use surrogate model if so
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if precPhase in self.drivingForceModels:
+            trainingData = self.drivingForceData[precPhase]
+
+            # Format x, T arrays for model
+            x, T = _process_xT_arrays(x, T, self._isBinary)
+            T = np.atleast_2d(T).T
+            if trainingData['logX']:
+                x = np.log(x)
+
+            xIn = self._createInput([x, T], [trainingData['singleX'], trainingData['singleT']])
+            output = self.drivingForceModels[precPhase].predict(xIn)
+            return output[:,0], np.squeeze(output[:,1:])
+        
+        # If precipitate phase has not been trained, used underlying thermodynamics function
+        else:
+            return self.therm.getDrivingForce(x, T, precPhase=precPhase, *args, **kwargs)
+
+    def trainDiffusivity(self, x, T, phase=None, logX=False, broadcast=True):
+        # Get x,T arrays and precipitate phase and compute driving force and precipitate composition
+        x, T, singleX, singleT = self._processCompositionInput(x, T, broadcast=broadcast)
+        phase = _getMatrixPhase(self.phases, phase)
+        dnkj = self.therm.getInterdiffusivity(np.squeeze(x), T, phase=phase, removeCache=True)
+        dtracer = self.therm.getTracerDiffusivity(np.squeeze(x), T, phase=phase, removeCache=True)
+        self.diffusivityData[phase] = {
+            'x': x, 'T': T, 'dnkj': dnkj, 'dtracer': dtracer, 'logX': logX, 'singleX': singleX, 'singleT': singleT
+        }
+        # Format x and T and training data. If x or T is a single training point, then don't use for
+        # training data as it will create a non-full rank matrix
+        xFit = np.atleast_2d(x)
+        if logX:
+            xFit = np.log(xFit)
+        TFit = np.atleast_2d(T).T
+        xTrain = self._createInput([xFit, 1/TFit], [singleX, singleT])
+
+        if self._isBinary:
+            dnkjFit = np.atleast_2d(dnkj).T
+        else:
+            dnkjFit = np.reshape(dnkj, (dnkj.shape[0], dnkj.shape[1]*dnkj.shape[2]))
+        dtracerFit = np.atleast_2d(dtracer)
+        yTrain = np.concatenate((dnkjFit, dtracerFit), axis=1)
+        yTrain = np.log(yTrain)
+        self.diffusivityModels[phase] = self.kernel(xTrain, yTrain, **self.kernelKwargs)
+
+    def _getDiffusivity(self, x, T, phase):
+        trainingData = self.diffusivityData[phase]
+
+        # Format x, T arrays for model
+        x, T = _process_xT_arrays(x, T, self._isBinary)
+        T = np.atleast_2d(T).T
+        if trainingData['logX']:
+            x = np.log(x)
+
+        xIn = self._createInput([x, 1/T], [trainingData['singleX'], trainingData['singleT']])
+        output = self.diffusivityModels[phase].predict(xIn)
+        return output
+
+    def getInterdiffusivity(self, x, T, phase=None, *args, **kwargs):
+        phase = _getMatrixPhase(self.phases, phase)
+        if phase in self.diffusivityModels:
+            output = self._getDiffusivity(x, T, phase)
+            if self._isBinary:
+                return np.exp(output[:,0])
+            else:
+                d = np.exp(output[:,:x.shape[1]*x.shape[1]])
+                return np.reshape(d, (d.shape[0], x.shape[1], x.shape[1]))
+        else:
+            return self.therm.getInterdiffusivity(x, T, phase=phase, *args, **kwargs)
+
+    def getTracerDiffusivity(self, x, T, phase=None, *args, **kwargs):
+        phase = _getMatrixPhase(self.phases, phase)
+        if phase in self.diffusivityModels:
+            output = self._getDiffusivity(x, T, phase)
+            return np.exp(output[:,x.shape[1]*x.shape[1]:])
+        else:
+            return self.therm.getInterdiffusivity(x, T, phase=phase, *args, **kwargs)
+
+class BinarySurrogateNew(GeneralSurrogate):
+    """
+    New surrogate model
+    By default, the untrained surrogate will use the thermodynamic functions
+
+    As we train a model, it will be added to the model and replace the underlying thermodynamics
+    Then any untrained model will still go back to the thermodynamic functions
+
+    The intent of this is that the surrogate models API will be similar to the 
+    underlying thermodynamic modules
+        Driving force
+        Interfacial composition
+        Tracer diffusivity
+        Interdiffusivity
+    """
+    def __init__(self, thermodynamics: BinaryThermodynamics, kernel: SurrogateKernel = RBFKernel, kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
+        super().__init__(thermodynamics, kernel, kernelKwargs)
+        self.interfacialCompositionData = {}
+        self.interfacialCompositionModels = {}
+
+    def _processGibbsThompsonInput(self, T, gExtra, broadcast = False):
+        '''
+        Makes sure T and gExtra are np arrays
+        If broadcasting, then T and gExtra will be computed as a grid
+        '''
+        T = np.atleast_1d(T)
+        gExtra = np.atleast_1d(gExtra)
+        singleT, singleG = len(T) == 1, len(gExtra) == 1
+        if broadcast:
+            Tsize, gsize = len(T), len(gExtra)
+            T = np.tile(T, (gsize,1))
+            gExtra = np.repeat(gExtra, Tsize, axis=0)
+        return T, gExtra, singleT, singleG
+    
+    def trainInterfacialComposition(self, T, gExtra, precPhase=None, logY = False, broadcast=True):
+        T, gExtra, singleT, singleG = self._processGibbsThompsonInput(T, gExtra, broadcast=broadcast)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        xpalpha, xpbeta = self.therm.getInterfacialComposition(T, gExtra, precPhase=precPhase)
+        indices = xpalpha > 0
+        T = T[indices]
+        gExtra = gExtra[indices]
+        xpalpha = xpalpha[indices]
+        xpbeta = xpbeta[indices]
+        self.interfacialCompositionData[precPhase] = {
+            'T': T, 'gExtra': gExtra, 'xpalpha': xpalpha, 'xpbeta': xpbeta, 'logY': logY, 'singleT': singleT, 'singleG': singleG,
+        }
+
+        # Format x and T and training data. If x or T is a single training point, then don't use for
+        # training data as it will create a non-full rank matrix
+        TFit = np.atleast_2d(T).T
+        gFit = np.atleast_2d(gExtra).T
+        xTrain = self._createInput([TFit, 1/gFit], [singleT, singleG])
+
+        xpalpha = np.atleast_2d(xpalpha).T
+        if logY:
+            xpalpha = np.log(xpalpha)
+        xpbeta = np.atleast_2d(xpbeta).T
+        yTrain = np.concatenate((xpalpha, xpbeta), axis=1)
+        self.interfacialCompositionModels[precPhase] = self.kernel(xTrain, yTrain, **self.kernelKwargs)
+
+    def getInterfacialComposition(self, T, gExtra=0, precPhase=None):
+        # Check if precipitate phase has been trained on and use surrogate model if so
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if precPhase in self.interfacialCompositionModels:
+            trainingData = self.interfacialCompositionData[precPhase]
+
+            # Format T, g arrays for model
+            T, gExtra = _process_TG_arrays(T, gExtra)
+            T = np.atleast_2d(T).T
+            gExtra = np.atleast_2d(gExtra).T
+
+            xIn = self._createInput([T, 1/gExtra], [trainingData['singleT'], trainingData['singleG']])
+            output = self.interfacialCompositionModels[precPhase].predict(xIn)
+            if trainingData['logY']:
+                output[:,0] = np.exp(output[:,0])
+            return output[:,0], output[:,1]
+        
+        # If precipitate phase has not been trained, used underlying thermodynamics function
+        else:
+            return self.therm.getInterfacialComposition(T, gExtra, precPhase=precPhase)
 
 class BinarySurrogate:
     '''

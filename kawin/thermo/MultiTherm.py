@@ -4,7 +4,7 @@ import numpy as np
 
 from pycalphad import variables as v
 
-from kawin.thermo.utils import _getPrecipitatePhase
+from kawin.thermo.utils import _getPrecipitatePhase, _process_xT_arrays, _process_x
 from kawin.thermo.Thermodynamics import GeneralThermodynamics
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
@@ -27,6 +27,34 @@ CurvatureOutput = namedtuple('CurvatureOutput',
 GrowthRateOutput = namedtuple('GrowthRateOutput',
                              ['growth_rate', 'c_alpha', 'c_beta', 'c_eq_alpha', 'c_eq_beta'],
                              defaults=(None, None, None, None, None))
+
+def _growthRateOutputFromCurvature(x, dG, R, gExtra, curvature: CurvatureOutput):
+    x = np.atleast_1d(x)
+    R = np.atleast_1d(R)
+    gExtra = np.atleast_1d(gExtra)
+
+    # Eq 28 from Philippe and Voorhees, Acta Mat 61 (2013) 4237
+    # Rdiff is (dCbar^T * d2G/dx2 * C^inf - 2yVm/R) = (driving force - Gibbs Thompson energy)
+    Rdiff = (dG - gExtra)
+    gr = (curvature.mc / R) * Rdiff
+
+    # Eq 31 from Philippe and Voorhees, Acta Mat 61 (2013) 4237
+    # calpha and cbeta are shape (len(gExtra), len(elements)-1)
+    calpha = x[np.newaxis,:] - np.outer(Rdiff, curvature.dc)
+
+    # Eq 36 from Philippe and Voorhees, Acta Mat 61 (2013) 4237
+    dca = calpha - curvature.c_eq_alpha[np.newaxis,:]
+    dcb = np.matmul(curvature.gba, dca.T).T
+    cbeta = curvature.c_eq_beta[np.newaxis,:] + dcb
+
+    calpha = np.clip(calpha, 0, 1)
+    cbeta = np.clip(cbeta, 0, 1)
+
+    return GrowthRateOutput(growth_rate=np.squeeze(gr), 
+                            c_alpha=np.squeeze(calpha), 
+                            c_beta=np.squeeze(cbeta), 
+                            c_eq_alpha=np.squeeze(curvature.c_eq_alpha), 
+                            c_eq_beta=np.squeeze(curvature.c_eq_beta))
 
 
 class MulticomponentThermodynamics (GeneralThermodynamics):
@@ -245,7 +273,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         return self._curvature_outputs[precPhase]
 
-    def curvatureFactor(self, x, T, precPhase = None, removeCache = False, searchDir = None):
+    def curvatureFactor(self, x, T, precPhase = None, removeCache = False, searchDir = None, computeSearchDir = False):
         '''
         Curvature factor (from Phillipes and Voorhees - 2013) from composition and temperature
         This will find equilibrium and composition sets for x and T and call _curvatureFactorFromEq
@@ -287,6 +315,12 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
                 print(f'Warning: {calc_source} equilibrum was not able to be solved for, using results of previous calculation')
                 return self._curvature_outputs[precPhase]
             
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
+        if len(x) > 1 or len(T) > 1:
+            raise ValueError('Curvature factor only takes in a single x,T condition.')
+        x = np.squeeze(x)
+        T = np.squeeze(T)
+            
         # Get composition sets for equilibrium between matrix and precipitate
         #precPhase = self.phases[1] if precPhase is None else precPhase
         precPhase = _getPrecipitatePhase(self.phases, precPhase)
@@ -298,7 +332,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
 
         # If either the matrix of precipitate is unstable, then search for two-phase equilibria
         if cs_matrix is None or cs_precip is None:
-            eq_results = self._searchForTwoPhaseEq(x, T, precPhase, searchDir)
+            eq_results = self._searchForTwoPhaseEq(x, T, precPhase, removeCache, searchDir, computeSearchDir)
             if eq_results is None:
                 return _process_invalid_eq('search')
                 
@@ -307,7 +341,7 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         self._compset_cache_curvature[precPhase] = None if removeCache else [cs_matrix, cs_precip]
         return self._curvatureFactorFromEq(chemical_potentials, cs_matrix, cs_precip, precPhase)
         
-    def _searchForTwoPhaseEq(self, x, T, precPhase, searchDir = None):
+    def _searchForTwoPhaseEq(self, x, T, precPhase, removeCache = False, searchDir = None, computeSearchDir = False):
         '''
         Given x and a search direction (which should correspond to the composition of precipitate from driving force calc)
         Iteratively search between x and search direction until two phase equilibria is found
@@ -316,7 +350,10 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         else return chemical_potential, cs_matrix, cs_precip
         '''
         if searchDir is None:
-            return None
+            if computeSearchDir:
+                _, searchDir = self.getDrivingForce(x, T, precPhase, removeCache)
+            if searchDir is None:
+                return None
         
         searchDir = np.array(searchDir)
         currX = 0.5 * np.array(x) + 0.5 * searchDir
@@ -378,37 +415,15 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
             matrix and precipitate composition will be array or 2D array based
                 off shape of R
         '''
-        x = self.process_x(x)
-        R = np.atleast_1d(R)
-        gExtra = np.atleast_1d(gExtra)
         precPhase = _getPrecipitatePhase(self.phases, precPhase)
 
         curv_results = self.curvatureFactor(x, T, precPhase, removeCache, searchDir)
         if curv_results is None:
             return None
-
-        # Eq 28 from Philippe and Voorhees, Acta Mat 61 (2013) 4237
-        # Rdiff is (dCbar^T * d2G/dx2 * C^inf - 2yVm/R) = (driving force - Gibbs Thompson energy)
-        Rdiff = (dG - gExtra)
-        gr = (curv_results.mc / R) * Rdiff
-
-        # Eq 31 from Philippe and Voorhees, Acta Mat 61 (2013) 4237
-        # calpha and cbeta are shape (len(gExtra), len(elements)-1)
-        calpha = x[np.newaxis,:] - np.outer(Rdiff, curv_results.dc)
-
-        # Eq 36 from Philippe and Voorhees, Acta Mat 61 (2013) 4237
-        dca = calpha - curv_results.c_eq_alpha[np.newaxis,:]
-        dcb = np.matmul(curv_results.gba, dca.T).T
-        cbeta = curv_results.c_eq_beta[np.newaxis,:] + dcb
-
-        calpha = np.clip(calpha, 0, 1)
-        cbeta = np.clip(cbeta, 0, 1)
-
-        return GrowthRateOutput(growth_rate=np.squeeze(gr), 
-                                c_alpha=np.squeeze(calpha), 
-                                c_beta=np.squeeze(cbeta), 
-                                c_eq_alpha=np.squeeze(curv_results.c_eq_alpha), 
-                                c_eq_beta=np.squeeze(curv_results.c_eq_beta))
+        
+        
+        x = _process_x(x, self.numElements)
+        return _growthRateOutputFromCurvature(x, dG, R, gExtra, curv_results)
 
     def impingementFactor(self, x, T, precPhase = None, removeCache = False, searchDir = None):
         '''
@@ -435,24 +450,3 @@ class MulticomponentThermodynamics (GeneralThermodynamics):
         if curv_results is None:
             return self._curvature_outputs[precPhase].beta
         return curv_results.beta
-    
-    def _curvatureWithSearch(self, x, T, precPhase, removeCache = True):
-        '''
-        Performs driving force calculation to get xb, which can be used to find
-        curvature factors when driving force is negative. Main use is for the surrogate model
-        to train on all points
-
-        Parameters
-        ----------
-        x : array
-            Composition of solutes
-        T : float
-            Temperature
-        precPhase : str (optional)
-            Precipitate phase (defaults to first precipitate in list)
-        removeCache : bool (optional)
-            If True, this will not cache any equilibrium
-            This is used for training since training points may not be near each other
-        '''
-        _, xb = self.getDrivingForce(x, T, precPhase, removeCache = removeCache)
-        return self.curvatureFactor(x, T, precPhase, removeCache = removeCache, searchDir=xb)

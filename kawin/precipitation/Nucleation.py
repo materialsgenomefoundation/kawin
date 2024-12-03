@@ -19,9 +19,7 @@ def volumetricDrivingForce(therm: GeneralThermodynamics, x, T, precipitate: Prec
         In the case where the matrix is prestrained and the precipitate will relax the matrix, then the strain
         energy is negative
     '''
-    x, T = _process_xT_arrays(x, T, therm._isBinary)
-    x = np.squeeze(x)
-
+    x, T = _process_xT_arrays(x, T, therm.numElements == 2)
     chemDGs, betaComp = therm.getDrivingForce(x, T, precPhase=precipitate.phase, removeCache=removeCache)
     volDGs = chemDGs / precipitate.volume.Vm
     volDGs -= precipitate.strainEnergy.strainEnergy(precipitate.shapeFactor.description.normalRadiiFromAR(aspectRatio))
@@ -203,13 +201,12 @@ def nucleationRadius(T, Rcrit, precipitateParameters: PrecipitateParameters):
     return np.squeeze(Rad)
 
 def computeSteadyStateNucleation(therm : GeneralThermodynamics, x, T, precipitate: PrecipitateParameters, matrix : MatrixParameters, betaFunc = None, aspectRatio = 1, removeCache = False):
-    x, T = _process_xT_arrays(x, T, therm._isBinary)
-    x = np.squeeze(x)
+    x, T = _process_xT_arrays(x, T, therm.numElements == 2)
     chemDGs, volDGs, betaComp = volumetricDrivingForce(therm, x, T, precipitate, aspectRatio = aspectRatio, removeCache = removeCache)
     Rcrit, Gcrit = nucleationBarrier(volDGs, precipitate, aspectRatio = aspectRatio)
     Z = zeldovich(T, Rcrit, precipitate)
     if betaFunc is None:
-        betaFunc = betaBinary2 if therm._isBinary else betaMulti
+        betaFunc = betaBinary2 if therm.numElements == 2 else betaMulti
     beta = betaFunc(therm, x, T, Rcrit, matrix, precipitate, removeCache = removeCache)
     tau = incubationTime(beta, Z, matrix)
     nucRate = nucleationRate(Z, beta, Gcrit, T, tau, time = np.inf)

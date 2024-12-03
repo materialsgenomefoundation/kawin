@@ -9,7 +9,7 @@ from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import extract_parameters
 
-from kawin.thermo.utils import _process_xT_arrays, _getMatrixPhase, _getPrecipitatePhase
+from kawin.thermo.utils import _process_xT_arrays, _getMatrixPhase, _getPrecipitatePhase, _process_x
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
 from kawin.thermo.Mobility import MobilityModel, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
@@ -74,7 +74,7 @@ class GeneralThermodynamics:
         self.elements = copy.copy(elements)
         if 'VA' not in self.elements:
             self.elements.append('VA')
-        self._isBinary = len(self.elements) == 3
+        self.numElements = len(set(self.elements) - {'VA'})
         
         if parameters is None:
             self._parameters = {}
@@ -341,17 +341,7 @@ class GeneralThermodynamics:
                 self.mobility_correction[e] = factor
         else:
             self.mobility_correction[element] = factor
-
-    def process_x(self, x):
-        '''
-        Processes x to always be an array for len(elements) - 1
-        If x in len(elements), then we assume that the first item is the solute
-        '''
-        x = np.atleast_1d(x)
-        if len(x) == len(self.elements) - 1:
-            x = x[1:]
-        return x
-
+        
     def _getConditions(self, x, T, gExtra = 0):
         '''
         Creates dictionary of conditions from composition, temperature and gExtra
@@ -365,7 +355,7 @@ class GeneralThermodynamics:
         gExtra : float (optional)
             Gibbs free energy to add to phase. Defaults to 0
         '''
-        x = self.process_x(x)
+        x = _process_x(x, len(set(self.elements)-{'VA'}))
         cond = {v.X(self.elements[i+1]): x[i] for i in range(len(x))}
         cond.update({v.GE: gExtra, v.N: 1, v.P: 101325, v.T: T})
         return cond
@@ -503,7 +493,7 @@ class GeneralThermodynamics:
             For multicomponent - matrix or array of matrices
         '''
         dnkj = []
-        x, T = _process_xT_arrays(x, T, self._isBinary)
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
         dnkj = [self._interdiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(dnkj)
 
@@ -547,7 +537,7 @@ class GeneralThermodynamics:
                                          parameters=self._parameters)
 
         # Sort Dnkj from alphabetical to the input order of the elements
-        if not self._isBinary:
+        if self.numElements != 2:
             sortIndices = np.argsort(self.elements[1:-1])
             unsortIndices = np.argsort(sortIndices)
             Dnkj = Dnkj[unsortIndices,:]
@@ -581,7 +571,7 @@ class GeneralThermodynamics:
         tracer diffusivity - will return array if T is an array
         '''
         td = []
-        x, T = _process_xT_arrays(x, T, self._isBinary)
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
         td = [self._tracerDiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(td)
 
@@ -655,7 +645,7 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        x, T = _process_xT_arrays(x, T, self._isBinary)
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
         precPhase = _getPrecipitatePhase(self.phases, precPhase)
         dgArray, compArray = zip(*[self._drivingForce(xi, Ti, precPhase, removeCache, local_phase_sampling_conditions) for xi, Ti in zip(x, T)])
         return np.squeeze(dgArray), np.squeeze(compArray)

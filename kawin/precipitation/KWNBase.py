@@ -672,7 +672,7 @@ class PrecipitateBase(GenericModel):
             Rcrit, Gcrit = nucfuncs.nucleationBarrier(volDG, precParams, aspectRatio)
             
             # Impingement factor
-            if self.therm._isBinary:
+            if self.therm.numElements == 2:
                 if self.betaFuncType == 1:
                     beta = nucfuncs.betaBinary1(self.therm, xComp, T, Rcrit, self.matrixParameters, precParams, self.removeCache)
                 else:

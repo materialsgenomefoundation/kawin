@@ -6,6 +6,7 @@ import warnings
 
 import numpy as np
 
+from kawin.thermo.utils import _process_xT_arrays
 from kawin.thermo import GeneralThermodynamics
 from kawin.thermo.Mobility import mobility_from_composition_set, x_to_u_frac, interstitials
 
@@ -599,11 +600,7 @@ def _computeSingleMobility(therm: GeneralThermodynamics, x: np.array, T: np.arra
     return mobility_data
 
 def computeMobility(therm : GeneralThermodynamics, x, T, hashTable : HashTable = None):
-    # x should always be 2d, T should always be 1d
-    x = np.atleast_2d(np.squeeze(x))
-    if therm._isBinary:
-        x = x.T
-    T = np.atleast_1d(T)
+    x, T = _process_xT_arrays(x, T, therm.numElements == 2)
 
     # we want to make sure that the mobility is sorted to be the same order as listed in therm
     sortIndices = np.argsort(therm.elements[:-1])
@@ -644,11 +641,7 @@ def computeHomogenizationFunction(therm : GeneralThermodynamics, x, T, homogeniz
 
     Where N is size of (x,T), and e is number of elements
     '''
-    # x should always be 2d, T should always be 1d
-    x = np.atleast_2d(np.squeeze(x))
-    if therm._isBinary:
-        x = x.T
-    T = np.atleast_1d(T)
+    x, T = _process_xT_arrays(x, T, therm.numElements == 2)
 
     # we want to make sure that the mobility is sorted to be the same order as listed in therm
     sortIndices = np.argsort(therm.elements[:-1])

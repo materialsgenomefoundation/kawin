@@ -5,9 +5,9 @@ import pickle
 from scipy.interpolate import Rbf, RBFInterpolator
 import scipy.spatial.distance as spd
 
-from kawin.thermo.utils import _process_TG_arrays, _process_xT_arrays, _getMatrixPhase, _getPrecipitatePhase
+from kawin.thermo.utils import _process_TG_arrays, _process_xT_arrays, _getMatrixPhase, _getPrecipitatePhase, _process_x
 from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
-from kawin.thermo.MultiTherm import CurvatureOutput, GrowthRateOutput
+from kawin.thermo.MultiTherm import CurvatureOutput, GrowthRateOutput, _growthRateOutputFromCurvature
 
 def generateTrainingPoints(*arrays):
     '''
@@ -58,6 +58,13 @@ def _filter_points(inputs, outputs, tol = 1e-3):
     return newInputs, newOutputs
 
 class SurrogateKernel(ABC):
+    '''
+    Abstract class for kernel
+
+    Attributes
+      __init__ - builds the surrogate model from x and y, and may use *args and **kwargs for hyperparameters
+      predict - returns a y-like output from an x-like input
+    '''
     @abstractmethod
     def __init__(self, x, y, *args, **kwargs):
         pass
@@ -67,6 +74,10 @@ class SurrogateKernel(ABC):
         pass
 
 class RBFKernel(SurrogateKernel):
+    '''
+    Surrogate kernel using scipy radial basis function (RBFInterpolator)
+    An additional parameter, 'normalize', can be used to normalize all dimensions of x from [0,1]
+    '''
     def __init__(self, x, y, *args, **kwargs):
         if kwargs.get('normalize', False):
             self.xoffset = np.amin(x, axis=0)
@@ -82,9 +93,27 @@ class RBFKernel(SurrogateKernel):
         return self.rbfModel((x - self.xoffset[np.newaxis,:]) / self.scale[np.newaxis,:])
     
 class GeneralSurrogate:
-    def __init__(self, thermodynamics: GeneralThermodynamics, kernel: SurrogateKernel = RBFKernel, kernelKwargs = {}):
+    '''
+    By default, the untrained surrogate will use the thermodynamic functions
+
+    As we train a model, it will be added to the model and replace the underlying thermodynamics
+    Then any untrained model will still go back to the thermodynamic functions
+
+    The intent of this is that the surrogate models API will be similar to the 
+    underlying thermodynamic modules
+        Driving force
+        Tracer diffusivity
+        Interdiffusivity
+        Interfacial composition - binary only
+        Curvature factor - multicomponent only
+        Impingement rate - multicomponent only
+    '''
+    def __init__(self, thermodynamics: GeneralThermodynamics, 
+                 kernel: SurrogateKernel = RBFKernel, 
+                 kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
         self.therm = thermodynamics
-        self._isBinary = self.therm._isBinary
+        self.numElements = self.therm.numElements
+        self.elements = self.therm.elements
         self.phases = self.therm.phases
 
         self.drivingForceData = {}
@@ -102,7 +131,7 @@ class GeneralSurrogate:
         If broadcasting, then x and T will be computed as a grid
         '''
         x = np.atleast_2d(x)
-        if self._isBinary:
+        if self.numElements == 2 and x.shape[1] != 1:
             x = x.T
         T = np.atleast_1d(T)
         singleX, singleT = len(x) == 1, len(T) == 1
@@ -126,14 +155,20 @@ class GeneralSurrogate:
             return np.concatenate(xIn, axis=1)
         
     def trainDrivingForce(self, x, T, precPhase=None, logX = False, broadcast=True):
+        '''
+        Creates surrogate model for driving force
+        Model will be in the form of (dg, x) = f(x, T) or (dg, x) = f(ln(x), T)
+
+        If only single x or T, then surrogate model will only be trained on
+        non-scalar axis
+        '''
         # Get x,T arrays and precipitate phase and compute driving force and precipitate composition
         x, T, singleX, singleT = self._processCompositionInput(x, T, broadcast=broadcast)
         precPhase = _getPrecipitatePhase(self.phases, precPhase)
-        dg, xp = self.therm.getDrivingForce(np.squeeze(x), T, precPhase=precPhase, removeCache=True)
+        dg, xp = self.therm.getDrivingForce(x, T, precPhase=precPhase, removeCache=True)
         self.drivingForceData[precPhase] = {
             'x': x, 'T': T, 'dg': dg, 'xp': xp, 'logX': logX, 'singleX': singleX, 'singleT': singleT
         }
-
         # Format x and T and training data. If x or T is a single training point, then don't use for
         # training data as it will create a non-full rank matrix
         xFit = np.atleast_2d(x)
@@ -145,7 +180,7 @@ class GeneralSurrogate:
         # Format driving force and precipitate composition arrays
         dgFit = np.atleast_2d(dg).T
         xpFit = np.atleast_2d(xp)
-        if self._isBinary:
+        if self.numElements == 2 and xpFit.shape[1] != 1:
             xpFit = xpFit.T
         yTrain = np.concatenate((dgFit, xpFit), axis=1)
 
@@ -159,25 +194,33 @@ class GeneralSurrogate:
             trainingData = self.drivingForceData[precPhase]
 
             # Format x, T arrays for model
-            x, T = _process_xT_arrays(x, T, self._isBinary)
+            x, T = _process_xT_arrays(x, T, self.numElements == 2)
             T = np.atleast_2d(T).T
             if trainingData['logX']:
                 x = np.log(x)
 
             xIn = self._createInput([x, T], [trainingData['singleX'], trainingData['singleT']])
             output = self.drivingForceModels[precPhase].predict(xIn)
-            return output[:,0], np.squeeze(output[:,1:])
+            return np.squeeze(output[:,0]), np.squeeze(output[:,1:])
         
         # If precipitate phase has not been trained, used underlying thermodynamics function
         else:
             return self.therm.getDrivingForce(x, T, precPhase=precPhase, *args, **kwargs)
 
     def trainDiffusivity(self, x, T, phase=None, logX=False, broadcast=True):
+        '''
+        Creates surrogate model for diffusivity
+        Model will be in the form of (Dnkj^1/3, D*^1/3) = f(x, 1/T) or (Dnkj^1/3, D*^1/3) = f(ln(x), 1/T)
+        The cubic transformation is used since Dnkj may be negative due to chemical potential gradients
+
+        If only single x or T, then surrogate model will only be trained on
+        non-scalar axis
+        '''
         # Get x,T arrays and precipitate phase and compute driving force and precipitate composition
         x, T, singleX, singleT = self._processCompositionInput(x, T, broadcast=broadcast)
         phase = _getMatrixPhase(self.phases, phase)
-        dnkj = self.therm.getInterdiffusivity(np.squeeze(x), T, phase=phase, removeCache=True)
-        dtracer = self.therm.getTracerDiffusivity(np.squeeze(x), T, phase=phase, removeCache=True)
+        dnkj = self.therm.getInterdiffusivity(x, T, phase=phase, removeCache=True)
+        dtracer = self.therm.getTracerDiffusivity(x, T, phase=phase, removeCache=True)
         self.diffusivityData[phase] = {
             'x': x, 'T': T, 'dnkj': dnkj, 'dtracer': dtracer, 'logX': logX, 'singleX': singleX, 'singleT': singleT
         }
@@ -189,20 +232,20 @@ class GeneralSurrogate:
         TFit = np.atleast_2d(T).T
         xTrain = self._createInput([xFit, 1/TFit], [singleX, singleT])
 
-        if self._isBinary:
+        if self.numElements == 2:
             dnkjFit = np.atleast_2d(dnkj).T
         else:
             dnkjFit = np.reshape(dnkj, (dnkj.shape[0], dnkj.shape[1]*dnkj.shape[2]))
         dtracerFit = np.atleast_2d(dtracer)
         yTrain = np.concatenate((dnkjFit, dtracerFit), axis=1)
-        yTrain = np.log(yTrain)
+        yTrain = np.sign(yTrain)*np.power(np.abs(yTrain),1/3)
         self.diffusivityModels[phase] = self.kernel(xTrain, yTrain, **self.kernelKwargs)
 
     def _getDiffusivity(self, x, T, phase):
         trainingData = self.diffusivityData[phase]
 
         # Format x, T arrays for model
-        x, T = _process_xT_arrays(x, T, self._isBinary)
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
         T = np.atleast_2d(T).T
         if trainingData['logX']:
             x = np.log(x)
@@ -215,11 +258,12 @@ class GeneralSurrogate:
         phase = _getMatrixPhase(self.phases, phase)
         if phase in self.diffusivityModels:
             output = self._getDiffusivity(x, T, phase)
-            if self._isBinary:
-                return np.exp(output[:,0])
+            if self.numElements == 2:
+                return np.squeeze(np.power(output[:,0],3))
             else:
-                d = np.exp(output[:,:x.shape[1]*x.shape[1]])
-                return np.reshape(d, (d.shape[0], x.shape[1], x.shape[1]))
+                d = np.power(output[:,:x.shape[1]*x.shape[1]], 3)
+                d = np.reshape(d, (d.shape[0], x.shape[1], x.shape[1]))
+                return np.squeeze(d)
         else:
             return self.therm.getInterdiffusivity(x, T, phase=phase, *args, **kwargs)
 
@@ -227,26 +271,18 @@ class GeneralSurrogate:
         phase = _getMatrixPhase(self.phases, phase)
         if phase in self.diffusivityModels:
             output = self._getDiffusivity(x, T, phase)
-            return np.exp(output[:,x.shape[1]*x.shape[1]:])
+            d = np.power(output[:,x.shape[1]*x.shape[1]:],3)
+            return np.squeeze(d)
         else:
             return self.therm.getInterdiffusivity(x, T, phase=phase, *args, **kwargs)
 
-class BinarySurrogateNew(GeneralSurrogate):
+class BinarySurrogate(GeneralSurrogate):
     """
-    New surrogate model
-    By default, the untrained surrogate will use the thermodynamic functions
-
-    As we train a model, it will be added to the model and replace the underlying thermodynamics
-    Then any untrained model will still go back to the thermodynamic functions
-
-    The intent of this is that the surrogate models API will be similar to the 
-    underlying thermodynamic modules
-        Driving force
-        Interfacial composition
-        Tracer diffusivity
-        Interdiffusivity
+    Same as GeneralSurrogate but implements models for interfacial composition
     """
-    def __init__(self, thermodynamics: BinaryThermodynamics, kernel: SurrogateKernel = RBFKernel, kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
+    def __init__(self, thermodynamics: BinaryThermodynamics, 
+                 kernel: SurrogateKernel = RBFKernel, 
+                 kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
         super().__init__(thermodynamics, kernel, kernelKwargs)
         self.interfacialCompositionData = {}
         self.interfacialCompositionModels = {}
@@ -266,6 +302,13 @@ class BinarySurrogateNew(GeneralSurrogate):
         return T, gExtra, singleT, singleG
     
     def trainInterfacialComposition(self, T, gExtra, precPhase=None, logY = False, broadcast=True):
+        '''
+        Creates surrogate model for interfacial composition
+        Model will be in the form of (xa, xb) = f(T, 1/gExtra) or (ln(xa), xb) = f(T, 1/gExtra)
+
+        If only single T or gExtra, then surrogate model will only be trained on
+        non-scalar axis
+        '''
         T, gExtra, singleT, singleG = self._processGibbsThompsonInput(T, gExtra, broadcast=broadcast)
         precPhase = _getPrecipitatePhase(self.phases, precPhase)
         xpalpha, xpbeta = self.therm.getInterfacialComposition(T, gExtra, precPhase=precPhase)
@@ -306,13 +349,140 @@ class BinarySurrogateNew(GeneralSurrogate):
             output = self.interfacialCompositionModels[precPhase].predict(xIn)
             if trainingData['logY']:
                 output[:,0] = np.exp(output[:,0])
-            return output[:,0], output[:,1]
+            return np.squeeze(output[:,0]), np.squeeze(output[:,1])
         
         # If precipitate phase has not been trained, used underlying thermodynamics function
         else:
             return self.therm.getInterfacialComposition(T, gExtra, precPhase=precPhase)
+        
+class MulticomponentSurrogate(GeneralSurrogate):
+    """
+    Same as GeneralSurrogate but implements models for curvature factors
+        Curvature factor can then be used for growth rate, interfacial composition and impingement rate
+    """
+    def __init__(self, thermodynamics: MulticomponentThermodynamics, 
+                 kernel: SurrogateKernel = RBFKernel, 
+                 kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
+        super().__init__(thermodynamics, kernel, kernelKwargs)
+        self.curvatureData = {}
+        self.curvatureModels = {}
 
-class BinarySurrogate:
+    def trainCurvature(self, x, T, precPhase=None, logX = False, broadcast=True):
+        # Get x,T arrays and precipitate phase and compute driving force and precipitate composition
+        x, T, singleX, singleT = self._processCompositionInput(x, T, broadcast=broadcast)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        xSuccess, TSuccess = [], []
+        dc, mc, gba, beta, xEqAlpha, xEqBeta = [], [], [], [], [], []
+        for xi, Ti in zip(x, T):
+            curvature = self.therm.curvatureFactor(xi, Ti, precPhase=precPhase, removeCache=True, computeSearchDir = True)
+            if curvature is None:
+                continue
+            xSuccess.append(xi)
+            TSuccess.append(Ti)
+            dc.append(curvature.dc)
+            mc.append(curvature.mc)
+            gba.append(curvature.gba)
+            beta.append(curvature.beta)
+            xEqAlpha.append(curvature.c_eq_alpha)
+            xEqBeta.append(curvature.c_eq_beta)
+        xSuccess = np.array(xSuccess)   # (N,e)
+        TSuccess = np.array(TSuccess)   # (N,)
+        dc = np.array(dc)               # (N,e)
+        mc = np.array(mc)               # (N,)
+        gba = np.array(gba)             # (N,e,e)
+        beta = np.array(beta)           # (N,)
+        xEqAlpha = np.array(xEqAlpha)   # (N,e)
+        xEqBeta = np.array(xEqBeta)     # (N,e)
+        self.curvatureData[precPhase] = {
+            'x': xSuccess, 'T': TSuccess, 'dc': dc, 'mc': mc, 'gba': gba, 'beta': beta, 'xEqAlpha': xEqAlpha, 'xEqBeta': xEqBeta,
+            'logX': logX, 'singleX': singleX, 'singleT': singleT
+        }
+        # Format x and T and training data. If x or T is a single training point, then don't use for
+        # training data as it will create a non-full rank matrix
+        xFit = np.atleast_2d(xSuccess)
+        if logX:
+            xFit = np.log(xFit)
+        TFit = np.atleast_2d(TSuccess).T
+        xTrain = self._createInput([xFit, TFit], [singleX, singleT])
+
+        # Format curvature factors
+        dcFit = np.atleast_2d(dc)
+        mcFit = np.atleast_2d(mc).T
+        gbaFit = np.reshape(gba, (gba.shape[0], gba.shape[1]*gba.shape[2]))
+        betaFit = np.atleast_2d(beta).T
+        xEqAlphaFit = np.atleast_2d(xEqAlpha)
+        xEqBetaFit = np.atleast_2d(xEqBeta)
+        if logX:
+            xEqAlphaFit = np.log(xEqAlphaFit)
+        yTrain = np.concatenate((dcFit, mcFit, gbaFit, betaFit, xEqAlphaFit, xEqBetaFit), axis=1)
+        self.curvatureModels[precPhase] = self.kernel(xTrain, yTrain, **self.kernelKwargs)
+
+    def _surrogateOutputToCurvature(self, output, numEle, logX):
+            idx = 0
+            dc = np.squeeze(output[0,idx:idx+numEle])
+            idx += numEle
+            mc = np.squeeze(output[0,idx:idx+1])
+            idx += 1
+            gba = np.squeeze(output[0,idx:idx+numEle*numEle])
+            gba = np.reshape(gba, (numEle,numEle))
+            idx += numEle*numEle
+            beta = np.squeeze(output[0,idx:idx+1])
+            idx += 1
+            xEqAlpha = np.squeeze(output[0,idx:idx+numEle])
+            if logX:
+                xEqAlpha = np.exp(xEqAlpha)
+            idx += numEle
+            xEqBeta = np.squeeze(output[0,idx:idx+numEle])
+            curvature = CurvatureOutput(
+                dc=dc,
+                mc=mc,
+                gba=gba,
+                beta=beta,
+                c_eq_alpha=xEqAlpha,
+                c_eq_beta=xEqBeta
+            )
+            return curvature
+
+    def curvatureFactor(self, x, T, precPhase = None, *args, **kwargs):
+        # Check if precipitate phase has been trained on and use surrogate model if so
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if precPhase in self.curvatureModels:
+            trainingData = self.curvatureData[precPhase]
+
+            # Format x, T arrays for model
+            x, T = _process_xT_arrays(x, T, self.numElements == 2)
+            if len(x) > 1 or len(T) > 1:
+                raise ValueError('Curvature factor only takes in a single x,T condition.')
+            T = np.atleast_2d(T).T
+            if trainingData['logX']:
+                x = np.log(x)
+
+            xIn = self._createInput([x, T], [trainingData['singleX'], trainingData['singleT']])
+            output = self.curvatureModels[precPhase].predict(xIn)
+            return self._surrogateOutputToCurvature(output, x.shape[1], trainingData['logX'])
+        
+        # If precipitate phase has not been trained, used underlying thermodynamics function
+        else:
+            return self.therm.curvatureFactor(x, T, precPhase=precPhase, *args, **kwargs)
+        
+    def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, precPhase = None, *args, **kwargs):
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if precPhase in self.curvatureModels:
+            curvature = self.curvatureFactor(x, T, precPhase)
+            x = _process_x(x, self.numElements)
+            return _growthRateOutputFromCurvature(x, dG, R, gExtra, curvature)
+        else:
+            return self.therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase, *args, **kwargs)
+    
+    def impingementFactor(self, x, T, precPhase = None, *args, **kwargs):
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if precPhase in self.curvatureModels:
+            curvature = self.curvatureFactor(x, T, precPhase)
+            return curvature.beta
+        else:
+            return self.therm.impingementFactor(x, T, precPhase, *args, **kwargs)
+
+class BinarySurrogateOld:
     '''
     Handles surrogate models for driving force, interfacial composition and
     diffusivity in a binary system
@@ -1094,7 +1264,7 @@ class BinarySurrogate:
 
         return surr
         
-class MulticomponentSurrogate:
+class MulticomponentSurrogateOld:
     '''
     Handles surrogate models for driving force, interfacial composition
         and growth rate in a multicomponent system
@@ -1152,7 +1322,7 @@ class MulticomponentSurrogate:
         if curvature is None:
             #self.curvature = self.therm.curvatureFactor
             #self.curvature = lambda x, T, training = True: self.therm.curvatureFactor(x, T, self.precPhase, training)
-            self.curvature = lambda x, T, removeCache = True: self.therm._curvatureWithSearch(x, T, self.precPhase, removeCache)
+            self.curvature = lambda x, T, removeCache = True, searchDir = None, computeSearchDir = True: self.therm.curvatureFactor(x, T, self.precPhase, removeCache=removeCache, searchDir=searchDir, computeSearchDir=computeSearchDir)
         else:
             self.curvature = curvature
 

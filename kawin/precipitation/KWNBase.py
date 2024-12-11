@@ -2,7 +2,7 @@ import numpy as np
 
 from kawin.GenericModel import GenericModel
 from kawin.precipitation.PrecipitationParameters import Constraints, PrecipitationData, MatrixParameters, PrecipitateParameters, TemperatureParameters
-import kawin.precipitation.Nucleation as nucfuncs
+import kawin.precipitation.NucleationRate as nucfuncs
 
 class PrecipitateBase(GenericModel):
     '''
@@ -249,7 +249,7 @@ class PrecipitateBase(GenericModel):
         Parameters
         ----------
         precipitateShape : int
-            Precipitate shape (ShapeFactor.SPHERE, NEEDLE, PLATE or CUBIC)
+            Precipitate shape ('SPHERE', 'NEEDLE', 'PLATE', 'CUBIC')
         phase : str (optional)
             Phase to consider (defaults to first precipitate in list)
         ratio : float (optional)
@@ -446,7 +446,7 @@ class PrecipitateBase(GenericModel):
         index = self.phaseIndex(phase)
         return self.precipitateParameters[index].computeGibbsThomsonContribution(radius)
 
-    def neglectEffectiveDiffusionDistance(self, neglect = True):
+    def enableEffectiveDiffusionDistance(self, enable = True):
         '''
         Whether or not to account for effective diffusion distance dependency on the supersaturation
         By default, effective diffusion distance is considered
@@ -457,7 +457,7 @@ class PrecipitateBase(GenericModel):
             If True (default), will assume effective diffusion distance is particle radius
             If False, will calculate correction factor from Chen, Jeppson and Agren (2008)
         '''
-        self.matrixParameters.effDiffDistance = self.matrixParameters.effDiffFuncs.noDiffusionDistance if neglect else self.matrixParameters.effDiffFuncs.effectiveDiffusionDistance
+        self.matrixParameters.effectiveDiffusion.isEnabled = enable
 
     def addStoppingCondition(self, condition, mode = 'or'):
         '''
@@ -501,7 +501,7 @@ class PrecipitateBase(GenericModel):
             self.matrixParameters.nucleationSites._parametersSet = True
         self.matrixParameters.nucleationSites.setupNucleationDensity(self.matrixParameters.initComposition, self.matrixParameters.volume.Vm)
         for p in range(len(self.phases)):
-            self.precipitateParameters[p].setup()
+            self.precipitateParameters[p].validate()
 
         self.pData.composition[0] = self.matrixParameters.initComposition
         self.pData.temperature[0] = self.temperatureParameters(self.pData.time[0])

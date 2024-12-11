@@ -1,13 +1,10 @@
 import numpy as np
 
-from kawin.precipitation.non_ideal.EffectiveDiffusion import EffectiveDiffusionFunctions
-from kawin.precipitation.non_ideal.ShapeFactors import ShapeFactor
-from kawin.precipitation.non_ideal.ElasticFactors import StrainEnergy
-from kawin.precipitation.non_ideal.NucleationBarrier import NucleationBarrierParameters
-
-GAS_CONSTANT = 8.314
-AVOGADROS_NUMBER = 6.022e23
-BOLTZMANN_CONSTANT = GAS_CONSTANT / AVOGADROS_NUMBER
+from kawin.precipitation.parameters.Volume import VolumeParameter
+from kawin.precipitation.parameters.EffectiveDiffusion import EffectiveDiffusionFunctions
+from kawin.precipitation.parameters.ShapeFactors import ShapeFactor, SphereDescription, CuboidalDescription
+from kawin.precipitation.parameters.ElasticFactors import StrainEnergy, SphericalEnergyDescription, CuboidalEnergyDescription, EllipsoidalEnergyDescription, ConstantEnergyDescription
+from kawin.precipitation.parameters.Nucleation import NucleationBarrierParameters, NucleationSiteParameters, DislocationDescription
 
 class PrecipitationData:
     # Strings for each attributes to make it easier to loop accessing these terms
@@ -64,130 +61,6 @@ class PrecipitationData:
         for name in self.ATTRIBUTES:
             print(f'{name}: {getattr(self, name)[N]}')
 
-class VolumeParameter:
-    MOLAR_VOLUME = 0
-    ATOMIC_VOLUME = 1
-    LATTICE_PARAMETER = 2
-
-    def __init__(self):
-        self.a = None
-        self.Va = None
-        self.Vm = None
-        self.atomsPerCell = None
-
-    def setVolume(self, value, volumeType, atomsPerCell):
-        '''
-        Function to set lattice parameter, atomic volume and molar volume
-
-        Parameters
-        ----------
-        value : float
-            Value for volume parameters (lattice parameter, atomic (unit cell) volume or molar volume)
-        valueType : VolumeParameter or str
-            States what volume term that value is
-        atomsPerCell : int
-            Number of atoms in the unit cell
-        '''
-        self.atomsPerCell = atomsPerCell
-        if volumeType == self.MOLAR_VOLUME or volumeType == 'VM':
-            self.Vm = value
-            self.Va = atomsPerCell * self.Vm / AVOGADROS_NUMBER
-            self.a = np.cbrt(self.Va)
-        elif volumeType == self.ATOMIC_VOLUME or volumeType == 'VA':
-            self.Va = value
-            self.Vm = self.Va * AVOGADROS_NUMBER / atomsPerCell
-            self.a = np.cbrt(self.Va)
-        elif volumeType == self.LATTICE_PARAMETER or volumeType == 'a':
-            self.a = value
-            self.Va = self.a**3
-            self.Vm = self.Va * AVOGADROS_NUMBER / atomsPerCell
-
-class NucleationSiteParameters:
-    def __init__(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
-        self.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
-
-        self._parametersSet = False
-        self.GBareaN0 = None
-        self.GBedgeN0 = None
-        self.GBcornerN0 = None
-        self.dislocationN0 = None
-
-    def setNucleationDensity(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
-        '''
-        Sets grain size and dislocation density which determines the available nucleation sites
-        
-        Parameters
-        ----------
-        grainSize : float (optional)
-            Average grain size in microns (default at 100um if this function is not called)
-        aspectRatio : float (optional)
-            Aspect ratio of grains (default at 1)
-        dislocationDensity : float (optional)
-            Dislocation density (m/m3) (default at 5e12)
-        bulkN0 : float (optional)
-            This allows for the use to override the nucleation site density for bulk precipitation
-            By default (None), this is calculated by the number of lattice sites containing a solute atom
-            However, for calibration purposes, it may be better to set the nucleation site density manually
-        '''
-        self.grainSize = grainSize * 1e-6
-        self.grainAspectRatio = aspectRatio
-        self.dislocationDensity = dislocationDensity
-        self.bulkN0 = bulkN0
-        self._parametersSet = True
-
-    def bulkSites(self, x0, VmAlpha):
-        #Set bulk nucleation site to the number of solutes per unit volume
-        #   This is the represent that any solute atom can be a nucleation site
-        #NOTE: some texts will state the bulk nucleation sites to just be the number
-        #       of lattice sites per unit volume. The justification for this would be 
-        #       the solutes can diffuse around to any lattice site and nucleate there
-        return np.amin(x0) * (AVOGADROS_NUMBER / VmAlpha)
-
-    def dislocationSites(self, VmAlpha):
-        return self.dislocationDensity * (AVOGADROS_NUMBER / VmAlpha)**(1/3)
-
-    def grainBoundaryArea(self, grainSize, grainAspectRatio):
-        gbArea = (6 * np.sqrt(1 + 2 * grainAspectRatio**2) + 1 + 2 * grainAspectRatio)
-        gbArea /= (4 * grainAspectRatio * grainSize)
-        return gbArea
-    
-    def grainBoundarySites(self, grainSize, grainAspectRatio, VmAlpha):
-        gbAreaN0 = self.grainBoundaryArea(grainSize, grainAspectRatio)
-        gbAreaN0 *= (AVOGADROS_NUMBER / VmAlpha)**(2/3)
-        return gbAreaN0
-
-    def grainEdgeLength(self, grainSize, grainAspectRatio):
-        gbEdge = 2 * (np.sqrt(2) + 2*np.sqrt(1 + grainAspectRatio**2))
-        gbEdge /= (grainAspectRatio * grainSize**2)
-        return gbEdge
-
-    def grainEdgeSites(self, grainSize, grainAspectRatio, VmAlpha):
-        gbEdgeN0 = self.grainEdgeLength(grainSize, grainAspectRatio)
-        gbEdgeN0 *= (AVOGADROS_NUMBER / VmAlpha)**(1/3)
-        return gbEdgeN0
-    
-    def grainCornerAmount(self, grainSize, grainAspectRatio):
-        gbCornerAmount = 12 / (grainAspectRatio * grainSize**3)
-        return gbCornerAmount
-
-    def grainCornerSites(self, grainSize, grainAspectRatio, VmAlpha):
-        gbCornerN0 = self.grainCornerAmount(grainSize, grainAspectRatio)
-        return gbCornerN0
-
-    def setupNucleationDensity(self, x0, VmAlpha):
-        if self.bulkN0 is None:
-            self.bulkN0 = self.bulkSites(x0, VmAlpha)
-        self.dislocationN0 = self.dislocationSites(VmAlpha)
-        
-        if self.grainSize != np.inf:
-            self.GBareaN0 = self.grainBoundarySites(self.grainSize, self.grainAspectRatio, VmAlpha)
-            self.GBedgeN0 = self.grainEdgeSites(self.grainSize, self.grainAspectRatio, VmAlpha)
-            self.GBcornerN0 = self.grainCornerSites(self.grainSize, self.grainAspectRatio, VmAlpha)
-        else:
-            self.GBareaN0 = 0
-            self.GBedgeN0 = 0
-            self.GBcornerN0 = 0
-
 class TemperatureParameters:
     def __init__(self, *args):
         self.setTemperatureParameters(*args)
@@ -227,13 +100,14 @@ class TemperatureParameters:
 class MatrixParameters:
     def __init__(self, solutes):
         self.solutes = solutes
-        self.effDiffFuncs = EffectiveDiffusionFunctions()
-        self.effDiffDistance = self.effDiffFuncs.effectiveDiffusionDistance
-        self.GBenergy = 0.3
+        self.initComposition = None
+
         self.volume = VolumeParameter()
         self.nucleationSites = NucleationSiteParameters()
+        self.GBenergy = 0.3
+        
+        self.effectiveDiffusion = EffectiveDiffusionFunctions()
         self.theta = 2
-        self.initComposition = None
 
 class PrecipitateParameters:
     '''
@@ -246,36 +120,57 @@ class PrecipitateParameters:
         if phase is None:
             phase = name
         self.phase = str(phase)
+        
+        self._gamma = None
 
-        self.strainEnergy = StrainEnergy()
-        self.shapeFactor = ShapeFactor()
-        self.nucleation = NucleationBarrierParameters()
         self.volume = VolumeParameter()
-        self.gamma = None
+
+        self.shapeFactor = ShapeFactor(precipitateShape=SphereDescription(), ar=1)
+        self.shapeFactor._updateCallbacks.append(self.validate)
+        self.strainEnergy = StrainEnergy(shape=ConstantEnergyDescription())
         self.calculateAspectRatio = False
+
+        self.nucleation = NucleationBarrierParameters(site=DislocationDescription(), gbEnergy=0.3)
+        self.nucleation._updateCallbacks.append(self.validate)
+        self.parentPhases = []
+
         self.RdrivingForceLimit = 0
         self.infinitePrecipitateDiffusion = True
-        self.parentPhases = []
-        self.Rmin = None
+        self.Rmin = 3e-10
 
-    def setup(self, gbEnergy = 0.3, minRadius = 3e-10):
-        if self.nucleation.isGrainBoundaryNucleation:
-            self.shapeFactor.setSpherical()
-        self.nucleation.setFactors(gbEnergy, self.gamma)
+        self.validate()
 
-        self.strainEnergy.setup()
-        if self.strainEnergy.type != StrainEnergy.CONSTANT:
-            if self.shapeFactor.particleType == ShapeFactor.SPHERE:
-                self.strainEnergy.setSpherical()
-            elif self.shapeFactor.particleType == ShapeFactor.CUBIC:
-                self.strainEnergy.setCuboidal()
+    @property
+    def gamma(self):
+        return self._gamma
+    
+    @gamma.setter
+    def gamma(self, value):
+        self._gamma = value
+        self.validate()
+        
+    def validate(self):
+        self.nucleation.gamma = self.gamma
+        
+        if self.nucleation.description.isGrainBoundaryNucleation and not isinstance(self.shapeFactor.description, SphereDescription):
+            raise ValueError('Nucleation is set to grain boundary nucleaiton and shape factor not set to spherical. \
+                             If using GB nucleation, shape factor should be spherical. If shape factor is spherical, nucleation should be bulk or dislocations')
+        
+        # If strain energy is not constant, then switch to description that matches shapeFactor
+        # TODO: this is really awkward especially if the user switches the strain energy description, which would not update the shape factor
+        # I guess the alternative would be that the call back for shape factors would validate nucleation and update strain energy
+        # Then the callback for strain energy would update the shape factor
+        # Thus, the final shape of the precipitate would depend on whatever attribute is last called
+        if not isinstance(self.strainEnergy.description, ConstantEnergyDescription):
+            if isinstance(self.shapeFactor.description, SphereDescription):
+                self.strainEnergy.setShape(SphericalEnergyDescription())
+            elif isinstance(self.shapeFactor.description, CuboidalDescription):
+                self.strainEnergy.setShape(CuboidalEnergyDescription())
             else:
-                self.strainEnergy.setEllipsoidal()
-
-        self.Rmin = minRadius
+                self.strainEnergy.setShape(EllipsoidalEnergyDescription())
         
     def computeStrainEnergyFromR(self, r):
-        return self.strainEnergy.strainEnergy(self.shapeFactor.normalRadii(r))
+        return self.strainEnergy.compute(self.shapeFactor.normalRadii(r))
     
     def computeGibbsThomsonContribution(self, r):
         vmbeta = self.volume.Vm

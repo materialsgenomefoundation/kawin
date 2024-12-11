@@ -1,13 +1,30 @@
-from kawin.precipitation import PrecipitateModel
+from kawin.precipitation import PrecipitateModel, MatrixParameters, PrecipitateParameters
 from kawin.diffusion.Diffusion import DiffusionModel, CompositionProfile
 import matplotlib.pyplot as plt
 import numpy as np
 
 def test_precipitate_plotting():
-    binary_single = PrecipitateModel(phases=['beta'], elements=['A'])
-    binary_multi = PrecipitateModel(phases=['beta', 'gamma', 'zeta'], elements=['A'])
-    ternary_single = PrecipitateModel(phases=['beta'], elements=['A', 'B'])
-    ternary_multi = PrecipitateModel(phases=['beta', 'gamma', 'zeta'], elements=['A', 'B'])
+    binary_matrix = MatrixParameters(['A'])
+    ternary_matrix = MatrixParameters(['A', 'B'])
+
+    beta_prec = PrecipitateParameters('beta')
+    beta_prec.gamma = 0.1
+
+    gamma_prec = PrecipitateParameters('gamma')
+    gamma_prec.gamma = 0.1
+
+    zeta_prec = PrecipitateParameters('zeta')
+    zeta_prec.gamma = 0.1
+
+    #binary_single = PrecipitateModel(phases=['beta'], elements=['A'])
+    #binary_multi = PrecipitateModel(phases=['beta', 'gamma', 'zeta'], elements=['A'])
+    #ternary_single = PrecipitateModel(phases=['beta'], elements=['A', 'B'])
+    #ternary_multi = PrecipitateModel(phases=['beta', 'gamma', 'zeta'], elements=['A', 'B'])
+
+    binary_single = PrecipitateModel(matrixParameters=binary_matrix, precipitateParameters=[beta_prec])
+    binary_multi = PrecipitateModel(matrixParameters=binary_matrix, precipitateParameters=[beta_prec, gamma_prec, zeta_prec])
+    ternary_single = PrecipitateModel(matrixParameters=ternary_matrix, precipitateParameters=[beta_prec])
+    ternary_multi = PrecipitateModel(matrixParameters=ternary_matrix, precipitateParameters=[beta_prec, gamma_prec, zeta_prec])
 
     models = [
         (binary_single, 1, 1),

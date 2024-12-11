@@ -1,8 +1,10 @@
 import numpy as np
-from kawin.precipitation.PrecipitationParameters import PrecipitationData, AVOGADROS_NUMBER
+
+from kawin.Constants import AVOGADROS_NUMBER
+from kawin.precipitation.PrecipitationParameters import PrecipitationData
 from kawin.precipitation.KWNBase import PrecipitateBase
 from kawin.precipitation.PopulationBalance import PopulationBalanceModel
-from kawin.precipitation.non_ideal.NucleationBarrier import NucleationBarrierParameters
+from kawin.precipitation.parameters.Nucleation import NucleationBarrierParameters, DislocationDescription, BulkDescription, GrainBoundaryDescription, GrainCornerDescription, GrainEdgeDescription
 from kawin.precipitation.Plot import plotEuler
 
 class PrecipitateModel (PrecipitateBase):
@@ -400,24 +402,24 @@ class PrecipitateModel (PrecipitateBase):
         #If parent phases exists, then calculate the number of potential nucleation sites on the parent phase
         # #This is the number of lattice sites on the total surface area of the parent precipitate
         nucleationSites = np.sum([4*np.pi*self.PBM[p2].SecondMomentFromN(x[p2]) * (AVOGADROS_NUMBER/VmBetas[p2])**(2/3) for p2 in parentPhases[p]])
-        if nucParams[p].nucleationSiteType == NucleationBarrierParameters.BULK:
-            bulkPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.BULK])
+        if isinstance(nucParams[p].description, BulkDescription):
+            bulkPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, BulkDescription)])
             nucleationSites += self.matrixParameters.nucleationSites.bulkN0 - bulkPrec
 
-        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.DISLOCATION:
-            bulkPrec = np.sum([self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.DISLOCATION])
+        elif isinstance(nucParams[p].description, DislocationDescription):
+            bulkPrec = np.sum([self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, DislocationDescription)])
             nucleationSites += self.matrixParameters.nucleationSites.dislocationN0 - bulkPrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(1/3)
 
-        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.GRAIN_BOUNDARIES:
-            boundPrec = np.sum([nucParams[p2].gbRemoval * self.PBM[p2].SecondMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.GRAIN_BOUNDARIES])
+        elif isinstance(nucParams[p].description, GrainBoundaryDescription):
+            boundPrec = np.sum([nucParams[p2].gbRemoval * self.PBM[p2].SecondMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainBoundaryDescription)])
             nucleationSites += self.matrixParameters.nucleationSites.GBareaN0 - boundPrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(2/3)
 
-        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.GRAIN_EDGES:
-            edgePrec = np.sum([np.sqrt(1 - nucParams[p2].GBk**2) * self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.GRAIN_EDGES])
+        elif isinstance(nucParams[p].description, GrainEdgeDescription):
+            edgePrec = np.sum([np.sqrt(1 - nucParams[p2].GBk**2) * self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainEdgeDescription)])
             nucleationSites += self.matrixParameters.nucleationSites.GBedgeN0 - edgePrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(1/3)
 
-        elif nucParams[p].nucleationSiteType == NucleationBarrierParameters.GRAIN_CORNERS:
-            cornerPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if nucParams[p2].nucleationSiteType == NucleationBarrierParameters.GRAIN_CORNERS])
+        elif isinstance(nucParams[p].description, GrainCornerDescription):
+            cornerPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainCornerDescription)])
             nucleationSites += self.matrixParameters.nucleationSites.GBcornerN0 - cornerPrec
 
         return np.amax([nucleationSites, 0])
@@ -533,7 +535,7 @@ class PrecipitateModel (PrecipitateBase):
         if self.RdrivingForceIndex[p]+1 < len(self.PSDXalpha[p][:,0]):
             superSaturation = (xComp[0] - self.PSDXalpha[p][:,0]) / (self.matrixParameters.volume.Vm * self.PSDXbeta[p][:,0] / self.precipitateParameters[p].volume.Vm - self.PSDXalpha[p][:,0])
             D = self.therm.getInterdiffusivity(xComp[0], T, removeCache=self.removeCache)
-            growthRate = self.precipitateParameters[p].shapeFactor.kineticFactor(self.PBM[p].PSDbounds) * D * superSaturation / (self.matrixParameters.effDiffDistance(superSaturation) * self.PBM[p].PSDbounds)
+            growthRate = self.precipitateParameters[p].shapeFactor.kineticFactor(self.PBM[p].PSDbounds) * D * superSaturation / (self.matrixParameters.effectiveDiffusion(superSaturation) * self.PBM[p].PSDbounds)
 
         return growthRate
     

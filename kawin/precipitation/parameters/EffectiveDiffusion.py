@@ -5,8 +5,9 @@ class EffectiveDiffusionFunctions:
     '''
     Stores variables and functions to calculate effective diffusion distance
     '''
-    def __init__(self):
+    def __init__(self, isEnabled=True):
         self.setupInterpolation()
+        self.isEnabled = isEnabled
 
     def setupInterpolation(self, n = 250, lmin = -5, lmax = 1):
         '''
@@ -110,6 +111,11 @@ class EffectiveDiffusionFunctions:
         -------
         1 or array of 1s
         '''
-        #TODO: this can be more efficient
         supersaturation = np.atleast_1d(supersaturation)
-        return np.squeeze(np.ones(supersaturation.shape), dtype=np.float64)
+        return np.squeeze(np.ones(supersaturation.shape, dtype=np.float64))
+    
+    def __call__(self, supersaturation):
+        if self.isEnabled:
+            return self.effectiveDiffusionDistance(supersaturation)
+        else:
+            return self.noDiffusionDistance(supersaturation)

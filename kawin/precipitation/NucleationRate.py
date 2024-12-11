@@ -2,10 +2,10 @@ from collections import namedtuple
 
 import numpy as np
 
+from kawin.Constants import AVOGADROS_NUMBER, BOLTZMANN_CONSTANT
 from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.thermo.utils import _process_xT_arrays
-from kawin.precipitation.non_ideal.NucleationBarrier import NucleationBarrierParameters
-from kawin.precipitation.PrecipitationParameters import MatrixParameters, PrecipitateParameters, AVOGADROS_NUMBER, BOLTZMANN_CONSTANT
+from kawin.precipitation.PrecipitationParameters import MatrixParameters, PrecipitateParameters
 
 NucleationData = namedtuple('NucleationData', [
     'x', 'T',
@@ -22,7 +22,7 @@ def volumetricDrivingForce(therm: GeneralThermodynamics, x, T, precipitate: Prec
     x, T = _process_xT_arrays(x, T, therm.numElements == 2)
     chemDGs, betaComp = therm.getDrivingForce(x, T, precPhase=precipitate.phase, removeCache=removeCache)
     volDGs = chemDGs / precipitate.volume.Vm
-    volDGs -= precipitate.strainEnergy.strainEnergy(precipitate.shapeFactor.description.normalRadiiFromAR(aspectRatio))
+    volDGs -= precipitate.strainEnergy.compute(precipitate.shapeFactor.description.normalRadii(aspectRatio))
 
     return np.squeeze(chemDGs), np.squeeze(volDGs), np.squeeze(betaComp)
 
@@ -41,8 +41,8 @@ def nucleationBarrier(volumeDrivingForce, precipitate : PrecipitateParameters, a
     Rcrit = np.zeros(volumeDrivingForce.shape)
     Gcrit = np.zeros(volumeDrivingForce.shape)
 
-    if not precipitate.nucleation.isGrainBoundaryNucleation:
-        RcritProposal = 2*precipitate.shapeFactor.description.thermoFactorFromAR(aspectRatio) * precipitate.gamma / volumeDrivingForce[indices]
+    if not precipitate.nucleation.description.isGrainBoundaryNucleation:
+        RcritProposal = 2*precipitate.shapeFactor.description.thermoFactor(aspectRatio) * precipitate.gamma / volumeDrivingForce[indices]
         Rcrit[indices] = np.amax([RcritProposal, Rmin[indices]], axis=0)
         Gcrit[indices] = (4*np.pi/3) * precipitate.gamma * Rcrit[indices]**2
 

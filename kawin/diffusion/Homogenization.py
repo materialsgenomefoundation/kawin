@@ -1,4 +1,6 @@
 import numpy as np
+
+from kawin.Constants import GAS_CONSTANT
 from kawin.diffusion.Diffusion import DiffusionModel
 from kawin.thermo.Mobility import mobility_from_composition_set, interstitials, x_to_u_frac
 from kawin.diffusion.DiffusionParameters import HomogenizationParameters, computeHomogenizationFunction
@@ -82,7 +84,7 @@ class HomogenizationModel(DiffusionModel):
         Tmidfull = Tmid[np.newaxis,:]
         for i in range(fluxes.shape[0]-1):
             Tmidfull = np.concatenate((Tmidfull, Tmid[np.newaxis,:]), axis=0)
-        fluxes[nonzeroComp] += -self.homogenizationParameters.eps * avg_mob[nonzeroComp] * 8.314 * Tmidfull[nonzeroComp] * dudz[nonzeroComp] / avgU[nonzeroComp]
+        fluxes[nonzeroComp] += -self.homogenizationParameters.eps * avg_mob[nonzeroComp] * GAS_CONSTANT * Tmidfull[nonzeroComp] * dudz[nonzeroComp] / avgU[nonzeroComp]
 
         #Flux in a volume fixed frame: J_vi = J_i - x_i * sum(J_j)
         vfluxes = np.zeros((len(self.elements), self.N+1))

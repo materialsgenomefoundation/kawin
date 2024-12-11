@@ -157,7 +157,7 @@ def plotEuler(precModel, axes, variable, bounds = None, timeUnits = 's', radius=
         # else:
         #     scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
 
-        if not precModel.precipitateParameters[p].nucleation.isGrainBoundaryNucleation:
+        if not precModel.precipitateParameters[p].nucleation.description.isGrainBoundaryNucleation:
             if radius == 'spherical':
                 scale.append(precModel.precipitateParameters[p].nucleation.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
             else:
@@ -290,7 +290,7 @@ def plotSingleVariables(precModel, timeScale, radius, labels, variable, axes, *a
             #         plotVariable[p] *= precModel.pData.ARavg[p]
             # else:
             #     plotVariable[p] *= precModel._GBareaRemoval(p)
-            if not precModel.precipitateParameters[p].nucleation.isGrainBoundaryNucleation:
+            if not precModel.precipitateParameters[p].nucleation.description.isGrainBoundaryNucleation:
                 if radius != 'spherical':
                     plotVariable[p] /= precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.pData.Ravg[p])
                 if radius == 'long':

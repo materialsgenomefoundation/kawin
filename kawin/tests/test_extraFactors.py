@@ -3,6 +3,7 @@ import numpy as np
 
 from kawin.precipitation import ShapeFactor
 from kawin.precipitation import StrainEnergy
+from kawin.precipitation.parameters.ElasticFactors import convert2To4rankTensor
 
 import itertools
 
@@ -198,8 +199,8 @@ def test_StrainOutput():
     rSingle = np.random.random(3)
     rArray = np.random.random((10, 3))
 
-    elSingle = se.strainEnergy(rSingle)
-    elArray = se.strainEnergy(rArray)
+    elSingle = se.compute(rSingle)
+    elArray = se.compute(rArray)
 
     assert np.isscalar(elSingle) or (type(elSingle) == np.ndarray and elSingle.ndim == 0)
     assert elArray.shape == (10,)
@@ -214,16 +215,16 @@ def test_StrainValues():
     se.setEllipsoidal()
     se.setElasticConstants(168.4e9, 121.4e9, 75.4e9)
     se.setEigenstrain([0.022, 0.022, 0.003])
-    se.setup()
+    #se.setup()
 
     aspect = 1.5
     rSph = 4e-9 / np.cbrt(aspect)
     r = np.array([rSph, rSph, aspect*rSph])
-    E = se.strainEnergy(r)
+    E = se.compute(r)
 
     assert_allclose(E, 1.22956765e-17, rtol=1e-3)
 
-def test_AspectRatio():
+def test_AspectRatioFromStrainEnergy():
     '''
     Test eq aspect ratio calculation of arbitrary system
 
@@ -233,7 +234,7 @@ def test_AspectRatio():
     se.setEigenstrain([6.67e-3, 6.67e-3, 2.86e-2])
     se.setModuli(G=57.1e9, nu=0.33)
     se.setEllipsoidal()
-    se.setup()
+    #se.setup()
 
     sf = ShapeFactor()
     sf.setPlateShape()
@@ -272,15 +273,15 @@ def test_different_strain_energy_inputs():
     se = StrainEnergy()
 
     r2Tensor = np.array([[c11, c12, c12, 0, 0, 0], [c12, c11, c12, 0, 0, 0], [c12, c12, c11, 0, 0, 0], [0, 0, 0, c44, 0, 0], [0, 0, 0, 0, c44, 0], [0, 0, 0, 0, 0, c44]])
-    r4Tensor = se._convert2To4rankTensor(r2Tensor)
+    r4Tensor = convert2To4rankTensor(r2Tensor)
     
     #Test 2nd rank tensor input
     se.setElasticTensor(r2Tensor)
-    assert_allclose(se._c4, r4Tensor, rtol=1e-3)
+    assert_allclose(se.params.cMatrix_4th, r4Tensor, rtol=1e-3)
 
     #Test elastic constants input
     se.setElasticConstants(c11, c12, c44)
-    assert_allclose(se._c4, r4Tensor, rtol=1e-3)
+    assert_allclose(se.params.cMatrix_4th, r4Tensor, rtol=1e-3)
 
     #This is in the order of the if statements in StrainEnergy._setModuli so it's easier to debug
     moduli = {'E': E, 'nu': nu, 'G': G, 'lam': lam, 'K': K, 'M': M}
@@ -290,7 +291,7 @@ def test_different_strain_energy_inputs():
     for pair in itertools.combinations(moduli_names, 2):
         moduli_input = {m: moduli[m] for m in pair}
         se.setModuli(**moduli_input)
-        assert_allclose(se._c4, r4Tensor, rtol=1e-3)
+        assert_allclose(se.params.cMatrix_4th, r4Tensor, rtol=1e-3)
 
 
 

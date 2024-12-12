@@ -415,6 +415,7 @@ class PrecipitateModel (PrecipitateBase):
             nucleationSites += self.matrixParameters.nucleationSites.GBareaN0 - boundPrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(2/3)
 
         elif isinstance(nucParams[p].description, GrainEdgeDescription):
+            # TODO: where did sqrt(1-GBk^2) come from?
             edgePrec = np.sum([np.sqrt(1 - nucParams[p2].GBk**2) * self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainEdgeDescription)])
             nucleationSites += self.matrixParameters.nucleationSites.GBedgeN0 - edgePrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(1/3)
 

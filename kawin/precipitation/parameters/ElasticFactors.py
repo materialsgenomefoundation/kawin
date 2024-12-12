@@ -595,7 +595,6 @@ class EllipsoidalEnergyDescription(StrainEnergyDescriptionBase):
 
         V = 4*np.pi/3 * np.prod(radius)
         S = self.Sijmn(self.Dijkl(radius, cM4))
-        #invTerm = np.linalg.tensorinv(self._multiply(self._c4Prec - self._c4, S) + self._c4)
         invTerm = invert4rankTensor(self._multiply(cP4 - cM4, S) + cM4)
         multTerm = self._multiply(invTerm, cP4)
         stressC = self._multiply(cM4, self._multiply(self._multiply(S, multTerm), eigenstrain))
@@ -636,7 +635,7 @@ class StrainEnergy:
         self._unrotated_cPrec_4th = np.zeros((3,3,3,3))
         self.rotation = np.eye(3)
         self.rotationPrec = np.eye(3)
-
+        
         #Cached values for calculating equilibrium aspect ratio
         self.ifmethod = 1
         self._aspectRatios = None
@@ -644,7 +643,19 @@ class StrainEnergy:
         self._cachedRange = 5
         self._cachedIntervals = 100
 
+        self._description = ConstantEnergyDescription()
+        self._updateCallbacks = []
         self.setShape(shape)
+
+    @property
+    def description(self):
+        return self._description
+    
+    @description.setter
+    def description(self, value):
+        self._description = value
+        for callback in self._updateCallbacks:
+            callback()
 
     @property
     def unrotated_cMatrix_4th(self):
@@ -891,6 +902,8 @@ class StrainEnergy:
         Thus, this is only valid if the following conditions are met:
             The matrix phase has a single orientation (either as a single crystal or highly textured)
             Precipitates will form only in a single orientation with respect to the matrix
+        
+        NOTE: this is only available in EllipsoidalEnergyDescription.strainEnergyEllipsoidWithStress and is currently not used in the KWNModel
 
         TODO: It will be nice to expand on this.
             For polycrystalline matrix and randomly oriented precipitates, it should be possible

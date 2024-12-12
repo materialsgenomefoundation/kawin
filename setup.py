@@ -11,7 +11,7 @@ setup(
     author='Nicholas Ury',
     author_email='nury12n@gmail.com',
     description='Tool for simulating precipitation using the KWN model coupled with Calphad.',
-    packages=['kawin', 'kawin.tests', 'kawin.diffusion', 'kawin.precipitation', 'kawin.precipitation.coupling', 'kawin.precipitation.non_ideal', 'kawin.solver', 'kawin.thermo'],
+    packages=['kawin', 'kawin.tests', 'kawin.diffusion', 'kawin.precipitation', 'kawin.precipitation.coupling', 'kawin.precipitation.parameters', 'kawin.solver', 'kawin.thermo'],
     license='MIT',
     long_description=read('README.md'),
     long_description_content_type='text/markdown',

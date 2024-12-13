@@ -1,5 +1,34 @@
+'''
+References for strain energy calculations
+
+For cubic and spherical strain energies, Khachaturyan's approximation is used and taken from
+K. Wu, Q. Chen, P. Mason, "Simulation of precipitation kinetics with non-spherical particles"
+Journal of Phase Equilibria and Diffusion 39 (2018) 571
+doi:10.1007/s11669-018-0644-1
+
+For needle and plate-like precipitates, Eshelby's theory is used and taken from
+  Matrix elastic constants == precipitate elastic constants
+    K. Wu, Q. Chen, P. Mason, "Simulation of precipitation kinetics with non-spherical particles"
+    Journal of Phase Equilibria and Diffusion 39 (2018) 571
+    doi:10.1007/s11669-018-0644-1 
+  Matrix elastic constants != precipitate elastic constants
+    H.J. Bohm, G.A. Zickler, F.D. Fischer, J. Svoboda, "Role of elastic strain energy in spheroidal
+    precipitates revisited" Mechanics of Materials 155 (2021) 103781
+    doi:10.1016/j.mechmat.2021.103781
+
+  Integration of Eshelby's tensor over the precipitate uses Lebedev nodes
+  V.I. Lebedev, "Quadratures on a sphere" USSR Computational Mathematics and Mathematical
+  Physics 16 (1976) 10
+  doi:10.1016/0041-5553(76)90100-2
+
+  Some resources on how Eshelby's tensor is derived:
+    C. Weinberger, W. Cai and D. Barneet, ME340B Lecture Notes - Elasticity of Microscopic Structures, Stanford Univerity, 2005. 
+
+    J. D. Eshelby, “The elastic field outside an ellipsoidal inclusion” Proceedings 
+    of the Royal Society of London. Series A, Mathematical and Physical Sciences 252 (1959) p. 561
+    doi:10.1098/rspa.1959.0173
+'''
 import itertools
-import copy
 from dataclasses import dataclass
 
 import numpy as np
@@ -83,7 +112,7 @@ def convertVecTo2rankTensor(v):
     '''
     return np.array([[v[0], v[5], v[4]], 
                      [v[5], v[1], v[3]], 
-                     [v[3], v[4], v[2]]])
+                     [v[4], v[3], v[2]]])
 
 def convert2rankToVec(c):
     '''
@@ -283,45 +312,7 @@ class SphericalEnergyDescription(StrainEnergyDescriptionBase):
         return self._Khachaturyan(1/15, 1/105, radius)
 
 class CuboidalEnergyDescription(SphericalEnergyDescription):
-    name = 'CUBIC'
-
-    #Additional methods for verifying that the general methods reduce to these
-    #specific cases for cubic crystal symmetry
-    def _OhmCubic(self, n):
-        '''
-        Ohm term for cubic crystal symmetry
-        '''
-        c2 = self.params.cMatrix_2nd
-        ohm = np.zeros((3,3))
-        jk = [(1,2), (0,2), (0,1)]
-        for i in range(3):
-            for j in range(3):
-                if i == j:
-                    jn, k = jk[i]
-                    ohm[i,i] = (c2[3,3] + (c2[0,0]-c2[3,3])*(n[jn]**2 + n[k]**2) + self._xi*(c2[0,0]+c2[0,1])*(n[jn]*n[k])**2) / (c2[3,3]*self._D(n))
-                else:
-                    k = 3 - (i + j)
-                    ohm[i,j] = -(c2[0,1] + c2[3,3])*(1 + self._xi*n[k]**2)*n[i]*n[j] / (c2[3,3]*self._D(n))
-        
-        return ohm
-
-    def _D(self, n):
-        '''
-        Needed for the Ohm term with cubic crystal symmetry
-        '''
-        c2 = self.params.cMatrix_2nd
-        d = c2[0,0]
-        d += self._xi*(c2[0,0] + c2[0,1])*((n[0]*n[1])**2 + (n[0]*n[2])**2 + (n[1]*n[2])**2)
-        d += self._xi**2 * (c2[0,0] + 2*c2[0,1] + c2[3,3])*(n[0]*n[1]*n[2])**2
-        return d
-
-    @property
-    def _xi(self):
-        '''
-        Needed for the Ohm term with cubic crystal symmetry
-        '''
-        c2 = self.params.cMatrix_2nd
-        return (c2[0,0] - c2[0,1] - 2*c2[3,3]) / c2[3,3]
+    name = 'CUBE'
 
     def computeStrainEnergy(self, radius):
         '''
@@ -621,6 +612,44 @@ class EllipsoidalEnergyDescription(StrainEnergyDescriptionBase):
 
     def computeStrainEnergy(self, radius):
         return self.strainEnergyBohm(radius)
+    
+    #Additional methods for verifying that the general methods reduce to these
+    #specific cases for cubic crystal symmetry
+    def _OhmCubic(self, n, c4):
+        '''
+        Ohm term for cubic crystal symmetry
+        '''
+        c2 = convert4To2rankTensor(c4)
+        ohm = np.zeros((3,3))
+        jk = [(1,2), (0,2), (0,1)]
+        for i in range(3):
+            for j in range(3):
+                if i == j:
+                    jn, k = jk[i]
+                    ohm[i,i] = (c2[3,3] + (c2[0,0]-c2[3,3])*(n[jn]**2 + n[k]**2) + self._xi*(c2[0,0]+c2[0,1])*(n[jn]*n[k])**2) / (c2[3,3]*self._D(n))
+                else:
+                    k = 3 - (i + j)
+                    ohm[i,j] = -(c2[0,1] + c2[3,3])*(1 + self._xi*n[k]**2)*n[i]*n[j] / (c2[3,3]*self._D(n))
+        
+        return ohm
+
+    def _D(self, n):
+        '''
+        Needed for the Ohm term with cubic crystal symmetry
+        '''
+        c2 = self.params.cMatrix_2nd
+        d = c2[0,0]
+        d += self._xi*(c2[0,0] + c2[0,1])*((n[0]*n[1])**2 + (n[0]*n[2])**2 + (n[1]*n[2])**2)
+        d += self._xi**2 * (c2[0,0] + 2*c2[0,1] + c2[3,3])*(n[0]*n[1]*n[2])**2
+        return d
+
+    @property
+    def _xi(self):
+        '''
+        Needed for the Ohm term with cubic crystal symmetry
+        '''
+        c2 = self.params.cMatrix_2nd
+        return (c2[0,0] - c2[0,1] - 2*c2[3,3]) / c2[3,3]
 
 class StrainEnergy:
     '''

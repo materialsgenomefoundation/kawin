@@ -234,6 +234,7 @@ class PlateDescription(ShapeDescriptionBase):
     
 class CuboidalDescription(ShapeDescriptionBase):
     name = 'CUBIC'
+    
     def __init__(self):
         super().__init__()
         self.eqRadiusFactorMin = self.eqRadiusFactor(1)

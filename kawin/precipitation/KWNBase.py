@@ -501,6 +501,7 @@ class PrecipitateBase(GenericModel):
             self.matrixParameters.nucleationSites._parametersSet = True
         self.matrixParameters.nucleationSites.setupNucleationDensity(self.matrixParameters.initComposition, self.matrixParameters.volume.Vm)
         for p in range(len(self.phases)):
+            self.precipitateParameters[p].nucleation.gbEnergy = self.matrixParameters.GBenergy
             self.precipitateParameters[p].validate()
 
         self.pData.composition[0] = self.matrixParameters.initComposition

@@ -1,6 +1,6 @@
 from kawin.tests.datasets import ALZR_TDB, NICRAL_TDB, ALMGSI_DB
-from kawin.precipitation import PrecipitateModel
-from kawin.precipitation.PrecipitationParameters import VolumeParameter
+from kawin.precipitation import PrecipitateModel, StrainEnergy
+from kawin.precipitation.PrecipitationParameters import VolumeParameter, PrecipitateParameters, MatrixParameters, TemperatureParameters
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 import numpy as np
 from numpy.testing import assert_allclose
@@ -199,3 +199,53 @@ def test_multiphase_precipitation_x_shape():
     assert(flatShape == (origLen*bins,))
     assert(len(x_restore) == origLen)
     assert(np.all(psd.shape == (bins,) for psd in x_restore))
+
+def test_precipitationBackCompatibility():
+    matrix = MatrixParameters(['ZR'])
+    matrix.volume.setVolume(1e-5, 'VM', 4)
+    matrix.GBenergy = 0.15
+    matrix.initComposition = 0.01
+    matrix.nucleationSites.setNucleationDensity(grainSize=50, dislocationDensity=5e13)
+
+    prec = PrecipitateParameters('AL3ZR')
+    prec.gamma = 0.1
+    prec.volume.setVolume(1.1e-5, 'VM', 4)
+    prec.strainEnergy.setShape('ellipsoid')
+    prec.strainEnergy.setModuli(E=160e8, nu=0.3)
+    prec.nucleation.setNucleationType('grain boundaries')
+
+    temperature = TemperatureParameters(500)
+
+    m = PrecipitateModel(thermodynamics=AlZrTherm, 
+                         matrixParameters=matrix, 
+                         precipitateParameters=[prec], 
+                         temperatureParameters=temperature)
+
+    m2 = PrecipitateModel(phases=['AL3ZR'], elements=['ZR'])
+    m2.setThermodynamics(AlZrTherm)
+    m2.setTemperature(500)
+    m2.setVolumeAlpha(1e-5, 'VM', 4)
+    m2.setGrainBoundaryEnergy(0.15)
+    m2.setInitialComposition(0.01)
+    m2.setNucleationDensity(grainSize=50, dislocationDensity=5e13)
+
+    m2.setInterfacialEnergy(0.1)
+    m2.setVolumeBeta(1.1e-5, 'VM', 4)
+
+    se = StrainEnergy('ellipsoid')
+    se.setModuli(E=160e8, nu=0.3)
+    m2.setStrainEnergy(se)
+    m2.setNucleationSite('grain boundaries')
+
+    m.setup()
+    m2.setup()
+
+    assert_allclose([m.matrixParameters.volume.Vm], [m2.matrixParameters.volume.Vm], rtol=1e-3)
+    assert_allclose([m.matrixParameters.GBenergy], [m2.matrixParameters.GBenergy], rtol=1e-3)
+    assert_allclose([m.matrixParameters.initComposition], [m2.matrixParameters.initComposition], rtol=1e-3)
+    assert_allclose([m.matrixParameters.nucleationSites.dislocationN0], [m2.matrixParameters.nucleationSites.dislocationN0], rtol=1e-3)
+    assert_allclose([m.matrixParameters.nucleationSites.GBareaN0], [m2.matrixParameters.nucleationSites.GBareaN0], rtol=1e-3)
+    assert_allclose([m.precipitateParameters[0].gamma], [m2.precipitateParameters[0].gamma], rtol=1e-3)
+    assert_allclose([m.precipitateParameters[0].volume.Vm], [m2.precipitateParameters[0].volume.Vm], rtol=1e-3)
+    assert_allclose([m.precipitateParameters[0].strainEnergy.params.cMatrix_4th], [m2.precipitateParameters[0].strainEnergy.params.cMatrix_4th], rtol=1e-3)
+    assert m.precipitateParameters[0].nucleation.description.name == m2.precipitateParameters[0].nucleation.description.name

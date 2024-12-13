@@ -1,7 +1,7 @@
 from numpy.testing import assert_allclose
 import numpy as np
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel
-from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction, computeMobility, HomogenizationParameters, CompositionProfile
+from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction, computeMobility, HomogenizationParameters, CompositionProfile, BoundaryConditions, TemperatureParameters
 from kawin.thermo import GeneralThermodynamics
 from kawin.tests.datasets import *
 
@@ -325,6 +325,45 @@ def test_homogenization_dxdt():
     assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
     assert_allclose(dt, 65415.110254, rtol=1e-3)
+
+def test_diffusionBackCompatibility():
+    compositionProfile = CompositionProfile()
+    compositionProfile.addLinearCompositionStep('CR', 0.257, 0.423)
+    compositionProfile.addLinearCompositionStep('NI', 0.065, 0.276)
+
+    boundaryConditions = BoundaryConditions()
+    boundaryConditions.setBoundaryCondition(BoundaryConditions.RIGHT, BoundaryConditions.FLUX_BC, 1, 'NI')
+    boundaryConditions.setBoundaryCondition(BoundaryConditions.LEFT, BoundaryConditions.COMPOSITION_BC, 0.5, 'CR')
+
+    temperature = TemperatureParameters(10)
+
+    homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_LOWER, eps=0.01)
+
+    m = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
+                            compositionProfile=compositionProfile, 
+                            boundaryConditions=boundaryConditions,
+                            temperatureParameters=temperature,
+                            homogenizationParameters=homogenizationParameters)
+    
+    m2 = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
+    m2.setCompositionLinear(0.257, 0.423, 'CR')
+    m2.setCompositionLinear(0.065, 0.276, 'NI')
+    m2.setBC(BoundaryConditions.COMPOSITION_BC, 0.5, BoundaryConditions.FLUX_BC, 0, element='CR')
+    m2.setBC(BoundaryConditions.FLUX_BC, 0, BoundaryConditions.FLUX_BC, 1, element='NI')
+    m2.setTemperature(10)
+    m2.setMobilityFunction(HomogenizationParameters.HASHIN_LOWER)
+
+    m.setup()
+    m2.setup()
+
+    assert_allclose(m.x, m2.x, rtol=1e-3)
+    assert_allclose(m.temperatureParameters(m.z, 0), m2.temperatureParameters(m.z, 0), rtol=1e-3)
+    assert m.boundaryConditions.leftBCtype == m2.boundaryConditions.leftBCtype
+    assert m.boundaryConditions.leftBC == m2.boundaryConditions.leftBC
+    assert m.boundaryConditions.rightBCtype == m2.boundaryConditions.rightBCtype
+    assert m.boundaryConditions.rightBC == m2.boundaryConditions.rightBC
+
+    assert m.homogenizationParameters.homogenizationFunction == m2.homogenizationParameters.homogenizationFunction
 
 
 

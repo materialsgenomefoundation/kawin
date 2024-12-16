@@ -68,10 +68,10 @@ def test_binary_precipitation_dxdt():
     n = 1/(r*sigma*np.sqrt(2*np.pi)) * np.exp(-np.log(r/r0)**2/(2*sigma**2))
     model.PBM[0].PSD = n
 
-    t, x = model.getCurrentX()
+    x = model.getCurrentX()
     #Call calculateDependentTerms so it can recognize that we changed PSD, otherwise, it'll use the initial values
-    model._calculateDependentTerms(t, x)
-    dxdt = model.getdXdt(t, x)
+    model._calculateDependentTerms(model.currentTime, x)
+    dxdt = model.getdXdt(model.currentTime, x)
 
     #Set arbitrary final time, this is done during the solve function, but we do it here since we're not using the solve function
     #  the initial guess for the time steo will be 0.01*(1.001) regardless of finalTime
@@ -128,10 +128,10 @@ def test_multi_precipitation_dxdt():
     n = 1/(r*sigma*np.sqrt(2*np.pi)) * np.exp(-np.log(r/r0)**2/(2*sigma**2))
     model.PBM[0].PSD = n
 
-    t, x = model.getCurrentX()
+    x = model.getCurrentX()
     #Call calculateDependentTerms so it can recognize that we changed PSD, otherwise, it'll use the initial values
-    model._calculateDependentTerms(t, x)
-    dxdt = model.getdXdt(t, x)
+    model._calculateDependentTerms(model.currentTime, x)
+    dxdt = model.getdXdt(model.currentTime, x)
 
     #Set arbitrary final time, this is done during the solve function, but we do it here since we're not using the solve function
     #  the initial guess for the time steo will be 0.01*(1.001) regardless of finalTime
@@ -182,7 +182,7 @@ def test_multiphase_precipitation_x_shape():
         model.setThermodynamics(AlMgSitherm, phase=phases[i+1])
 
     model.setup()
-    t, x = model.getCurrentX()
+    x = model.getCurrentX()
     origLen = 5
 
     x_flat = model.flattenX(x)

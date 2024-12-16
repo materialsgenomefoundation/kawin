@@ -30,6 +30,7 @@ class GenericModel:
         printStatus(self, iteration, modelTime, simTimeElapsed) - output states made after n iterations
     '''
     def __init__(self):
+        self.currentTime = 0
         self.clearCouplingModels()
 
     def _getVarDict(self):
@@ -135,6 +136,9 @@ class GenericModel:
         for cm in self.couplingModels:
             cm.updateCoupledModel(self)
 
+    def reset(self):
+        self.currentTime = 0
+
     def setup(self):
         '''
         Sets up model before being solved
@@ -236,6 +240,7 @@ class GenericModel:
         stop : bool
             If the simulation needs to end early (ex. a stopping condition is met), then return True to stop solving
         '''
+        self.currentTime = time
         return x, False
 
     def printHeader(self):
@@ -345,8 +350,8 @@ class GenericModel:
         solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printHeader=self.printHeader, printStatus=self.printStatus)
         solver.setdXdtFunctions(self.getdXdt, self.correctdXdt, self.getDt, self.flattenX, self.unflattenX)
         
-        t, X0 = self.getCurrentX()
-        self.setTimeInfo(t, simTime)
+        X0 = self.getCurrentX()
+        self.setTimeInfo(self.currentTime, simTime)
         solver.solve(self.startTime, X0, self.finalTime, verbose, vIt)
         #solver.solve(self.getdXdt, self.startTime, X0, self.finalTime, verbose, vIt, self.correctdXdt, self.flattenX, self.unflattenX)
 
@@ -379,13 +384,14 @@ class Coupler(GenericModel):
         List of models to be solved
     '''
     def __init__(self, models : List[GenericModel]):
+        super().__init__()
         self.models = models
 
         #Internal time to record
         #We have the option to solve a model for a given amount of time before coupling it
         #  to another model, which would make each model have a different internal time
         #  Thus, we'll record time here as well representing the time during the coupling
-        self.time = np.zeros(1)
+        #self.time = np.zeros(1)
 
     def setup(self):
         '''
@@ -443,10 +449,10 @@ class Coupler(GenericModel):
         '''
         xs = []
         for m in self.models:
-            _, x = m.getCurrentX()
+            x = m.getCurrentX()
             xs.append(x)
 
-        return self.time[-1], xs
+        return xs
     
     def getDt(self, dXdt):
         '''
@@ -490,13 +496,14 @@ class Coupler(GenericModel):
         '''
         Post process on each model and records new time
         '''
+        super().postProcess(time, x)
         xNew = []
         stop = False
         for m, xsub in zip(self.models, x):
             xnew_sub, s = m.postProcess(time, xsub)
             stop = stop or s
             xNew.append(xnew_sub)
-        self.time = np.append(self.time, time)
+        #self.time = np.append(self.time, time)
         self.couplePostProcess()
         return xNew, stop
     

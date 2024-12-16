@@ -356,4 +356,33 @@ def test_homogenization_dxdt():
     assert_allclose(dt, 62271.050081, rtol=1e-3)
 
 
+    m = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
+    m.setCompositionLinear(0.257, 0.423, 'CR')
+    m.setCompositionLinear(0.065, 0.276, 'NI')
+    m.setTemperature(1100+273.15)
+    m.setThermodynamics(FeCrNiTherm)
+    m.eps = 0.01
+
+    m.setMobilityFunction('hashin upper')
+
+    m.setup()
+    x = m.getCurrentX()
+    dxdt = m.getdXdt(m.currentTime, x)
+    dt = m.getDt(dxdt)
+    
+    #Index 5
+    ind5, vals5 = 5, np.array([-2.44361335e-08, -9.00013354e-09])
+
+    #Index 10
+    ind10, vals10 = 10, np.array([-1.4624311e-08, -6.0309694e-09])
+
+    #Index 15
+    ind15, vals15 = 15, np.array([-1.57258643e-08, -9.38965611e-09])
+    
+    assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
+    assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
+    assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
+    assert_allclose(dt, 3547.407084, rtol=1e-3)
+
+
 

@@ -91,6 +91,7 @@ class MeshBase:
         if boundaryConditions is None:
             boundaryConditions = MixedBoundary(self.dims)
         self.boundaryConditions = boundaryConditions
+        self._dt = 0
     
     def computedXdt(self, pairs):
         '''
@@ -98,6 +99,10 @@ class MeshBase:
             Tuple will contain (diffusivity, response, averaging function)
         '''
         raise NotImplementedError()
+    
+    @property
+    def dt(self):
+        return self._dt
     
 class FiniteVolume1D(MeshBase):
     '''
@@ -126,12 +131,16 @@ class FiniteVolume1D(MeshBase):
             Dmid = func(D[:-1], D[1:])
             fluxes[1:-1] -= Dmid * (r[1:] - r[:-1]) / self.dz
 
+            Dmax = np.amax(np.abs(Dmid))
+
             # TODO: I would like to have this be done in PeriodicBoundary, but not
             # too sure how, especially if we want to extend to 2D systems
             if isinstance(self.boundaryConditions, PeriodicBoundary):
                 Dend = func(D[0], D[1])
                 fluxes[0] -= Dend * (r[0] - r[-1]) / self.dz
                 fluxes[-1] -= Dend * (r[0] - r[-1]) / self.dz
+                Dmax = np.amax([Dmax, np.amax(np.abs(Dend))])
+        self._dt = 0.4 * self.dz**2 / Dmax
 
         self.boundaryConditions.adjustFluxes(fluxes)
         return fluxes

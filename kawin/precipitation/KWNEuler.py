@@ -555,7 +555,7 @@ class PrecipitateModel (PrecipitateBase):
         Returns current value of time and X
         In this case, X is the particle size distribution for each phase
         '''
-        return self.time[self.n], [self.PBM[p].PSD for p in range(len(self.phases))]
+        return [self.PBM[p].PSD for p in range(len(self.phases))]
 
     def _getdXdt(self, t, x):
         '''

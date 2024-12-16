@@ -114,6 +114,7 @@ class PrecipitateBase(GenericModel):
         Resets simulation results
         This does not reset the model parameters, however, it will clear any stopping conditions
         '''
+        super().reset()
         self._resetArrays()
         self.xComp[0] = self.xInit
         self.dTemp = 0
@@ -984,6 +985,7 @@ class PrecipitateBase(GenericModel):
         4) Check stopping conditions
         5) Return new values and whether to stop the model
         '''
+        super().postProcess(t, x)
         self._calculateDependentTerms(t, x)
         self._appendArrays(self._currY)
 
@@ -1012,7 +1014,7 @@ class PrecipitateBase(GenericModel):
 
         stop = orCondition or andCondition
 
-        return self.getCurrentX()[1], stop
+        return self.getCurrentX(), stop
     
     def _processX(self, x):
         return NotImplementedError()

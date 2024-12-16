@@ -226,8 +226,8 @@ def test_single_phase_dxdt():
     m.setTemperature(1200 + 273.15)
 
     m.setup()
-    t, x = m.getCurrentX()
-    dxdt = m.getdXdt(t, x)
+    x = m.getCurrentX()
+    dxdt = m.getdXdt(m.currentTime, x)
     dt = m.getDt(dxdt)
 
     #Index 5
@@ -268,7 +268,7 @@ def test_diffusion_x_shape():
     m.setTemperature(1200 + 273.15)
 
     m.setup()
-    t, x = m.getCurrentX()
+    x = m.getCurrentX()
     origShape = x[0].shape
     
     x_flat = m.flattenX(x)
@@ -304,8 +304,8 @@ def test_homogenization_dxdt():
     m.setMobilityFunction('hashin lower')
 
     m.setup()
-    t, x = m.getCurrentX()
-    dxdt = m.getdXdt(t, x)
+    x = m.getCurrentX()
+    dxdt = m.getdXdt(m.currentTime, x)
     dt = m.getDt(dxdt)
     
     #Index 5

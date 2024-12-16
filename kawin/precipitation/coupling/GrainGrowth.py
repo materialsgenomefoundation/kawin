@@ -127,6 +127,7 @@ class GrainGrowthModel(GenericModel):
         '''
         Resets model with initially loaded grain size distribution
         '''
+        super().reset()
         self.time = np.zeros(1)
         self.avgR = np.zeros(1)
         self._z = 0
@@ -213,7 +214,7 @@ class GrainGrowthModel(GenericModel):
         '''
         Returns current time and grain size distribution
         '''
-        return self.time[-1], [self.pbm.PSD]
+        return [self.pbm.PSD]
     
     def getdXdt(self, t, x):
         '''
@@ -251,6 +252,7 @@ class GrainGrowthModel(GenericModel):
             4. Normalize grain size distribution to 1 (should be a tiny correction factor due to step 3)
             5. Record time and average grain size
         '''
+        super().postProcess(time, x)
         self.pbm.UpdatePBMEuler(time, x[0])
         self.pbm.adjustSizeClassesEuler(True)
         self.dissolutionIndex = self.pbm.getDissolutionIndex(self.maxDissolution, 0)

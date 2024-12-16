@@ -4,6 +4,7 @@ import csv
 from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
+from kawin.diffusion.Mesh import FiniteVolume1D, Cartesian1D
 import kawin.diffusion.Plot as diffPlot
 
 class DiffusionModel(GenericModel):
@@ -11,7 +12,7 @@ class DiffusionModel(GenericModel):
     FLUX = 0
     COMPOSITION = 1
 
-    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], record = True):
+    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], mesh = None, record = True):
         '''
         Class for defining a 1-dimensional mesh
 
@@ -34,9 +35,14 @@ class DiffusionModel(GenericModel):
         self.phases = phases
         self.therm = None
 
+        #if mesh is None:
+        #    self.mesh = Cartesian1D(self.zlim, self.N, len(self.elements))
+        #else:
+        #    self.mesh = mesh
+        #self.z = self.mesh.z
         self.z = np.linspace(zlim[0], zlim[1], N)
         self.dz = self.z[1] - self.z[0]
-        self.t = 0
+        #self.t = 0
 
         self.reset()
 
@@ -65,14 +71,17 @@ class DiffusionModel(GenericModel):
         This involves clearing any caches in the Thermodynamics object and this model
         as well as resetting the composition and phase profiles
         '''
+        super().reset()
+
         if self.therm is not None:
             self.therm.clearCache()
         
         self.x = np.zeros((len(self.elements), self.N))
+        #self.x = self.mesh.y.T
         self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
         self.hashTable = {}
         self.isSetup = False
-        self.t = 0
+        #self.t = 0
 
     def setThermodynamics(self, thermodynamics):
         '''
@@ -227,6 +236,7 @@ class DiffusionModel(GenericModel):
                 self._recordedTime = np.pad(self._recordedTime, (0, 1))
 
             self._recordedX[-1] = self.x
+            #self._recordedX[-1] = self.mesh.y.T
             self._recordedP[-1] = self.p
             self._recordedTime[-1] = time
 
@@ -249,9 +259,11 @@ class DiffusionModel(GenericModel):
                 lx, lp, ltime = self._recordedX[lind], self._recordedP[lind], self._recordedTime[lind]
 
                 self.x = (ux - lx) * (time - ltime) / (utime - ltime) + lx
+                self.mesh.y = self.x.T
                 self.p = (up - lp) * (time - ltime) / (utime - ltime) + lp
             
-            self.z = self._recordedZ
+            self.mesh.z = self._recordedZ
+            self.z = self.mesh.z
 
     def _getElementIndex(self, element = None):
         '''
@@ -437,8 +449,11 @@ class DiffusionModel(GenericModel):
         self.x[self.x > self.minComposition] = self.x[self.x > self.minComposition] - len(self.allElements) * self.minComposition
         self.x[self.x < self.minComposition] = self.minComposition
         self.T = self.Tfunc(self.z, 0)
+
+        #self.mesh.y = self.x.T
+
         self.isSetup = True
-        self.record(self.t) #Record at t = 0
+        self.record(self.currentTime) #Record at t = 0
 
     def _getFluxes(self):
         '''
@@ -455,7 +470,8 @@ class DiffusionModel(GenericModel):
         super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
-        return self.t, [self.x]
+        #return self.t, [self.mesh.y]
+        return [self.x]
     
     def getdXdt(self, t, x):
         '''
@@ -472,11 +488,13 @@ class DiffusionModel(GenericModel):
         Stores new x and t
         Records new values if recording is enabled
         '''
-        self.t = time
+        super().postProcess(time, x)
         self.x = x[0]
-        self.record(self.t)
+        #self.mesh.y = x[0]
+        #self.x = self.mesh.y.T
+        self.record(self.currentTime)
         self.updateCoupledModels()
-        return self.getCurrentX()[1], False
+        return self.getCurrentX(), False
     
     def flattenX(self, X):
         '''

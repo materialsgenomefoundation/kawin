@@ -21,14 +21,15 @@ def test_iterators():
     '''
     class TestModel(GenericModel):
         def __init__(self):
+            super().__init__()
             self.reset()
 
         def reset(self):
+            super().reset()
             self.x = np.array([0])
-            self.time = np.zeros(1)
 
         def getCurrentX(self):
-            return self.time[-1], [self.x[-1]]
+            return [self.x[-1]]
         
         def getdXdt(self, t, x):
             return [np.cos(t)]
@@ -37,7 +38,7 @@ def test_iterators():
             return 0.001
         
         def postProcess(self, time, x):
-            self.time = np.append(self.time, time)
+            super().postProcess(time, x)
             self.x = np.append(self.x, x[0])
             return x, False
         
@@ -111,7 +112,7 @@ def test_coupler_shape():
     coupled_model = Coupler([p_model, d_model])
     coupled_model.setup()
 
-    t, x = coupled_model.getCurrentX()
+    x = coupled_model.getCurrentX()
     x_flat = coupled_model.flattenX(x)
     x_restore = coupled_model.unflattenX(x_flat, x)
 

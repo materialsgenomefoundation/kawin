@@ -313,7 +313,7 @@ class HomogenizationModel(DiffusionModel):
         '''
         Return fluxes and time interval for the current iteration
         '''
-        vfluxes = self._getFluxes(self.t, [self.x])
+        vfluxes = self._getFluxes(self.currentTime, [self.x])
         dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
         dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
         return vfluxes, dt

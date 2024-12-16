@@ -76,9 +76,10 @@ class DiffusionModel(GenericModel):
         if self.therm is not None:
             self.therm.clearCache()
         
-        self.x = np.zeros((len(self.elements), self.N))
+        self.x = np.zeros((self.N, len(self.elements)))
         #self.x = self.mesh.y.T
-        self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
+        self.p = np.ones((self.N,len(self.phases)))
+        #self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
         self.hashTable = {}
         self.isSetup = False
         #self.t = 0
@@ -205,8 +206,9 @@ class DiffusionModel(GenericModel):
             Defaults to np.float32
         '''
         self._record = True
-        self._recordedX = np.zeros((1, len(self.elements), self.N))
-        self._recordedP = np.zeros((1, 1,self.N)) if len(self.phases) == 1 else np.zeros((1, len(self.phases), self.N))
+        self._recordedX = np.zeros((1, self.N, len(self.elements)))
+        self._recordedP = np.zeros((1, self.N, len(self.phases)))
+        #self._recordedP = np.zeros((1, 1,self.N)) if len(self.phases) == 1 else np.zeros((1, len(self.phases), self.N))
         self._recordedZ = self.z
         self._recordedTime = np.zeros(1)
 
@@ -259,7 +261,7 @@ class DiffusionModel(GenericModel):
                 lx, lp, ltime = self._recordedX[lind], self._recordedP[lind], self._recordedTime[lind]
 
                 self.x = (ux - lx) * (time - ltime) / (utime - ltime) + lx
-                self.mesh.y = self.x.T
+                #self.mesh.y = self.x.T
                 self.p = (up - lp) * (time - ltime) / (utime - ltime) + lp
             
             self.mesh.z = self._recordedZ
@@ -318,12 +320,12 @@ class DiffusionModel(GenericModel):
         self.LBC[eIndex] = LBCtype
         self.LBCvalue[eIndex] = LBCvalue
         if LBCtype == self.COMPOSITION:
-            self.x[eIndex,0] = LBCvalue
+            self.x[0,eIndex] = LBCvalue
 
         self.RBC[eIndex] = RBCtype
         self.RBCvalue[eIndex] = RBCvalue
         if RBCtype == self.COMPOSITION:
-            self.x[eIndex,-1] = RBCvalue
+            self.x[-1,eIndex] = RBCvalue
 
     def setCompositionLinear(self, Lvalue, Rvalue, element = None):
         '''
@@ -339,7 +341,7 @@ class DiffusionModel(GenericModel):
             Element to apply composition profile to
         '''
         eIndex = self._getElementIndex(element)
-        self.x[eIndex] = np.linspace(Lvalue, Rvalue, self.N)
+        self.x[:,eIndex] = np.linspace(Lvalue, Rvalue, self.N)
 
     def setCompositionStep(self, Lvalue, Rvalue, z, element = None):
         '''
@@ -358,8 +360,8 @@ class DiffusionModel(GenericModel):
         '''
         eIndex = self._getElementIndex(element)
         Lindices = self.z <= z
-        self.x[eIndex,Lindices] = Lvalue
-        self.x[eIndex,~Lindices] = Rvalue
+        self.x[Lindices,eIndex] = Lvalue
+        self.x[~Lindices,eIndex] = Rvalue
 
     def setCompositionSingle(self, value, z, element = None):
         '''
@@ -376,7 +378,7 @@ class DiffusionModel(GenericModel):
         '''
         eIndex = self._getElementIndex(element)
         zIndex = np.argmin(np.abs(self.z-z))
-        self.x[eIndex,zIndex] = value
+        self.x[zIndex,eIndex] = value
 
     def setCompositionInBounds(self, value, Lbound, Rbound, element = None):
         '''
@@ -395,7 +397,7 @@ class DiffusionModel(GenericModel):
         '''
         eIndex = self._getElementIndex(element)
         indices = (self.z >= Lbound) & (self.z <= Rbound)
-        self.x[eIndex,indices] = value
+        self.x[indices,eIndex] = value
 
     def setCompositionFunction(self, func, element = None):
         '''
@@ -409,7 +411,7 @@ class DiffusionModel(GenericModel):
             Element to apply composition profile to
         '''
         eIndex = self._getElementIndex(element)
-        self.x[eIndex,:] = func(self.z)
+        self.x[:,eIndex] = func(self.z)
 
     def setCompositionProfile(self, z, x, element = None):
         '''
@@ -430,7 +432,7 @@ class DiffusionModel(GenericModel):
         sortIndices = np.argsort(z)
         z = z[sortIndices]
         x = x[sortIndices]
-        self.x[eIndex,:] = np.interp(self.z, z, x)
+        self.x[:,eIndex] = np.interp(self.z, z, x)
 
     def setup(self):
         '''
@@ -442,7 +444,7 @@ class DiffusionModel(GenericModel):
         '''
         if self.therm is not None:
             self.therm.clearCache()
-        xsum = np.sum(self.x, axis=0)
+        xsum = np.sum(self.x, axis=1)
         if any(xsum > 1):
             print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[xsum>1]), np.amax(self.z[xsum>1])))
             raise Exception('Some compositions sum up to above 1')
@@ -478,7 +480,7 @@ class DiffusionModel(GenericModel):
         dXdt is defined as -dJ/dz
         '''
         fluxes = self._getFluxes(t, x)
-        return [-(fluxes[:,1:] - fluxes[:,:-1])/self.dz]
+        return [-(fluxes[1:,:] - fluxes[:-1,:])/self.dz]
     
     def preProcess(self):
         return
@@ -522,10 +524,10 @@ class DiffusionModel(GenericModel):
             Element to get profile of
         '''
         if element in self.allElements and element not in self.elements:
-            return 1 - np.sum(self.x, axis=0)
+            return 1 - np.sum(self.x, axis=1)
         else:
             e = self._getElementIndex(element)
-            return self.x[e]
+            return self.x[:,e]
 
     def getP(self, phase):
         '''

@@ -33,29 +33,30 @@ class SinglePhaseModel(DiffusionModel):
             d = np.zeros((self.N, len(self.elements), len(self.elements)))
         if self.cache:
             for i in range(self.N):
-                hashValue = self._getHash(x[:,i], T[i])
+                hashValue = self._getHash(x[i], T[i])
                 if hashValue not in self.hashTable:
-                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(x[:,i], T[i], phase=self.phases[0])
+                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(x[i], T[i], phase=self.phases[0])
                 d[i] = self.hashTable[hashValue]
         else:
             d = self.therm.getInterdiffusivity(x.T, T, phase=self.phases[0])
         
         #Get diffusivity and composition gradient at cell boundaries
         dmid = (d[1:] + d[:-1]) / 2
-        dxdz = (x[:,1:] - x[:,:-1]) / self.dz
+        dxdz = (x[1:] - x[:-1]) / self.dz
 
         #Fluxes = -D * dx/dz
-        fluxes = np.zeros((len(self.elements), self.N+1))
+        #fluxes = np.zeros((len(self.elements), self.N+1))
+        fluxes = np.zeros((self.N+1, len(self.elements)))
         if len(self.elements) == 1:
-            fluxes[0,1:-1] = -dmid * dxdz
+            fluxes[1:-1] = -dmid[:,np.newaxis] * dxdz
         else:
-            dxdz = np.expand_dims(dxdz, axis=0)
-            fluxes[:,1:-1] = -np.matmul(dmid, np.transpose(dxdz, (2,1,0)))[:,:,0].T
+            dxdz = np.expand_dims(dxdz, axis=2)
+            fluxes[1:-1] = -np.matmul(dmid, dxdz)[:,:,0]
 
         #Boundary condition
         for e in range(len(self.elements)):
-            fluxes[e,0] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else fluxes[e,1]
-            fluxes[e,-1] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else fluxes[e,-2]
+            fluxes[0,e] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else fluxes[1,e]
+            fluxes[-1,e] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else fluxes[-2,e]
 
         #Time step from von Neumann analysis (using 0.4 instead of 0.5 to be safe)
         self._currdt = 0.4 * self.dz**2 / np.amax(np.abs(dmid))

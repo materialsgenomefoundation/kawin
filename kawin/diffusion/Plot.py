@@ -24,17 +24,17 @@ def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale 
 
     if plotElement is not None:
         if plotElement not in diffModel.elements and plotElement in diffModel.allElements:
-            x = 1 - np.sum(diffModel.x, axis=0)
+            x = 1 - np.sum(diffModel.x, axis=1)
         else:
             e = diffModel._getElementIndex(plotElement)
-            x = diffModel.x[e]
+            x = diffModel.x[:,e]
         ax.plot(diffModel.z/zScale, x, *args, **kwargs)
     else:
         if plotReference:
             refE = 1 - np.sum(diffModel.x, axis=0)
             ax.plot(diffModel.z/zScale, refE, label=diffModel.allElements[0], *args, **kwargs)
         for e in range(len(diffModel.elements)):
-            ax.plot(diffModel.z/zScale, diffModel.x[e], label=diffModel.elements[e], *args, **kwargs)
+            ax.plot(diffModel.z/zScale, diffModel.x[:,e], label=diffModel.elements[e], *args, **kwargs)
         
     ax.set_xlim([diffModel.zlim[0]/zScale, diffModel.zlim[1]/zScale])
     if plotElement is None:
@@ -74,13 +74,13 @@ def plotTwoAxis(diffModel, Lelements, Relements, zScale = 1, axL = None, axR = N
         Relements = [Relements]
 
     ci = 0
-    refE = 1 - np.sum(diffModel.x, axis=0)
+    refE = 1 - np.sum(diffModel.x, axis=1)
     if axR is None:
         axR = axL.twinx()
     for e in range(len(Lelements)):
         if Lelements[e] in diffModel.elements:
             eIndex = diffModel._getElementIndex(Lelements[e])
-            axL.plot(diffModel.z/zScale, diffModel.x[eIndex], label=diffModel.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
+            axL.plot(diffModel.z/zScale, diffModel.x[:,eIndex], label=diffModel.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
             ci = ci+1 if ci <= 9 else 0
         elif Lelements[e] in diffModel.allElements:
             axL.plot(diffModel.z/zScale, refE, label=diffModel.allElements[0], color = 'C' + str(ci), *args, **kwargs)
@@ -88,7 +88,7 @@ def plotTwoAxis(diffModel, Lelements, Relements, zScale = 1, axL = None, axR = N
     for e in range(len(Relements)):
         if Relements[e] in diffModel.elements:
             eIndex = diffModel._getElementIndex(Relements[e])
-            axR.plot(diffModel.z/zScale, diffModel.x[eIndex], label=diffModel.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
+            axR.plot(diffModel.z/zScale, diffModel.x[:,eIndex], label=diffModel.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
             ci = ci+1 if ci <= 9 else 0
         elif Relements[e] in diffModel.allElements:
             axR.plot(diffModel.z/zScale, refE, label=diffModel.allElements[0], color = 'C' + str(ci), *args, **kwargs)
@@ -127,10 +127,10 @@ def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, *args, **kwar
 
     if plotPhase is not None:
         p = diffModel._getPhaseIndex(plotPhase)
-        ax.plot(diffModel.z/zScale, diffModel.p[p], *args, **kwargs)
+        ax.plot(diffModel.z/zScale, diffModel.p[:,p], *args, **kwargs)
     else:
         for p in range(len(diffModel.phases)):
-            ax.plot(diffModel.z/zScale, diffModel.p[p], label=diffModel.phases[p], *args, **kwargs)
+            ax.plot(diffModel.z/zScale, diffModel.p[:,p], label=diffModel.phases[p], *args, **kwargs)
     ax.set_xlim([diffModel.zlim[0]/zScale, diffModel.zlim[1]/zScale])
     ax.set_ylim([0, 1])
     ax.set_xlabel('Distance (m)')

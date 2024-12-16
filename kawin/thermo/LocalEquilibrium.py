@@ -38,20 +38,31 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
         # Note: filter_phases() not called, so all specified phases must be valid
         composition_sets = []
 
-        # Choose a naive starting point for each phase
-        # only one composition set per phase is chosen
-        # here, we just choose the point with the minimum Gibbs energy
-        # mass balance does not have to be preserved at the starting point
-        for phase in phases:
-            # arbitrary guess
-            phase_amt = 1./len(phases)
-            calc_p = calculate(dbf, comps, phase, T=cur_conds[v.T], P=cur_conds[v.P], N=cur_conds[v.N], GE=cur_conds[v.GE],
-                               pdens=10, model=models, phase_records=phase_records)
+        # Special case for single phase where we can set a local phase condition for better sampling
+        if len(phases) == 1:
+            local_phase_conds = {v.X(phases[0], var.species): conds[var] for var in conds if isinstance(var, v.X)}
+            calc_p = calculate(dbf, comps, phases[0], T=cur_conds[v.T], P=cur_conds[v.P], N=cur_conds[v.N], GE=cur_conds[v.GE],
+                               pdens=10, model=models, phase_records=phase_records, conditions=local_phase_conds)
             idx_p = np.argmin(calc_p.GM.values.squeeze())
-            compset = CompositionSet(phase_records[phase])
+            compset = CompositionSet(phase_records[phases[0]])
             site_fractions = np.array(calc_p.Y.isel(points=idx_p).values.squeeze())
-            compset.update(site_fractions, phase_amt, state_variables)
+            compset.update(site_fractions, 1.0, state_variables)
             composition_sets.append(compset)
+        else:
+            # Choose a naive starting point for each phase
+            # only one composition set per phase is chosen
+            # here, we just choose the point with the minimum Gibbs energy
+            # mass balance does not have to be preserved at the starting point
+            for phase in phases:
+                # arbitrary guess
+                phase_amt = 1./len(phases)
+                calc_p = calculate(dbf, comps, phase, T=cur_conds[v.T], P=cur_conds[v.P], N=cur_conds[v.N], GE=cur_conds[v.GE],
+                                pdens=10, model=models, phase_records=phase_records)
+                idx_p = np.argmin(calc_p.GM.values.squeeze())
+                compset = CompositionSet(phase_records[phase])
+                site_fractions = np.array(calc_p.Y.isel(points=idx_p).values.squeeze())
+                compset.update(site_fractions, phase_amt, state_variables)
+                composition_sets.append(compset)
     else:
         #Update state variables in composition sets if supplied
         #pycalphad doesn't seem to update the temperature if it changes

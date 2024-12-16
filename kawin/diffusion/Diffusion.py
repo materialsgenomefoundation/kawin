@@ -35,19 +35,19 @@ class DiffusionModel(GenericModel):
         self.phases = phases
         self.therm = None
 
-        #if mesh is None:
-        #    self.mesh = Cartesian1D(self.zlim, self.N, len(self.elements))
-        #else:
-        #    self.mesh = mesh
-        #self.z = self.mesh.z
-        self.z = np.linspace(zlim[0], zlim[1], N)
-        self.dz = self.z[1] - self.z[0]
+        if mesh is None:
+           self.mesh = Cartesian1D(self.zlim, self.N, len(self.elements))
+        else:
+           self.mesh = mesh
+        self.z = self.mesh.z
+        #self.z = np.linspace(zlim[0], zlim[1], N)
+        #self.dz = self.z[1] - self.z[0]
         #self.t = 0
 
         self.reset()
 
-        self.LBC, self.RBC = self.FLUX*np.ones(len(self.elements)), self.FLUX*np.ones(len(self.elements))
-        self.LBCvalue, self.RBCvalue = np.zeros(len(self.elements)), np.zeros(len(self.elements))
+        #self.LBC, self.RBC = self.FLUX*np.ones(len(self.elements)), self.FLUX*np.ones(len(self.elements))
+        #self.LBCvalue, self.RBCvalue = np.zeros(len(self.elements)), np.zeros(len(self.elements))
 
         self.cache = True
         self.setHashSensitivity(4)
@@ -76,8 +76,8 @@ class DiffusionModel(GenericModel):
         if self.therm is not None:
             self.therm.clearCache()
         
-        self.x = np.zeros((self.N, len(self.elements)))
-        #self.x = self.mesh.y.T
+        #self.x = np.zeros((self.N, len(self.elements)))
+        self.x = self.mesh.y
         self.p = np.ones((self.N,len(self.phases)))
         #self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
         self.hashTable = {}
@@ -237,8 +237,8 @@ class DiffusionModel(GenericModel):
                 self._recordedP = np.pad(self._recordedP, ((0, 1), (0, 0), (0, 0)))
                 self._recordedTime = np.pad(self._recordedTime, (0, 1))
 
-            self._recordedX[-1] = self.x
-            #self._recordedX[-1] = self.mesh.y.T
+            #self._recordedX[-1] = self.x
+            self._recordedX[-1] = self.mesh.y
             self._recordedP[-1] = self.p
             self._recordedTime[-1] = time
 
@@ -261,11 +261,11 @@ class DiffusionModel(GenericModel):
                 lx, lp, ltime = self._recordedX[lind], self._recordedP[lind], self._recordedTime[lind]
 
                 self.x = (ux - lx) * (time - ltime) / (utime - ltime) + lx
-                #self.mesh.y = self.x.T
+                self.mesh.y = self.x
                 self.p = (up - lp) * (time - ltime) / (utime - ltime) + lp
             
             self.mesh.z = self._recordedZ
-            self.z = self.mesh.z
+            #self.z = self.mesh.z
 
     def _getElementIndex(self, element = None):
         '''
@@ -452,7 +452,7 @@ class DiffusionModel(GenericModel):
         self.x[self.x < self.minComposition] = self.minComposition
         self.T = self.Tfunc(self.z, 0)
 
-        #self.mesh.y = self.x.T
+        self.mesh.y = self.x
 
         self.isSetup = True
         self.record(self.currentTime) #Record at t = 0
@@ -475,12 +475,12 @@ class DiffusionModel(GenericModel):
         #return self.t, [self.mesh.y]
         return [self.x]
     
-    def getdXdt(self, t, x):
-        '''
-        dXdt is defined as -dJ/dz
-        '''
-        fluxes = self._getFluxes(t, x)
-        return [-(fluxes[1:,:] - fluxes[:-1,:])/self.dz]
+    # def getdXdt(self, t, x):
+    #     '''
+    #     dXdt is defined as -dJ/dz
+    #     '''
+    #     fluxes = self._getFluxes(t, x)
+    #     return [-(fluxes[1:,:] - fluxes[:-1,:])/self.dz]
     
     def preProcess(self):
         return
@@ -491,9 +491,9 @@ class DiffusionModel(GenericModel):
         Records new values if recording is enabled
         '''
         super().postProcess(time, x)
-        self.x = x[0]
-        #self.mesh.y = x[0]
-        #self.x = self.mesh.y.T
+        #self.x = x[0]
+        self.mesh.y = x[0]
+        self.x = self.mesh.y
         self.record(self.currentTime)
         self.updateCoupledModels()
         return self.getCurrentX(), False

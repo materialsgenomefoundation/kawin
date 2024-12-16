@@ -62,35 +62,6 @@ class SinglePhaseModel(DiffusionModel):
         self._currdt = 0.4 * self.dz**2 / np.amax(np.abs(dmid))
 
         return fluxes
-    
-    # def getdXdt(self, t, x):
-    #     #Calculate diffusivity at cell centers
-    #     x = x[0].T
-    #     T = self.Tfunc(self.z, t)
-    #     if len(self.elements) == 1:
-    #         d = np.zeros(self.N)
-    #     else:
-    #         d = np.zeros((self.N, len(self.elements), len(self.elements)))
-    #     if self.cache:
-    #         for i in range(self.N):
-    #             hashValue = self._getHash(x[:,i], T[i])
-    #             if hashValue not in self.hashTable:
-    #                 self.hashTable[hashValue] = self.therm.getInterdiffusivity(x[:,i], T[i], phase=self.phases[0])
-    #             d[i] = self.hashTable[hashValue]
-    #     else:
-    #         d = self.therm.getInterdiffusivity(x.T, T, phase=self.phases[0])
-
-    #     dmid = geometricMean(d[1:], d[:-1])
-    #     #self._currdt = 0.4 * self.mesh.dz**2 / np.amax(dmid)
-
-    #     pairs = []
-    #     if len(self.elements) == 1:
-    #         pairs.append((d, self.mesh.y, geometricMean))
-    #     else:
-    #         for i in range(len(self.elements)):
-    #             pairs.append((d[:,i,:], np.tile([self.mesh.y[:,i]], (len(self.elements), 1)).T, geometricMean))
-    #     dxdt = self.mesh.computedXdt(pairs)
-    #     return [dxdt]
 
     def getFluxes(self):
         '''
@@ -115,5 +86,31 @@ class SinglePhaseModel(DiffusionModel):
         Returns dt that was calculated from _getFluxes
         This prevents double calculation of the diffusivity just to get a time step
         '''
-        #return self.mesh.dt
-        return self._currdt
+        return self.mesh.dt
+        #return self._currdt
+
+    def getdXdt(self, t, xCurr):
+        #Calculate diffusivity at cell centers
+        x = xCurr[0]
+        T = self.Tfunc(self.z, t)
+        if len(self.elements) == 1:
+            d = np.zeros(self.N)
+        else:
+            d = np.zeros((self.N, len(self.elements), len(self.elements)))
+        if self.cache:
+            for i in range(self.N):
+                hashValue = self._getHash(x[i], T[i])
+                if hashValue not in self.hashTable:
+                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(x[i], T[i], phase=self.phases[0])
+                d[i] = self.hashTable[hashValue]
+        else:
+            d = self.therm.getInterdiffusivity(x.T, T, phase=self.phases[0])
+
+        pairs = []
+        if len(self.elements) == 1:
+            pairs.append((d, self.mesh.y, geometricMean))
+        else:
+            for i in range(len(self.elements)):
+                pairs.append((d[:,i,:], np.tile([self.mesh.y[:,i]], (len(self.elements), 1)).T, geometricMean))
+        dxdt = self.mesh.computedXdt(pairs)
+        return [dxdt]

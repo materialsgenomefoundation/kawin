@@ -1,11 +1,12 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
+from kawin.diffusion.Mesh import geometricMean
 from kawin.thermo.Mobility import mobility_from_composition_set
 import copy
 
 class HomogenizationModel(DiffusionModel):
-    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], record = True):
-        super().__init__(zlim, N, elements, phases, record)
+    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], mesh=None, record = True):
+        super().__init__(zlim, N, elements, phases, mesh, record)
 
         self.mobilityFunction = self.wienerUpper
         self.defaultMob = 0
@@ -283,10 +284,10 @@ class HomogenizationModel(DiffusionModel):
         avgX = np.concatenate((1-np.sum(avgX, axis=1)[:,np.newaxis], avgX), axis=1)
 
         #Chemical potential gradient
-        dmudz = (self.mu[1:] - self.mu[:-1]) / self.dz
+        dmudz = (self.mu[1:] - self.mu[:-1]) / self.mesh.dz
 
         #Composition gradient (we need to calculate gradient for reference element)
-        dxdz = (x[1:] - x[:-1]) / self.dz
+        dxdz = (x[1:] - x[:-1]) / self.mesh.dz
         dxdz = np.concatenate((0-np.sum(dxdz, axis=1)[:,np.newaxis], dxdz), axis=1)
 
         # J = -M * dmu/dz
@@ -318,7 +319,7 @@ class HomogenizationModel(DiffusionModel):
         Return fluxes and time interval for the current iteration
         '''
         vfluxes = self._getFluxes(self.currentTime, [self.x])
-        dJ = np.abs(vfluxes[1:] - vfluxes[:-1]) / self.dz
+        dJ = np.abs(vfluxes[1:] - vfluxes[:-1]) / self.mesh.dz
         dt = self.maxCompositionChange / np.amax(dJ[dJ!=0])
         return vfluxes, dt
     
@@ -329,3 +330,10 @@ class HomogenizationModel(DiffusionModel):
             change caused by the fluxes will be lower than self.maxCompositionChange
         '''
         return self.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
+    
+    def getdXdt(self, t, x):
+        '''
+        dXdt is defined as -dJ/dz
+        '''
+        fluxes = self._getFluxes(t, x)
+        return [-(fluxes[1:,:] - fluxes[:-1,:])/self.mesh.dz]

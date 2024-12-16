@@ -123,6 +123,9 @@ class FiniteVolume1D(MeshBase):
         self.z = 0.5*(self.zEdge[1:] + self.zEdge[:-1])
         self.dz = self.z[1] - self.z[0]
 
+    def _fluxTodXdt(self, fluxes):
+        raise NotImplementedError()
+
     def _computeFluxes(self, pairs):
         fluxes = np.zeros((self.N+1, self.dims))
         for p in pairs:
@@ -142,15 +145,18 @@ class FiniteVolume1D(MeshBase):
                 Dmax = np.amax([Dmax, np.amax(np.abs(Dend))])
         self._dt = 0.4 * self.dz**2 / Dmax
 
-        self.boundaryConditions.adjustFluxes(fluxes)
         return fluxes
     
-class Cartesian1D(FiniteVolume1D):
     def computedXdt(self, pairs):
         fluxes = self._computeFluxes(pairs)
-        dXdt = -(fluxes[1:] - fluxes[:-1]) / self.dz
+        self.boundaryConditions.adjustFluxes(fluxes)
+        dXdt = self._fluxTodXdt(fluxes)
         self.boundaryConditions.adjustdXdt(dXdt)
         return dXdt
+    
+class Cartesian1D(FiniteVolume1D):
+    def _fluxTodXdt(self, fluxes):
+        return -(fluxes[1:] - fluxes[:-1]) / self.dz
     
 class Cylindrical1D(FiniteVolume1D):
     def __init__(self, rlim, N, dims, boundaryConditions = None):
@@ -158,12 +164,9 @@ class Cylindrical1D(FiniteVolume1D):
             raise ValueError('Radial limits must be positive')
         super().__init__(rlim, N, dims, boundaryConditions)
 
-    def computedXdt(self, pairs):
-        fluxes = self._computeFluxes(pairs)
+    def _fluxTodXdt(self, fluxes):
         fr = fluxes*self.zEdge[:,np.newaxis]
-        dXdt = -(fr[1:] - fr[:-1]) / self.z[:,np.newaxis] / self.dz
-        self.boundaryConditions.adjustdXdt(dXdt)
-        return dXdt
+        return -(fr[1:] - fr[:-1]) / self.z[:,np.newaxis] / self.dz
     
 class Spherical1D(FiniteVolume1D):
     def __init__(self, rlim, N, dims, boundaryConditions = None):
@@ -171,11 +174,8 @@ class Spherical1D(FiniteVolume1D):
             raise ValueError('Radial limits must be positive')
         super().__init__(rlim, N, dims, boundaryConditions)
 
-    def computedXdt(self, pairs):
-        fluxes = self._computeFluxes(pairs)
+    def _fluxTodXdt(self, fluxes):
         fr = fluxes*self.zEdge[:,np.newaxis]**2
-        dXdt = -(fr[1:] - fr[:-1]) / self.z[:,np.newaxis]**2 / self.dz
-        self.boundaryConditions.adjustdXdt(dXdt)
-        return dXdt
+        return -(fr[1:] - fr[:-1]) / self.z[:,np.newaxis]**2 / self.dz
     
     

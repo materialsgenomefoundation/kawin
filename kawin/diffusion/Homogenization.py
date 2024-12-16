@@ -1,6 +1,6 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.diffusion.Mesh import geometricMean
+from kawin.diffusion.Mesh import geometricMean, arithmeticMean, harmonicMean
 from kawin.thermo.Mobility import mobility_from_composition_set
 import copy
 
@@ -331,9 +331,26 @@ class HomogenizationModel(DiffusionModel):
         '''
         return self.maxCompositionChange / np.amax(np.abs(dXdt[0][dXdt[0]!=0]))
     
-    def getdXdt(self, t, x):
+    def getdXdt(self, t, xCurr):
         '''
         dXdt is defined as -dJ/dz
         '''
-        fluxes = self._getFluxes(t, x)
-        return [-(fluxes[1:,:] - fluxes[:-1,:])/self.mesh.dz]
+        x = xCurr[0]
+        self.T = self.Tfunc(self.z, t)
+        self.p = self.updateCompSets(x)
+
+        #Get average mobility between nodes
+        allX = np.concatenate((1-np.sum(x, axis=1)[:,np.newaxis], x), axis=1)
+        mob = self.mobilityFunction(x)
+
+        
+        xTerm = (np.eye(len(self.allElements))[np.newaxis,:,:] - allX[:,:,np.newaxis])
+        mobTerm = xTerm*mob[:,np.newaxis,:]
+        idealTerm = xTerm * self.eps * mob[:,np.newaxis,:] * 8.314 * self.T[:,np.newaxis,np.newaxis]
+        pairs = []
+        for i in range(len(self.allElements)):
+            pairs.append((mobTerm[:,1:,i], np.tile([self.mu[:,i]], (len(self.elements), 1)).T, arithmeticMean))
+            pairs.append((idealTerm[:,1:,i], np.tile([allX[:,i]], (len(self.elements), 1)).T, harmonicMean))
+
+        dxdt = self.mesh.computedXdt(pairs)
+        return [dxdt]

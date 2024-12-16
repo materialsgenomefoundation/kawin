@@ -118,7 +118,8 @@ def test_coupler_shape():
 
     assert(len(x) == 2)
     assert(len(x[0]) == 1 and x[0][0].shape == (bins,))
-    assert(len(x[1]) == 1 and x[1][0].shape == (2,N))
+    #assert(len(x[1]) == 1 and x[1][0].shape == (2,N))
+    assert(len(x[1]) == 1 and x[1][0].shape == (N,2))
     assert(x_flat.shape == (bins+2*N,))
     assert(len(x_restore) == len(x))
     assert(len(x_restore[0]) == len(x[0]) and x_restore[0][0].shape == x[0][0].shape)

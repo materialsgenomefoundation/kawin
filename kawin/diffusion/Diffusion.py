@@ -4,15 +4,16 @@ import csv
 from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
-from kawin.diffusion.Mesh import FiniteVolume1D, Cartesian1D
+from kawin.diffusion.Mesh import MeshBase, Cartesian1D, PeriodicBoundary, MixedBoundary
 import kawin.diffusion.Plot as diffPlot
+
 
 class DiffusionModel(GenericModel):
     #Boundary conditions
     FLUX = 0
     COMPOSITION = 1
 
-    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], mesh = None, record = True):
+    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], mesh: MeshBase = None, record = True):
         '''
         Class for defining a 1-dimensional mesh
 
@@ -295,37 +296,61 @@ class DiffusionModel(GenericModel):
         else:
             return self.phases.index(phase)
 
-    def setBC(self, LBCtype = 0, LBCvalue = 0, RBCtype = 0, RBCvalue = 0, element = None):
+    def setBC(self, LBCtype = 'flux', LBCvalue = 0, RBCtype = 'flux', RBCvalue = 0, element = None):
         '''
         Set boundary conditions
 
         Parameters
         ----------
-        LBCtype : int
+        LBCtype : int | str
             Left boundary condition type
-                Mesh1D.FLUX - constant flux
-                Mesh1D.COMPOSITION - constant composition
+                'flux' or 'composition'
         LBCvalue : float
             Value of left boundary condition
-        RBCtype : int
+        RBCtype : int  | str
             Right boundary condition type
-                Mesh1D.FLUX - constant flux
-                Mesh1D.COMPOSITION - constant composition
+                'flux' or 'composition'
         RBCvalue : float
             Value of right boundary condition
         element : str
             Specified element to apply boundary conditions on
         '''
-        eIndex = self._getElementIndex(element)
-        self.LBC[eIndex] = LBCtype
-        self.LBCvalue[eIndex] = LBCvalue
-        if LBCtype == self.COMPOSITION:
-            self.x[0,eIndex] = LBCvalue
+        if isinstance(self.mesh.boundaryConditions, PeriodicBoundary):
+            self.mesh.boundaryConditions = MixedBoundary(len(self.elements))
 
-        self.RBC[eIndex] = RBCtype
-        self.RBCvalue[eIndex] = RBCvalue
-        if RBCtype == self.COMPOSITION:
-            self.x[-1,eIndex] = RBCvalue
+        eIndex = self._getElementIndex(element)
+        # self.LBC[eIndex] = LBCtype
+        # self.LBCvalue[eIndex] = LBCvalue
+        # if LBCtype == self.COMPOSITION:
+        #     self.x[0,eIndex] = LBCvalue
+
+        # self.RBC[eIndex] = RBCtype
+        # self.RBCvalue[eIndex] = RBCvalue
+        # if RBCtype == self.COMPOSITION:
+        #     self.x[-1,eIndex] = RBCvalue
+
+        if LBCtype == 'flux':
+            LBCtype = MixedBoundary.NEUMANN
+        elif LBCtype == 'composition':
+            LBCtype = MixedBoundary.DIRICHLET
+        else:
+            raise ValueError("LBCtype must be 'flux' or 'composition'")
+        
+        if RBCtype == 'flux':
+            RBCtype = MixedBoundary.NEUMANN
+        elif RBCtype == 'composition':
+            RBCtype = MixedBoundary.DIRICHLET
+        else:
+            raise ValueError("RBCtype must be 'flux' or 'composition'")
+
+        self.mesh.boundaryConditions.LBCtype[eIndex] = LBCtype
+        self.mesh.boundaryConditions.LBCvalue[eIndex] = LBCvalue
+
+        self.mesh.boundaryConditions.RBCtype[eIndex] = RBCtype
+        self.mesh.boundaryConditions.RBCvalue[eIndex] = RBCvalue
+
+    def setPeriodicBoundary(self):
+        self.mesh.boundaryConditions = PeriodicBoundary()
 
     def setCompositionLinear(self, Lvalue, Rvalue, element = None):
         '''
@@ -436,7 +461,7 @@ class DiffusionModel(GenericModel):
 
     def setup(self):
         '''
-        General setup function for all diffusio models
+        General setup function for all diffusion models
 
         This will clear any cached values in the thermodynamics function and check if all compositions add up to 1
 
@@ -444,6 +469,14 @@ class DiffusionModel(GenericModel):
         '''
         if self.therm is not None:
             self.therm.clearCache()
+
+        if isinstance(self.mesh.boundaryConditions, MixedBoundary):
+            for e in range(len(self.elements)):
+                if self.mesh.boundaryConditions.LBCtype[e] == MixedBoundary.DIRICHLET:
+                    self.x[0,e] = self.mesh.boundaryConditions.LBCvalue[e]
+                if self.mesh.boundaryConditions.RBCtype[e] == MixedBoundary.DIRICHLET:
+                    self.x[-1,e] = self.mesh.boundaryConditions.RBCvalue[e]
+
         xsum = np.sum(self.x, axis=1)
         if any(xsum > 1):
             print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[xsum>1]), np.amax(self.z[xsum>1])))
@@ -472,8 +505,8 @@ class DiffusionModel(GenericModel):
         super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
-        #return self.t, [self.mesh.y]
-        return [self.x]
+        return [self.mesh.y]
+        #return [self.x]
     
     # def getdXdt(self, t, x):
     #     '''

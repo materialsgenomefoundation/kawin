@@ -56,7 +56,8 @@ def test_SinglePhaseFluxes_shape():
     singleModelBinary.setTemperature(1073)
     singleModelBinary.setup()
 
-    fBinary, _ = singleModelBinary.getFluxes()
+    #fBinary, _ = singleModelBinary.getFluxes()
+    fBinary = singleModelBinary.getdXdt(singleModelBinary.currentTime, [singleModelBinary.x])
 
     singleModelTernary.reset()
     singleModelTernary.setCompositionStep(0.2, 0.4, 0, 'CR')
@@ -65,12 +66,13 @@ def test_SinglePhaseFluxes_shape():
     singleModelTernary.setTemperature(1073)
     singleModelTernary.setup()
 
-    fTernary, _ = singleModelTernary.getFluxes()
+    #fTernary, _ = singleModelTernary.getFluxes()
+    fTernary = singleModelTernary.getdXdt(singleModelTernary.currentTime, [singleModelTernary.x])
 
     #assert(fBinary.shape == (1,N+1))
     #assert(fTernary.shape == (2,N+1))
-    assert(fBinary.shape == (N+1,1))
-    assert(fTernary.shape == (N+1,2))
+    assert(fBinary[0].shape == (N,1))
+    assert(fTernary[0].shape == (N,2))
 
 def test_HomogenizationMobility():
     '''
@@ -239,7 +241,7 @@ def test_single_phase_dxdt():
     '''
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
     #Since we defined L12, the disordered phase as DIS_ attached to the front
-    m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'])
+    m = SinglePhaseModel([-1e-3 - 1e-3/19, 1e-3 + 1e-3/19], 20, ['NI', 'CR', 'AL'], ['FCC_A1'])
 
     #Define Cr and Al composition, with step-wise change at z=0
     m.setCompositionLinear(0.077, 0.359, 'CR')
@@ -266,7 +268,7 @@ def test_single_phase_dxdt():
     # assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
     # assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
     # assert_allclose(dt, 28721.530474, rtol=1e-3)
-
+    print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
@@ -321,8 +323,12 @@ def test_homogenization_dxdt():
 
     This uses the parameters from 07_Homogenization_Model example with the compositions
     being linear rather than stepwise functions
+
+    Note: values are changed slightly here since the mesh constructs the bounds to be slightly smaller than before
+        Old implementation - ends of the mesh is at the node centers
+        New implementation - ends of the mesh is at the node edges (node width is 1/(N-1) times smaller)
     '''
-    m = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
+    m = HomogenizationModel([-5e-4 - 5e-4/19, 5e-4 + 5e-4/19], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
     m.setCompositionLinear(0.257, 0.423, 'CR')
     m.setCompositionLinear(0.065, 0.276, 'NI')
     m.setTemperature(1100+273.15)
@@ -336,27 +342,32 @@ def test_homogenization_dxdt():
     dxdt = m.getdXdt(m.currentTime, x)
     dt = m.getDt(dxdt)
     
-    #Index 5
-    ind5, vals5 = 5, np.array([-1.581478e-9, 1.212876e-9])
+    # #Index 5
+    # ind5, vals5 = 5, np.array([-1.581478e-9, 1.212876e-9])
+    ind5, vals5 = 5, np.array([-1.57314176e-09, 1.20479525e-09])
 
-    #Index 10
-    ind10, vals10 = 10, np.array([-9.722631e-10, 1.703447e-9])
+    # #Index 10
+    # ind10, vals10 = 10, np.array([-9.722631e-10, 1.703447e-9])
+    ind10, vals10 = 10, np.array([-9.67564615e-10, 1.69169914e-09])
 
-    #Index 15
-    ind15, vals15 = 15, np.array([-4.720562e-10, 8.600518e-10])
+    # #Index 15
+    # ind15, vals15 = 15, np.array([-4.720562e-10, 8.600518e-10])
+    ind15, vals15 = 15, np.array([-4.71003916e-10, 8.56063987e-10])
     
     # assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
     # assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
     # assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
     # assert_allclose(dt, 62271.050081, rtol=1e-3)
 
+    print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 62271.050081, rtol=1e-3)
+    assert_allclose(dt, 62657.353106631825, rtol=1e-3)
+    #assert_allclose(dt, 62271.050081, rtol=1e-3)
 
 
-    m = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
+    m = HomogenizationModel([-5e-4 - 5e-4/19, 5e-4 + 5e-4/19], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
     m.setCompositionLinear(0.257, 0.423, 'CR')
     m.setCompositionLinear(0.065, 0.276, 'NI')
     m.setTemperature(1100+273.15)
@@ -371,18 +382,23 @@ def test_homogenization_dxdt():
     dt = m.getDt(dxdt)
     
     #Index 5
-    ind5, vals5 = 5, np.array([-2.44361335e-08, -9.00013354e-09])
+    #ind5, vals5 = 5, np.array([-2.44361335e-08, -9.00013354e-09])
+    ind5, vals5 = 5, np.array([-2.43525541e-08, -8.87417477e-09])
 
     #Index 10
-    ind10, vals10 = 10, np.array([-1.4624311e-08, -6.0309694e-09])
+    #ind10, vals10 = 10, np.array([-1.4624311e-08, -6.0309694e-09])
+    ind10, vals10 = 10, np.array([-1.45612235e-08, -5.98293479e-09])
 
     #Index 15
-    ind15, vals15 = 15, np.array([-1.57258643e-08, -9.38965611e-09])
-    
+    #ind15, vals15 = 15, np.array([-1.57258643e-08, -9.38965611e-09])
+    ind15, vals15 = 15, np.array([-1.56212711e-08, -9.31302621e-09])
+
+    print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 3547.407084, rtol=1e-3)
+    #assert_allclose(dt, 3547.407084, rtol=1e-3)
+    assert_allclose(dt, 3566.0695395387966, rtol=1e-3)
 
 
 

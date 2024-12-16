@@ -25,6 +25,8 @@ Basic idea:
         Arithmetic mean - D_avg = 1/2*(D_i + D_j)
         Geometric mean  - D_avg = sqrt(D_i * D_j)
         Harmonic mean   - D_avg = (1/2 * (D_i^-1 + D_j^-1))^-1
+
+    TODO: I want an averaging function that can account for both log scale and negative numbers, which are two not so friendly terms
 '''
 import numpy as np
 
@@ -35,9 +37,15 @@ def arithmeticMean(D1, D2):
     return 1/2 * (D1 + D2)
 
 def geometricMean(D1, D2):
+    '''
+    Geometric mean - D_avg = sqrt(D_i * D_j)
+    '''
     return np.sqrt(D1*D2)
 
 def harmonicMean(D1, D2):
+    '''
+    Harmonic mean - D_avg = (1/2 * (D_i^-1 + D_j^-1))^-1
+    '''
     return 1 / (1/D1 + 1/D2)
 
 class BoundaryCondition:

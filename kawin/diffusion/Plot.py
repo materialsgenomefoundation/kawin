@@ -31,7 +31,7 @@ def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale 
         ax.plot(diffModel.z/zScale, x, *args, **kwargs)
     else:
         if plotReference:
-            refE = 1 - np.sum(diffModel.x, axis=0)
+            refE = 1 - np.sum(diffModel.x, axis=1)
             ax.plot(diffModel.z/zScale, refE, label=diffModel.allElements[0], *args, **kwargs)
         for e in range(len(diffModel.elements)):
             ax.plot(diffModel.z/zScale, diffModel.x[:,e], label=diffModel.elements[e], *args, **kwargs)

@@ -1,6 +1,6 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.diffusion.Mesh import geometricMean
+from kawin.diffusion.Mesh import geometricMean, arithmeticMean
 
 class SinglePhaseModel(DiffusionModel):
     def _getFluxes(self, t, x_curr):
@@ -108,9 +108,9 @@ class SinglePhaseModel(DiffusionModel):
 
         pairs = []
         if len(self.elements) == 1:
-            pairs.append((d, self.mesh.y, geometricMean))
+            pairs.append((d[:,np.newaxis], self.mesh.y, arithmeticMean))
         else:
             for i in range(len(self.elements)):
-                pairs.append((d[:,i,:], np.tile([self.mesh.y[:,i]], (len(self.elements), 1)).T, geometricMean))
+                pairs.append((d[:,:,i], np.tile([x[:,i]], (len(self.elements), 1)).T, arithmeticMean))
         dxdt = self.mesh.computedXdt(pairs)
         return [dxdt]

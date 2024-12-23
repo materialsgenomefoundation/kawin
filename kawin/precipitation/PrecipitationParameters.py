@@ -61,6 +61,15 @@ class PrecipitationData:
         for name in self.ATTRIBUTES:
             print(f'{name}: {getattr(self, name)[N]}')
 
+    def toDict(self):
+        data = {name: getattr(self, name) for name in self.ATTRIBUTES}
+        return data
+    
+    def fromDict(self, data):
+        for name in self.ATTRIBUTES:
+            setattr(self, name, data[name])
+        self.n = len(self.time) - 1
+
 class TemperatureParameters:
     def __init__(self, *args):
         self.setTemperatureParameters(*args)

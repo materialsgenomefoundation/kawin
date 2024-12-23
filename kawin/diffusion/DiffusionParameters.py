@@ -282,6 +282,12 @@ class BoundaryConditions:
             self.rightBCtype[element] = bcType
             self.rightBC[element] = value
 
+    def setLeftBoundaryCondition(self, bcType: int, value: float, element: str):
+        self.setBoundaryCondition(self.LEFT, bcType, value, element)
+
+    def setRightBoundaryCondition(self, bcType: int, value: float, element: str):
+        self.setBoundaryCondition(self.RIGHT, bcType, value, element)
+
     def _setupBoundary(self, element: str, boundaryType: dict[str, int], boundaryValue: dict[str, int]):
         if element not in boundaryType:
             boundaryType[element] = self.FLUX_BC

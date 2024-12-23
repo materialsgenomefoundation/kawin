@@ -5,7 +5,7 @@ from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
 import kawin.diffusion.Plot as diffPlot
-from kawin.diffusion.DiffusionParameters import TemperatureParameters, BoundaryConditions, CompositionProfile, HomogenizationParameters, DiffusionConstraints, HashTable
+from kawin.diffusion.DiffusionParameters import TemperatureParameters, BoundaryConditions, CompositionProfile, DiffusionConstraints, HashTable
 
 class DiffusionModel(GenericModel):
     #Boundary conditions
@@ -18,7 +18,6 @@ class DiffusionModel(GenericModel):
                  boundaryConditions = None,
                  compositionProfile = None,
                  constraints = None,
-                 hashTable = None,
                  record = True):
         '''
         Class for defining a 1-dimensional mesh
@@ -50,8 +49,9 @@ class DiffusionModel(GenericModel):
         self.boundaryConditions = boundaryConditions if boundaryConditions is not None else BoundaryConditions()
         self.compositionProfile = compositionProfile if compositionProfile is not None else CompositionProfile()
         self.constraints = constraints if constraints is not None else DiffusionConstraints()
-        self.hashTable = hashTable if hashTable is not None else HashTable()
         self.setThermodynamics(thermodynamics)
+
+        self.hashTable = HashTable()
 
         self.reset()
 
@@ -60,7 +60,6 @@ class DiffusionModel(GenericModel):
         else:
             self.disableRecording()
             self._recordedX = None
-            self._recordedZ = None
             self._recordedTime = None
 
     def reset(self):
@@ -97,34 +96,20 @@ class DiffusionModel(GenericModel):
     def setTemperatureFunction(self, func):
         self.temperatureParameters.setTemperatureFunction(func)
 
-    def _getVarDict(self):
-        '''
-        Returns mapping of { variable name : attribute name } for saving
-        The variable name will be the name in the .npz file
-        '''
-        saveDict = {
-            'elements': 'elements',
-            'phases': 'phases',
-            'z': 'z',
-            'zLim': 'zLim',
-            'N': 'N',
-            'finalTime': 't',
-            'finalX': 'x',
-            'recordX': '_recordedX',
-            'recordZ': '_recordedZ',
-            'recordTime': '_recordedTime',
+    def toDict(self):
+        data = {
+            'finalTime': self.t,
+            'finalX': self.x,
+            'recordX': self._recordedX,
+            'recordTime': self._recordedTime
         }
-        return saveDict
+        return data
 
-    def load(filename):
-        '''
-        Loads data from filename and returns a PrecipitateModel
-        '''
-        data = np.load(filename)
-        model = DiffusionModel(data['zLim'], data['N'], data['elements'], data['phases'])
-        model._loadData(data)
-        model.isSetup = True
-        return model
+    def fromDict(self, data):
+        self.t = data['finalTime']
+        self.x = data['finalX']
+        self._recordedX = data['recordX']
+        self._recordedTime = data['recordTime']
     
     def setHashSensitivity(self, s):
         self.hashTable.setHashSensitivity(s)
@@ -135,19 +120,12 @@ class DiffusionModel(GenericModel):
     def clearCache(self):
         self.hashTable.clearCache()
 
-    def enableRecording(self, dtype = np.float32):
+    def enableRecording(self):
         '''
         Enables recording of composition and phase
-        
-        Parameters
-        ----------
-        dtype : numpy data type (optional)
-            Data type to record particle size distribution in
-            Defaults to np.float32
         '''
         self._record = True
         self._recordedX = np.zeros((1, len(self.elements), self.N))
-        self._recordedZ = self.z
         self._recordedTime = np.zeros(1)
 
     def disableRecording(self):
@@ -161,7 +139,6 @@ class DiffusionModel(GenericModel):
         Removes recorded data
         '''
         self._recordedX = None
-        self._recordedZ = None
         self._recordedTime = None
 
     def record(self, time):
@@ -195,8 +172,6 @@ class DiffusionModel(GenericModel):
                 lx, ltime = self._recordedX[lind], self._recordedTime[lind]
 
                 self.x = (ux - lx) * (time - ltime) / (utime - ltime) + lx
-            
-            self.z = self._recordedZ
 
     def _getElementIndex(self, element = None):
         '''

@@ -1,5 +1,8 @@
-from numpy.testing import assert_allclose
+import os
+
 import numpy as np
+from numpy.testing import assert_allclose
+
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel
 from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction, computeMobility, HomogenizationParameters, CompositionProfile, BoundaryConditions, TemperatureParameters
 from kawin.thermo import GeneralThermodynamics
@@ -258,7 +261,7 @@ def test_diffusion_x_shape():
 
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
     #Since we defined L12, the disordered phase as DIS_ attached to the front
-    m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['DIS_FCC_A1'], 
+    m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'], 
                          compositionProfile=compositionProfile)
 
     m.setThermodynamics(NiCrAlTherm)
@@ -327,6 +330,9 @@ def test_homogenization_dxdt():
     assert_allclose(dt, 65415.110254, rtol=1e-3)
 
 def test_diffusionBackCompatibility():
+    '''
+    Tests that old API works for diffusion models
+    '''
     compositionProfile = CompositionProfile()
     compositionProfile.addLinearCompositionStep('CR', 0.257, 0.423)
     compositionProfile.addLinearCompositionStep('NI', 0.065, 0.276)
@@ -365,5 +371,34 @@ def test_diffusionBackCompatibility():
 
     assert m.homogenizationParameters.homogenizationFunction == m2.homogenizationParameters.homogenizationFunction
 
+def test_diffusionSavingLoading():
+    '''
+    Tests saving/loading behavior of diffusion model
+    '''
+    compositionProfile = CompositionProfile()
+    compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
+    compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
+    temperature = TemperatureParameters(1200+273.15)
+    print([p for p in NiCrAlTherm.models])
+
+    #Define mesh spanning between -1mm to 1mm with 50 volume elements
+    #Since we defined L12, the disordered phase as DIS_ attached to the front
+    m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'], 
+                         thermodynamics=NiCrAlTherm,
+                         compositionProfile=compositionProfile,
+                         temperatureParameters=temperature)
+
+    m.solve(10*3600, verbose=True, vIt=1)
+    m.save('kawin/tests/diff.npz')
+
+    new_m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'], 
+                         thermodynamics=NiCrAlTherm,
+                         compositionProfile=compositionProfile,
+                         temperatureParameters=temperature)
+    new_m.load('kawin/tests/diff.npz')
+    os.remove('kawin/tests/diff.npz')
+
+    assert_allclose(m.x, new_m.x)
+    assert_allclose(m.t, new_m.t)
 
 

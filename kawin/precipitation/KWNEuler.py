@@ -21,20 +21,6 @@ class PrecipitateModel (PrecipitateBase):
         Note: order of elements must correspond to order of elements set in Thermodynamics module
         If binary system, then defualt is ['solute']
     '''
-    def __init__(self, phases=None, elements=None,
-                 thermodynamics = None,
-                 matrixParameters = None,
-                 temperatureParameters = None,
-                 precipitateParameters = None):
-        super().__init__(phases=phases, elements=elements, 
-                         thermodynamics=thermodynamics,
-                         matrixParameters=matrixParameters, 
-                         temperatureParameters=temperatureParameters, 
-                         precipitateParameters=precipitateParameters)
-        
-        #self._Beta = self._BetaBinary1 if self.numberOfElements == 1 else self._BetaMulti
-        self.eqAspectRatio = [None for p in range(len(self.phases))]
-
     def _resetArrays(self):
         '''
         Resets and initializes arrays for all variables
@@ -43,6 +29,7 @@ class PrecipitateModel (PrecipitateBase):
         '''
         super()._resetArrays()
         self.PBM = [PopulationBalanceModel() for p in self.phases]
+        self.eqAspectRatio = [None for p in range(len(self.phases))]
 
         self.RdrivingForceIndex = np.zeros(len(self.phases), dtype=np.int32)
         self.dissolutionIndex = np.zeros(len(self.phases), dtype=np.int32)
@@ -57,21 +44,18 @@ class PrecipitateModel (PrecipitateBase):
             self.PBM[i].reset()
             self.PBM[i].resetRecordedData()
 
-    def _addExtraSaveVariables(self, saveDict):
+    def toDict(self):
+        data = super().toDict()
         for p in range(len(self.phases)):
-            saveDict['PBM_data_' + self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
-            saveDict['PBM_PSD_' + self.phases[p]] = self.PBM[p].PSD
-            saveDict['PBM_bounds_' + self.phases[p]] = self.PBM[p].PSDbounds
-            saveDict['PBM_size_' + self.phases[p]] = self.PBM[p].PSDsize
-            saveDict['eqAspectRatio_' + self.phases[p]] = self.eqAspectRatio[p]
-
-    def load(filename):
-        data = np.load(filename)
-        model = PrecipitateModel(data['phases'], data['elements'])
-        model._loadData(data)
-        return model
-
-    def _loadExtraVariables(self, data):
+            data['PBM_data_' + self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
+            data['PBM_PSD_' + self.phases[p]] = self.PBM[p].PSD
+            data['PBM_bounds_' + self.phases[p]] = self.PBM[p].PSDbounds
+            data['PBM_size_' + self.phases[p]] = self.PBM[p].PSDsize
+            data['eqAspectRatio_' + self.phases[p]] = self.eqAspectRatio[p]
+        return data
+    
+    def fromDict(self, data):
+        super().fromDict(data)
         for p in range(len(self.phases)):
             PBMdata = data['PBM_data_' + self.phases[p]]
             psd = data['PBM_PSD_' + self.phases[p]]

@@ -126,22 +126,12 @@ class PrecipitateBase(GenericModel):
         #Temporary storage variables
         self._precBetaTemp = [None for _ in range(len(self.phases))]    #Composition of nucleate (found from driving force)
 
-    def _getVarDict(self):
-        '''
-        Returns mapping of { variable name : attribute name } for saving
-        The variable name will be the name in the .npz file
-        '''
-        saveDict = {name: name for name in self.pData.ATTRIBUTES}
-        return saveDict
+    def toDict(self):
+        data = self.pData.toDict()
+        return data
     
-    def load(filename):
-        '''
-        Loads data from filename and returns a PrecipitateModel
-        '''
-        data = np.load(filename)
-        model = PrecipitateBase(data['phases'], data['elements'])
-        model._loadData(data)
-        return model
+    def fromDict(self, data):
+        self.pData.fromDict(data)
     
     def _appendArrays(self, newVals):
         '''

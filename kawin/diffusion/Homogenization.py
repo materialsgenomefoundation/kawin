@@ -14,7 +14,6 @@ class HomogenizationModel(DiffusionModel):
                  compositionProfile = None,
                  constraints = None,
                  homogenizationParameters = None,
-                 hashTable = None,
                  record = True):
         super().__init__(zlim=zlim, N=N, elements=elements, phases=phases, 
                          thermodynamics=thermodynamics,
@@ -22,7 +21,6 @@ class HomogenizationModel(DiffusionModel):
                          boundaryConditions=boundaryConditions, 
                          compositionProfile=compositionProfile, 
                          constraints=constraints, 
-                         hashTable=hashTable, 
                          record=record)
         self.homogenizationParameters = homogenizationParameters if homogenizationParameters is not None else HomogenizationParameters()
 

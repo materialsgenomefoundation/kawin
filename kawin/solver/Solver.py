@@ -51,7 +51,6 @@ class DESolver:
         Sets functions before solving
 
         If any of these are not defined, then the corresponding function will be the default defined here
-            Except for getDt (which returns defaultDt), the other functions will do nothing
         '''
         self.preProcess = self.preProcess if preProcess is None else preProcess
         self.postProcess = self.postProcess if postProcess is None else postProcess

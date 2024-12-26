@@ -265,7 +265,7 @@ class NucleationBarrierParameters:
 
     def _validateInputs(self):
         if self.gamma is None or self.gamma == 0:
-            raise ValueError(f"Interfacial energy (gamma) is not set. NucleationBarrierParametesr.gamma = {self.gamma}")
+            raise ValueError(f"Interfacial energy (gamma) is not set. NucleationBarrierParameters.gamma = {self.gamma}")
         if self.gbEnergy is None:
             raise ValueError(f"Grain boundary energy (gbEnergy) is not set. NucleationBarrierParameters.gbEnergy = {self.gbEnergy}")
     
@@ -350,14 +350,50 @@ class NucleationBarrierParameters:
         return Rcrit**2 * ((self.areaFactor * self.gamma - self.gbRemoval * self.gbEnergy) - self.volumeFactor * dG * Rcrit)
     
 class NucleationSiteParameters:
-    def __init__(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
-        self.setNucleationDensity(grainSize, aspectRatio, dislocationDensity, bulkN0)
+    def __init__(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12):
+        self._grainSize = grainSize
+        self._grainAspectRatio = aspectRatio
+        self._dislocationDensity = dislocationDensity
 
-        self._parametersSet = False
-        self.GBareaN0 = None
-        self.GBedgeN0 = None
-        self.GBcornerN0 = None
-        self.dislocationN0 = None
+        self.VmAlpha = None
+
+        self._bulkN0 = None
+        self._compositionDependentBulkN0 = True
+        self._GBareaN0 = None
+        self._GBedgeN0 = None
+        self._GBcornerN0 = None
+        self._dislocationN0 = None
+
+    @property
+    def grainSize(self):
+        return self._grainSize
+    
+    @grainSize.setter
+    def grainSize(self, value):
+        self._grainSize = value
+        self._GBareaN0 = None
+        self._GBedgeN0 = None
+        self._GBcornerN0 = None
+
+    @property
+    def grainAspectRatio(self):
+        return self._grainAspectRatio
+    
+    @grainAspectRatio.setter
+    def grainAspectRatio(self, value):
+        self._grainAspectRatio = value
+        self._GBareaN0 = None
+        self._GBedgeN0 = None
+        self._GBcornerN0 = None
+
+    @property
+    def dislocationDensity(self):
+        return self._dislocationDensity
+    
+    @dislocationDensity.setter
+    def dislocationDensity(self, value):
+        self._dislocationDensity = value
+        self._dislocationN0 = None
 
     def setNucleationDensity(self, grainSize = 100, aspectRatio = 1, dislocationDensity = 5e12, bulkN0 = None):
         '''
@@ -379,16 +415,64 @@ class NucleationSiteParameters:
         self.grainSize = grainSize * 1e-6
         self.grainAspectRatio = aspectRatio
         self.dislocationDensity = dislocationDensity
-        self.bulkN0 = bulkN0
-        self._parametersSet = True
+        if bulkN0 is not None:
+            self.bulkN0 = bulkN0
 
-    def bulkSites(self, x0, VmAlpha):
+    def setGrainSize(self, grainSize = 100, aspectRatio = 1):
+        self.grainSize = grainSize * 1e-6
+        self.grainAspectRatio = aspectRatio
+
+    def setDislocationDensity(self, dislocationDensity):
+        self.dislocationDensity = dislocationDensity
+
+    def setBulkDensity(self, bulkN0):
+        self.bulkN0 = bulkN0
+
+    def setBulkDensityFromComposition(self, x0):
         #Set bulk nucleation site to the number of solutes per unit volume
         #   This is the represent that any solute atom can be a nucleation site
         #NOTE: some texts will state the bulk nucleation sites to just be the number
         #       of lattice sites per unit volume. The justification for this would be 
         #       the solutes can diffuse around to any lattice site and nucleate there
-        return np.amin(x0) * (AVOGADROS_NUMBER / VmAlpha)
+        self._validateVolume('bulkN0 from composition')
+        self.bulkN0 = np.amin(x0) * (AVOGADROS_NUMBER / self.VmAlpha)
+        self._compositionDependentBulkN0 = True
+
+    @property
+    def bulkN0(self):
+        return self._bulkN0
+    
+    @bulkN0.setter
+    def bulkN0(self, value):
+        self._bulkN0 = value
+        self._compositionDependentBulkN0 = False
+
+    @property
+    def dislocationN0(self):
+        if self._dislocationN0 is None:
+            self._validateVolume('dislocationN0')
+            self._dislocationN0 = self.dislocationSites(self.VmAlpha)
+        return self._dislocationN0
+    
+    @property
+    def GBareaN0(self):
+        if self._GBareaN0 is None:
+            self._validateVolume('GBareaN0')
+            self._GBareaN0 = self.grainBoundarySites(self.grainSize, self.grainAspectRatio, self.VmAlpha)
+        return self._GBareaN0
+    
+    @property
+    def GBedgeN0(self):
+        if self._GBedgeN0 is None:
+            self._validateVolume('GBedgeN0')
+            self._GBedgeN0 = self.grainEdgeSites(self.grainSize, self.grainAspectRatio, self.VmAlpha)
+        return self._GBedgeN0
+    
+    @property
+    def GBcornerN0(self):
+        if self._GBcornerN0 is None:
+            self._GBcornerN0 = self.grainCornerSites(self.grainSize, self.grainAspectRatio, self.VmAlpha)
+        return self._GBcornerN0
 
     def dislocationSites(self, VmAlpha):
         return self.dislocationDensity * (AVOGADROS_NUMBER / VmAlpha)**(1/3)
@@ -420,18 +504,8 @@ class NucleationSiteParameters:
     def grainCornerSites(self, grainSize, grainAspectRatio, VmAlpha):
         rho = self.grainCornerDensity(grainSize, grainAspectRatio)
         return rho
-
-    def setupNucleationDensity(self, x0, VmAlpha):
-        if self.bulkN0 is None:
-            self.bulkN0 = self.bulkSites(x0, VmAlpha)
-        self.dislocationN0 = self.dislocationSites(VmAlpha)
-        
-        if self.grainSize != np.inf:
-            self.GBareaN0 = self.grainBoundarySites(self.grainSize, self.grainAspectRatio, VmAlpha)
-            self.GBedgeN0 = self.grainEdgeSites(self.grainSize, self.grainAspectRatio, VmAlpha)
-            self.GBcornerN0 = self.grainCornerSites(self.grainSize, self.grainAspectRatio, VmAlpha)
-        else:
-            self.GBareaN0 = 0
-            self.GBedgeN0 = 0
-            self.GBcornerN0 = 0
+    
+    def _validateVolume(self, term):
+        if self.VmAlpha is None:
+            raise ValueError(f'NucleationSiteParameters.VMalpha must be set to compute {term}.')
 

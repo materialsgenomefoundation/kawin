@@ -109,14 +109,33 @@ class TemperatureParameters:
 class MatrixParameters:
     def __init__(self, solutes):
         self.solutes = solutes
-        self.initComposition = None
+        self._initComposition = None
 
         self.volume = VolumeParameter()
+        self.volume._updateCallbacks.append(self.update)
         self.nucleationSites = NucleationSiteParameters()
         self.GBenergy = 0.3
         
         self.effectiveDiffusion = EffectiveDiffusionFunctions()
         self.theta = 2
+
+    @property
+    def initComposition(self):
+        return self._initComposition
+    
+    @initComposition.setter
+    def initComposition(self, value):
+        self._initComposition = value
+        self.update()
+
+    def update(self):
+        # update nucleation site volume and bulkN0
+        #   only do this once both volume and composition is defined
+        # if bulkN0 is set before composition or volume, then we leave to the user defined bulkN0
+        self.nucleationSites.VmAlpha = self.volume.Vm
+        if self._initComposition is not None and self.nucleationSites.VmAlpha is not None:
+            if self.nucleationSites._compositionDependentBulkN0:
+                self.nucleationSites.setBulkDensityFromComposition(self._initComposition)
 
 class PrecipitateParameters:
     '''
@@ -162,7 +181,7 @@ class PrecipitateParameters:
         self.nucleation.gamma = self.gamma
         
         if self.nucleation.description.isGrainBoundaryNucleation and not isinstance(self.shapeFactor.description, SphereDescription):
-            raise ValueError('Nucleation is set to grain boundary nucleaiton and shape factor not set to spherical. \
+            raise ValueError('Nucleation is set to grain boundary nucleation and shape factor not set to spherical. \
                              If using GB nucleation, shape factor should be spherical. If shape factor is spherical, nucleation should be bulk or dislocations')
         
         # If strain energy is not constant, then switch to description that matches shapeFactor

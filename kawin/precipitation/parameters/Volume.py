@@ -15,6 +15,7 @@ class VolumeParameter:
             self.atomsPerCell = None
         else:
             self.setVolume(value, volumeType, atomsPerCell)
+        self._updateCallbacks = []
 
     def setVolume(self, value, volumeType, atomsPerCell):
         '''
@@ -45,3 +46,6 @@ class VolumeParameter:
         else:
             valid_values = "['VM', 'VA', 'a', VolumeParameter.MOLAR_VOLUME, VolumeParameter.ATOMIC_VOLUME, VolumeParameter.LATTICE_PARAMETER]"
             raise ValueError(f'Unknown volume type {volumeType}. Values must be: {valid_values}')
+        
+        for callback in self._updateCallbacks:
+            callback()

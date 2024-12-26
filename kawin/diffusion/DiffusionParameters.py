@@ -683,21 +683,3 @@ class DiffusionConstraints:
         # There is not an analagous method for von Neumann stability as we have for the single
         # phase diffusion model, so this is a naive approach to numerical stability
         self.maxCompositionChange = 0.002
-
-class DiffusionParameters:
-    def __init__(self, elements, 
-                 temperatureParameters = None, 
-                 boundaryCondition = None,
-                 compositionProfile = None,
-                 hashTable = None,
-                 homogenizationParameters = None,
-                 minComposition = 1e-8,
-                 maxCompositionChange = 0.002):
-        self.temperature = TemperatureParameters() if temperatureParameters is None else temperatureParameters
-        self.boundaryConditions = BoundaryConditions(elements) if boundaryCondition is None else boundaryCondition
-        self.compositionProfile = CompositionProfile(elements) if compositionProfile is None else compositionProfile
-        self.hashTable = HashTable() if hashTable is None else hashTable
-        self.homogenizationParameters = HomogenizationParameters() if homogenizationParameters is None else homogenizationParameters
-
-        self.minComposition = minComposition
-        self.maxCompositionChange = maxCompositionChange

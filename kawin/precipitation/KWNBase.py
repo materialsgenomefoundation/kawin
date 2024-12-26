@@ -484,12 +484,6 @@ class PrecipitateBase(GenericModel):
         if self._isSetup:
             return
         
-        if not self.matrixParameters.nucleationSites._parametersSet:
-            #Set nucleation density assuming grain size of 100 um and dislocation density of 5e12 m/m3 (Thermocalc default)
-            print('Nucleation density not set.\nSetting nucleation density assuming grain size of {:.0f} um and dislocation density of {:.0e} #/m2'.format(100, 5e12))
-            self.matrixParameters.nucleationSites.setNucleationDensity(100, 1, 5e12)
-            self.matrixParameters.nucleationSites._parametersSet = True
-        self.matrixParameters.nucleationSites.setupNucleationDensity(self.matrixParameters.initComposition, self.matrixParameters.volume.Vm)
         for p in range(len(self.phases)):
             self.precipitateParameters[p].nucleation.gbEnergy = self.matrixParameters.GBenergy
             self.precipitateParameters[p].validate()

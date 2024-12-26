@@ -305,6 +305,13 @@ class ShapeFactor:
         General shape setting function
 
         Defaults to spherical
+
+        Parameters
+        ----------
+        precipitateShape: str
+            'sphere', 'needle', 'plate' or 'cubic'
+        ar: float or callable
+            Aspect ratio. If callable, then it must be a function of equivalent spherical radius
         '''
         descriptionDict = {
             SphereDescription.name.upper(): SphereDescription(),

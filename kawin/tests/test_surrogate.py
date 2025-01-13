@@ -1,7 +1,9 @@
-from numpy.testing import assert_allclose
-import numpy as np
 import os
+
+import numpy as np
+from numpy.testing import assert_allclose
 import pytest
+
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics, BinarySurrogate, MulticomponentSurrogate
 from kawin.tests.datasets import *
 

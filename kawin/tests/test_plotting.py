@@ -1,7 +1,7 @@
+import numpy as np
+import matplotlib.pyplot as plt
 from kawin.precipitation import PrecipitateModel, MatrixParameters, PrecipitateParameters
 from kawin.diffusion.Diffusion import DiffusionModel, CompositionProfile
-import matplotlib.pyplot as plt
-import numpy as np
 
 def test_precipitate_plotting():
     binary_matrix = MatrixParameters(['A'])

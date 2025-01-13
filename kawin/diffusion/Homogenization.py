@@ -2,9 +2,8 @@ import numpy as np
 
 from kawin.Constants import GAS_CONSTANT
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.thermo.Mobility import mobility_from_composition_set, interstitials, x_to_u_frac
-from kawin.diffusion.DiffusionParameters import HomogenizationParameters, computeHomogenizationFunction
-import copy
+from kawin.thermo.Mobility import interstitials, x_to_u_frac
+from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 
 class HomogenizationModel(DiffusionModel): 
     def __init__(self, zlim, N, elements, phases, 
@@ -25,15 +24,53 @@ class HomogenizationModel(DiffusionModel):
         self.homogenizationParameters = homogenizationParameters if homogenizationParameters is not None else HomogenizationParameters()
 
     def setMobilityFunction(self, function):
+        '''
+        Sets averaging function to use for mobility
+
+        Default mobility value should be that a phase of unknown mobility will be ignored for average mobility calcs
+
+        Parameters
+        ----------
+        function : str
+            Options - 'upper wiener', 'lower wiener', 'upper hashin', 'lower hashin', 'lab'
+        '''
         self.homogenizationParameters.setHomogenizationFunction(function)
 
     def setLabyrinthFactor(self, n):
+        '''
+        Labyrinth factor
+
+        Parameters
+        ----------
+        n : int
+            Either 1 or 2
+            Note: n = 1 will the same as the weiner upper bounds
+        '''
         self.homogenizationParameters.setLabyrinthFactor(n)
 
     def setMobilityPostProcessFunction(self, function, functionArgs = None):
+        '''
+        Sets post process function by str or int
+
+        Parameters
+        ----------
+        functionName : Union[str, int]
+            Key for post process function ('none', 'predefined', 'majority', 'exclude')
+        functionArgs : Any
+            Additional function arguments
+            If functionName = 'predefined', functionArgs is str corresponding to predefined phase
+            If functionName = 'exclude', functionArgs is list[str] corresponding to phases to set mobility to 0
+        '''
         self.homogenizationParameters.setPostProcessFunction(function, functionArgs)
 
     def setIdealEps(self, eps):
+        '''
+        Factor for the ideal entropy contribution
+
+        Parameters
+        ----------
+        eps : float
+        '''
         self.homogenizationParameters.eps = eps
     
     def _getFluxes(self, t, x_curr):

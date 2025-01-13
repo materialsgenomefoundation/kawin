@@ -1,11 +1,11 @@
-from kawin.precipitation import PrecipitateModel
-from kawin.precipitation.PrecipitationParameters import VolumeParameter
+import numpy as np
+from numpy.testing import assert_allclose
+
+from kawin.precipitation import PrecipitateModel, VolumeParameter
 from kawin.diffusion import SinglePhaseModel
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.GenericModel import GenericModel, Coupler
 from kawin.solver import SolverType
-import numpy as np
-from numpy.testing import assert_allclose
 from kawin.tests.datasets import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')

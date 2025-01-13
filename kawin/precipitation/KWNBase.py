@@ -127,10 +127,16 @@ class PrecipitateBase(GenericModel):
         self._precBetaTemp = [None for _ in range(len(self.phases))]    #Composition of nucleate (found from driving force)
 
     def toDict(self):
+        '''
+        Converts precipitation data to dictionary
+        '''
         data = self.pData.toDict()
         return data
     
     def fromDict(self, data):
+        '''
+        Converts dictionary of data to precipitation data
+        '''
         self.pData.fromDict(data)
     
     def _appendArrays(self, newVals):

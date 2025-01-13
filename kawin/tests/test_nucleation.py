@@ -2,8 +2,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 import pytest
 
-from kawin.precipitation import PrecipitateParameters, MatrixParameters
-from kawin.precipitation.parameters.Nucleation import NucleationBarrierParameters, NucleationSiteParameters
+from kawin.precipitation import PrecipitateParameters, MatrixParameters, NucleationBarrierParameters, NucleationSiteParameters
 
 def test_nucleation_barrier_updating():
     '''

@@ -4,7 +4,8 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel
-from kawin.diffusion.DiffusionParameters import computeHomogenizationFunction, computeMobility, HomogenizationParameters, CompositionProfile, BoundaryConditions, TemperatureParameters
+from kawin.diffusion.DiffusionParameters import computeMobility, CompositionProfile, BoundaryConditions, TemperatureParameters
+from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 from kawin.thermo import GeneralThermodynamics
 from kawin.tests.datasets import *
 

@@ -5,7 +5,7 @@ from numpy.testing import assert_allclose
 
 from kawin.tests.datasets import ALZR_TDB, NICRAL_TDB, ALMGSI_DB
 from kawin.precipitation import PrecipitateModel, StrainEnergy
-from kawin.precipitation.PrecipitationParameters import VolumeParameter, PrecipitateParameters, MatrixParameters, TemperatureParameters
+from kawin.precipitation import VolumeParameter, PrecipitateParameters, MatrixParameters, TemperatureParameters
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')

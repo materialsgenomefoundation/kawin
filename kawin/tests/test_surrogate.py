@@ -1,6 +1,9 @@
-from numpy.testing import assert_allclose
-import numpy as np
 import os
+
+import numpy as np
+from numpy.testing import assert_allclose
+import pytest
+
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics, BinarySurrogate, MulticomponentSurrogate
 from kawin.tests.datasets import *
 
@@ -28,11 +31,12 @@ def test_Surr_binary_DG_output():
     surr = BinarySurrogate(AlZrTherm)
     T = 673.15
     xtrain = np.logspace(-5, -2, 5)
-    surr.trainDrivingForce(xtrain, T, scale='log')
+    #surr.trainDrivingForce(xtrain, T, scale='log')
+    surr.trainDrivingForce(xtrain, T, logX=True)
 
-    dg, xP = surr.getDrivingForce(xtrain[3], 673.15, returnComp=True)
-    dgT, xPT = AlZrTherm.getDrivingForce(xtrain[3], 673.15, returnComp=True, training = True)
-    dgarray, xParray = surr.getDrivingForce([0.004, 0.005], [673.15, 683.15], returnComp=True)
+    dg, xP = surr.getDrivingForce(xtrain[3], 673.15)
+    dgT, xPT = AlZrTherm.getDrivingForce(xtrain[3], 673.15, removeCache = True)
+    dgarray, xParray = surr.getDrivingForce([0.004, 0.005], [673.15, 683.15])
 
     assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
     assert np.isscalar(xP) or (type(xP) == np.ndarray and xP.ndim == 0)
@@ -88,11 +92,11 @@ def test_Surr_binary_Diff_output():
         (scalar, scalar) -> scalar
         (array, array) -> array
     '''
-    surr = BinarySurrogate(AlZrTherm)
+    surr = BinarySurrogate(AlZrTherm, kernelKwargs={'kernel': 'linear'})
     T = 673.15
     xtrain = np.logspace(-5, -2, 5)
 
-    surr.trainInterdiffusivity(xtrain, [T, T + 100])
+    surr.trainDiffusivity(xtrain, [T, T + 100])
 
     dnkj = surr.getInterdiffusivity(xtrain[3], 673.15)
     dnkjT = AlZrTherm.getInterdiffusivity(xtrain[3], 673.15)
@@ -110,26 +114,32 @@ def test_Surr_binary_save():
     surr = BinarySurrogate(AlZrTherm)
     T = 673.15
     xtrain = np.logspace(-5, -2, 5)
-    surr.trainDrivingForce(xtrain, T, scale='log')
+    #surr.trainDrivingForce(xtrain, T, scale='log')
+    surr.trainDrivingForce(xtrain, T, logX=True)
 
     gExtra = np.linspace(100, 1000, 5)
     surr.trainInterfacialComposition(T, gExtra)
 
-    surr.trainInterdiffusivity(xtrain, [T, T + 100])
+    surr.trainDiffusivity(xtrain, [T, T + 100])
 
-    a, b = surr.getDrivingForce(0.004, T, True)
+    a, b = surr.getDrivingForce(0.004, T)
     c, d = surr.getInterfacialComposition(T, 500)
     e = surr.getInterdiffusivity(0.1, T + 50)
 
-    surr.save('kawin/tests/alzr')
+    surr.toJson('kawin/tests/alzr.json')
 
-    surr2 = BinarySurrogate.load('kawin/tests/alzr')
-    a2, b2 = surr2.getDrivingForce(0.004, T, True)
+    #surr2 = BinarySurrogate.load('kawin/tests/alzr')
+    surr2 = BinarySurrogate(AlZrTherm)
+    surr2.fromJson('kawin/tests/alzr.json')
+    a2, b2 = surr2.getDrivingForce(0.004, T)
     c2, d2 = surr2.getInterfacialComposition(T, 500)
     e2 = surr2.getInterdiffusivity(0.1, T + 50)
 
-    os.remove('kawin/tests/alzr')
+    os.remove('kawin/tests/alzr.json')
 
+    # assert that models will generated from json data
+    assert 'FCC_A1' in surr2.diffusivityModels
+    assert 'AL3ZR' in surr2.drivingForceModels
     assert_allclose([a, b, c, d, e], [a2, b2, c2, d2, e2], rtol=1e-3)
 
 def test_Surr_binary_save_missing():
@@ -139,17 +149,20 @@ def test_Surr_binary_save_missing():
     surr = BinarySurrogate(AlZrTherm)
     T = 673.15
     xtrain = np.logspace(-5, -2, 5)
-    surr.trainDrivingForce(xtrain, T, scale='log')
+    surr.trainDrivingForce(xtrain, T, logX=True)
 
     a, b = surr.getDrivingForce(0.004, T)
 
-    surr.save('kawin/tests/alzr')
+    surr.toJson('kawin/tests/alzr.json')
 
-    surr2 = BinarySurrogate.load('kawin/tests/alzr')
+    #surr2 = BinarySurrogate.load('kawin/tests/alzr')
+    surr2 = BinarySurrogate(AlZrTherm)
+    surr2.fromJson('kawin/tests/alzr.json')
     a2, b2 = surr2.getDrivingForce(0.004, T)
 
-    os.remove('kawin/tests/alzr')
+    os.remove('kawin/tests/alzr.json')
 
+    assert 'AL3ZR' in surr2.drivingForceModels
     assert_allclose(a, a2, atol=0, rtol=1e-3)
 
 def test_Surr_ternary_DG_output():
@@ -167,9 +180,9 @@ def test_Surr_ternary_DG_output():
     x = [[0.06, 0.08], [0.06, 0.1], [0.06, 0.12], [0.08, 0.08], [0.08, 0.1], [0.08, 0.12], [0.1, 0.08], [0.1, 0.1], [0.1, 0.12]]
     surr.trainDrivingForce(x, T)
 
-    dg, xP = surr.getDrivingForce(x[5], 1073.15, returnComp=True)
-    dgT, xPT = NiCrAlTherm.getDrivingForce(x[5], 1073.15, returnComp=True, training = True)
-    dgarray, xParray = surr.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15], returnComp=True)
+    dg, xP = surr.getDrivingForce(x[5], 1073.15)
+    dgT, xPT = NiCrAlTherm.getDrivingForce(x[5], 1073.15, removeCache = True)
+    dgarray, xParray = surr.getDrivingForce([[0.08, 0.1], [0.085, 0.1], [0.09, 0.1]], [1073.15, 1078.15, 1083.15])
 
     assert np.isscalar(dg) or (type(dg) == np.ndarray and dg.ndim == 0)
     assert xP.ndim == 1 and len(xP) == 2
@@ -196,7 +209,7 @@ def test_Surr_ternary_IC_output():
     surr.trainCurvature(x, T)
 
     g, ca, cb, caEQ, cbEQ = surr.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000)
-    gT, caT, cbT, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000, training = True)
+    gT, caT, cbT, _, _ = NiCrAlTherm.getGrowthAndInterfacialComposition(x[5], 1073.15, 900, 1e-9, 1000, removeCache = True)
     garray, caarray, cbarray, caEQarray, cbEQarray = surr.getGrowthAndInterfacialComposition([0.08, 0.1], 1073.15, 900, [0.5e-9, 1e-9, 2e-9], [2000, 1000, 500])
 
     assert np.isscalar(g) or (type(g) == np.ndarray and g.ndim == 0)
@@ -226,19 +239,23 @@ def test_Surr_ternary_save():
 
     surr.trainCurvature(x, T)
 
-    a, b = surr.getDrivingForce([0.08, 0.1], T[0]+25, True)
+    a, b = surr.getDrivingForce([0.08, 0.1], T[0]+25)
     g, ca, cb, _, _ = surr.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
     beta = surr.impingementFactor([0.08, 0.1], T[0]+25)
 
-    surr.save('kawin/tests/nicral')
+    surr.toJson('kawin/tests/nicral.json')
 
-    surr2 = MulticomponentSurrogate.load('kawin/tests/nicral')
-    a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25, True)
+    #surr2 = MulticomponentSurrogate.load('kawin/tests/nicral')
+    surr2 = MulticomponentSurrogate(NiCrAlTherm)
+    surr2.fromJson('kawin/tests/nicral.json')
+    a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25)
     g2, ca2, cb2, _, _ = surr2.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
     beta2 = surr2.impingementFactor([0.08, 0.1], T[0]+25)
 
-    os.remove('kawin/tests/nicral')
+    os.remove('kawin/tests/nicral.json')
 
+    assert 'FCC_L12' in surr2.drivingForceModels
+    assert 'FCC_L12' in surr2.curvatureModels
     assert_allclose([a, b[0], b[1], g, ca[0], ca[1], cb[0], cb[1], beta], [a2, b2[0], b2[1], g2, ca2[0], ca2[1], cb2[0], cb2[1], beta2], atol=0, rtol=1e-3)
 
 def test_Surr_ternary_save_missing():
@@ -250,11 +267,14 @@ def test_Surr_ternary_save_missing():
     x = [[0.06, 0.08], [0.06, 0.1], [0.06, 0.12], [0.08, 0.08], [0.08, 0.1], [0.08, 0.12], [0.1, 0.08], [0.1, 0.1], [0.1, 0.12]]
     surr.trainDrivingForce(x, T)
 
-    a, b = surr.getDrivingForce([0.08, 0.1], T[0]+25, True)
-    surr.save('kawin/tests/nicral')
+    a, b = surr.getDrivingForce([0.08, 0.1], T[0]+25)
+    surr.toJson('kawin/tests/nicral.json')
 
-    surr2 = MulticomponentSurrogate.load('kawin/tests/nicral')
-    a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25, True)
-    os.remove('kawin/tests/nicral')
+    #surr2 = MulticomponentSurrogate.load('kawin/tests/nicral')
+    surr2 = MulticomponentSurrogate(NiCrAlTherm)
+    surr2.fromJson('kawin/tests/nicral.json')
+    a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25)
+    os.remove('kawin/tests/nicral.json')
 
+    assert 'FCC_L12' in surr2.drivingForceModels
     assert_allclose([a, b[0], b[1]], [a2, b2[0], b2[1]], atol=0, rtol=1e-3)

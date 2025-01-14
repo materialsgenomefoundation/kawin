@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def getTimeAxis(precModel, timeUnits='s', bounds=None):
+def getTimeAxis(time, timeUnits='s', bounds=None):
         '''
         Returns scaling factor, label and x-limits depending on units of time
 
@@ -22,7 +22,7 @@ def getTimeAxis(precModel, timeUnits='s', bounds=None):
             timeLabel = 'Time (hrs)'
 
         if bounds is None:
-            bounds = [timeScale*1e-5*precModel.time[-1], timeScale * precModel.time[-1]]
+            bounds = [timeScale*1e-5*time[-1], timeScale * time[-1]]
 
         return timeScale, timeLabel, bounds
 
@@ -58,7 +58,7 @@ def plotBase(precModel, axes, variable, bounds = None, timeUnits = 's', radius='
         Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
     *args, **kwargs - extra arguments for plotting
     '''
-    timeScale, timeLabel, bounds = getTimeAxis(precModel, timeUnits, bounds)
+    timeScale, timeLabel, bounds = getTimeAxis(precModel.pData.time, timeUnits, bounds)
 
     axes.set_xlabel(timeLabel)
     axes.set_xlim(bounds)
@@ -147,15 +147,26 @@ def plotEuler(precModel, axes, variable, bounds = None, timeUnits = 's', radius=
 
     scale = []
     for p in range(len(precModel.phases)):
-        if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+        # if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+        #     if radius == 'spherical':
+        #         scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+        #     else:
+        #         scale.append(1/precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+        #         if radius == 'long':
+        #             scale.append(precModel.shapeFactors[p].aspectRatio(precModel.PBM[p].PSDbounds) / precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+        # else:
+        #     scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+
+        if not precModel.precipitateParameters[p].nucleation.description.isGrainBoundaryNucleation:
             if radius == 'spherical':
-                scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+                scale.append(precModel.precipitateParameters[p].nucleation.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
             else:
-                scale.append(1/precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+                scale.append(1/precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
                 if radius == 'long':
-                    scale.append(precModel.shapeFactors[p].aspectRatio(precModel.PBM[p].PSDbounds) / precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
+                    scale.append(precModel.precipitateParameters[p].shapeFactor.aspectRatio(precModel.PBM[p].PSDbounds) / precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
         else:
-            scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+            scale.append(precModel.precipitateParameters[p].nucleation.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
+
 
     if variable in compositionVariables:
         plotEulerComposition(precModel, variable, axes, *args, **kwargs)
@@ -169,12 +180,12 @@ def plotEuler(precModel, axes, variable, bounds = None, timeUnits = 's', radius=
         plotBase(precModel, axes, variable, bounds, timeUnits, radius, *args, **kwargs)
 
 def plotTemperature(precModel, timeScale, labels, variable, axes, *args, **kwargs):
-    axes.semilogx(timeScale * precModel.time, precModel.temperature, *args, **kwargs)
+    axes.semilogx(timeScale * precModel.pData.time, precModel.pData.temperature, *args, **kwargs)
     axes.set_ylabel(labels[variable])
 
 def plotCompositions(precModel, timeScale, labels, variable, axes, *args, **kwargs):
     if precModel.numberOfElements == 1:
-        axes.semilogx(timeScale * precModel.time, precModel.xComp[:,0], *args, **kwargs)
+        axes.semilogx(timeScale * precModel.pData.time, precModel.pData.composition[:,0], *args, **kwargs)
         axes.set_ylabel('Matrix Composition (at.% ' + precModel.elements[0] + ')')
     else:
         #If kwargs has label, add it as an extension to the label we add
@@ -186,32 +197,32 @@ def plotCompositions(precModel, timeScale, labels, variable, axes, *args, **kwar
         for i in range(precModel.numberOfElements):
             #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
             if 'color' in kwargs:
-                axes.semilogx(timeScale * precModel.time, precModel.xComp[:,i], label=precModel.elements[i] + label_ext, *args, **kwargs)
+                axes.semilogx(timeScale * precModel.pData.time, precModel.pData.composition[:,i], label=precModel.elements[i] + label_ext, *args, **kwargs)
             else:
-                axes.semilogx(timeScale * precModel.time, precModel.xComp[:,i], label=precModel.elements[i] + label_ext, color='C'+str(i), *args, **kwargs)
+                axes.semilogx(timeScale * precModel.pData.time, precModel.pData.composition[:,i], label=precModel.elements[i] + label_ext, color='C'+str(i), *args, **kwargs)
         axes.legend()
         axes.set_ylabel(labels[variable])
-    yRange = [np.amin(precModel.xComp), np.amax(precModel.xComp)]
+    yRange = [np.amin(precModel.pData.composition), np.amax(precModel.pData.composition)]
     axes.set_ylim([yRange[0] - 0.1 * (yRange[1] - yRange[0]), yRange[1] + 0.1 * (yRange[1] - yRange[0])])
 
 
 def plotEqCompositions(precModel, timeScale, labels, variable, axes, *args, **kwargs):
     if variable == 'Eq Composition Alpha':
-        plotVariable = precModel.xEqAlpha
+        plotVariable = precModel.pData.xEqAlpha
     elif variable == 'Eq Composition Beta':
-        plotVariable = precModel.xEqBeta
+        plotVariable = precModel.pData.xEqBeta
 
     if len(precModel.phases) == 1:
         if precModel.numberOfElements == 1:
-            axes.semilogx(timeScale * precModel.time, plotVariable[:,0,0], *args, **kwargs)
+            axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0,0], *args, **kwargs)
             axes.set_ylabel('Matrix Composition (at.% ' + precModel.elements[0] + ')')
         else:
             for i in range(precModel.numberOfElements):
                 #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
                 if 'color' in kwargs:
-                    axes.semilogx(timeScale * precModel.time, plotVariable[:,0,i], label=precModel.elements[i]+'_Eq', *args, **kwargs)
+                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0,i], label=precModel.elements[i]+'_Eq', *args, **kwargs)
                 else:
-                    axes.semilogx(timeScale * precModel.time, plotVariable[:,0,i], label=precModel.elements[i]+'_Eq', color='C'+str(i), *args, **kwargs)
+                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0,i], label=precModel.elements[i]+'_Eq', color='C'+str(i), *args, **kwargs)
             axes.legend()
             axes.set_ylabel(labels[variable])
     else:
@@ -219,9 +230,9 @@ def plotEqCompositions(precModel, timeScale, labels, variable, axes, *args, **kw
             for p in range(len(precModel.phases)):
                 #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
                 if 'color' in kwargs:
-                    axes.semilogx(timeScale * precModel.time, plotVariable[:,p,0], label=precModel.phases[p]+'_Eq', *args, **kwargs)
+                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,0], label=precModel.phases[p]+'_Eq', *args, **kwargs)
                 else:
-                    axes.semilogx(timeScale * precModel.time, plotVariable[:,p,0], label=precModel.phases[p]+'_Eq', color='C'+str(p), *args, **kwargs)
+                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,0], label=precModel.phases[p]+'_Eq', color='C'+str(p), *args, **kwargs)
             axes.legend()
             axes.set_ylabel('Matrix Composition (at.% ' + precModel.elements[0] + ')')
         else:
@@ -230,9 +241,9 @@ def plotEqCompositions(precModel, timeScale, labels, variable, axes, *args, **kw
                 for i in range(precModel.numberOfElements):
                     #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
                     if 'color' in kwargs:
-                        axes.semilogx(timeScale * precModel.time, plotVariable[:,p,i], label=precModel.phases[p]+'_'+precModel.elements[i]+'_Eq', *args, **kwargs)
+                        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,i], label=precModel.phases[p]+'_'+precModel.elements[i]+'_Eq', *args, **kwargs)
                     else:
-                        axes.semilogx(timeScale * precModel.time, plotVariable[:,p,i], label=precModel.phases[p]+'_'+precModel.elements[i]+'_Eq', color='C'+str(cIndex), *args, **kwargs)
+                        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,i], label=precModel.phases[p]+'_'+precModel.elements[i]+'_Eq', color='C'+str(cIndex), *args, **kwargs)
                     cIndex += 1
             axes.legend()
             axes.set_ylabel(labels[variable])
@@ -240,13 +251,13 @@ def plotEqCompositions(precModel, timeScale, labels, variable, axes, *args, **kw
 def plotSaurations(precModel, timeScale, labels, variable, axes, *args, **kwargs):
     #Since supersaturation is calculated in respect to the tie-line, it is the same for each element
     #Thus only a single element is needed
-    plotVariable = np.zeros(precModel.betaFrac.shape)
+    plotVariable = np.zeros(precModel.pData.volFrac.shape)
     for p in range(len(precModel.phases)):
         if variable == 'Eq Volume Fraction':
-            num = precModel.xComp[0,0] - precModel.xEqAlpha[:,p,0]
+            num = precModel.pData.composition[0,0] - precModel.pData.xEqAlpha[:,p,0]
         else:
-            num = precModel.xComp[:,0] - precModel.xEqAlpha[:,p,0]
-        den = precModel.xEqBeta[:,p,0] - precModel.xEqAlpha[:,p,0]
+            num = precModel.pData.composition[:,0] - precModel.pData.xEqAlpha[:,p,0]
+        den = precModel.pData.xEqBeta[:,p,0] - precModel.pData.xEqAlpha[:,p,0]
         #If precipitate is unstable, both xEqAlpha and xEqBeta are set to 0
         #For these cases, change the values of numerator and denominator so that supersaturation is 0 instead of undefined
         num[den == 0] = 0
@@ -254,49 +265,56 @@ def plotSaurations(precModel, timeScale, labels, variable, axes, *args, **kwargs
         plotVariable[:,p] = num / den
     
     if len(precModel.phases) == 1:
-        axes.semilogx(timeScale * precModel.time, plotVariable[:,0], *args, **kwargs)
+        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0], *args, **kwargs)
     else:
         for p in range(len(precModel.phases)):
             if 'color' in kwargs:
-                axes.semilogx(timeScale * precModel.time, plotVariable[:,p], label=precModel.phases[p], *args, **kwargs)
+                axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p], label=precModel.phases[p], *args, **kwargs)
             else:
-                axes.semilogx(timeScale * precModel.time, plotVariable[:,p], label=precModel.phases[p], color='C'+str(p), *args, **kwargs)
+                axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p], label=precModel.phases[p], color='C'+str(p), *args, **kwargs)
         axes.legend()
     axes.set_ylabel(labels[variable])
 
 def plotSingleVariables(precModel, timeScale, radius, labels, variable, axes, *args, **kwargs):
     if variable == 'Volume Fraction':
-        plotVariable = precModel.betaFrac
+        plotVariable = precModel.pData.volFrac
     elif variable == 'Critical Radius':
-        plotVariable = precModel.Rcrit
+        plotVariable = precModel.pData.Rcrit
     elif variable == 'Average Radius':
-        plotVariable = precModel.avgR
+        plotVariable = precModel.pData.Ravg
         for p in range(len(precModel.phases)):
-            if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+            # if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
+            #     if radius != 'spherical':
+            #         plotVariable[p] /= precModel.shapeFactors[p].eqRadiusFactor(precModel.pData.Ravg[p])
+            #     if radius == 'long':
+            #         plotVariable[p] *= precModel.pData.ARavg[p]
+            # else:
+            #     plotVariable[p] *= precModel._GBareaRemoval(p)
+            if not precModel.precipitateParameters[p].nucleation.description.isGrainBoundaryNucleation:
                 if radius != 'spherical':
-                    plotVariable[p] /= precModel.shapeFactors[p].eqRadiusFactor(precModel.avgR[p])
+                    plotVariable[p] /= precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.pData.Ravg[p])
                 if radius == 'long':
-                    plotVariable[p] *= precModel.avgAR[p]
+                    plotVariable[p] *= precModel.pData.ARavg[p]
             else:
-                plotVariable[p] *= precModel._GBareaRemoval(p)
+                plotVariable[p] *= precModel.precipitateParameters[p].nucleation.areaRemoval
     elif variable == 'Volume Average Radius':
-        plotVariable = np.zeros(precModel.betaFrac.shape)
-        indices = precModel.precipitateDensity > 0
-        plotVariable[indices] = np.cbrt(precModel.betaFrac[indices] / precModel.precipitateDensity[indices] / (4/3*np.pi))
+        plotVariable = np.zeros(precModel.pData.volFrac.shape)
+        indices = precModel.pData.precipitateDensity > 0
+        plotVariable[indices] = np.cbrt(precModel.pData.volFrac[indices] / precModel.pData.precipitateDensity[indices] / (4/3*np.pi))
     elif variable == 'Aspect Ratio':
-        plotVariable = precModel.avgAR
+        plotVariable = precModel.pData.ARavg
     elif variable == 'Driving Force':
-        plotVariable = precModel.dGs
+        plotVariable = precModel.pData.drivingForce
     elif variable == 'Nucleation Rate':
-        plotVariable = precModel.nucRate
+        plotVariable = precModel.pData.nucRate
     elif variable == 'Precipitate Density':
-        plotVariable = precModel.precipitateDensity
+        plotVariable = precModel.pData.precipitateDensity
 
     if (len(precModel.phases)) == 1:
-        axes.semilogx(timeScale * precModel.time, plotVariable[:,0], *args, **kwargs)
+        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0], *args, **kwargs)
     else:
         for p in range(len(precModel.phases)):
-            axes.semilogx(timeScale * precModel.time, plotVariable[:,p], label=precModel.phases[p], color='C'+str(p), *args, **kwargs)
+            axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p], label=precModel.phases[p], color='C'+str(p), *args, **kwargs)
         axes.legend()
     axes.set_ylabel(labels[variable])
     yb = 1 if variable == 'Aspect Ratio' else 0
@@ -304,28 +322,28 @@ def plotSingleVariables(precModel, timeScale, radius, labels, variable, axes, *a
 
 def plotTotalVariables(precModel, timeScale, labels, variable, axes, *args, **kwargs):
     if variable == 'Total Volume Fraction':
-        plotVariable = np.sum(precModel.betaFrac, axis=1)
+        plotVariable = np.sum(precModel.pData.volFrac, axis=1)
     elif variable == 'Total Average Radius':
-        totalN = np.sum(precModel.precipitateDensity, axis=1)
+        totalN = np.sum(precModel.pData.precipitateDensity, axis=1)
         totalN[totalN == 0] = 1
-        totalR = np.sum(precModel.avgR * precModel.precipitateDensity, axis=1)
+        totalR = np.sum(precModel.pData.Ravg * precModel.pData.precipitateDensity, axis=1)
         plotVariable = totalR / totalN
     elif variable == 'Total Volume Average Radius':
-        totalN = np.sum(precModel.precipitateDensity, axis=1)
+        totalN = np.sum(precModel.pData.precipitateDensity, axis=1)
         totalN[totalN == 0] = 1
-        totalVol = np.sum(precModel.betaFrac, axis=1)
+        totalVol = np.sum(precModel.pData.volFrac, axis=1)
         plotVariable = np.cbrt(totalVol / totalN)
     elif variable == 'Total Aspect Ratio':
-        totalN = np.sum(precModel.precipitateDensity, axis=1)
+        totalN = np.sum(precModel.pData.precipitateDensity, axis=1)
         totalN[totalN == 0] = 1
-        totalAR = np.sum(precModel.avgAR * precModel.precipitateDensity, axis=1)
+        totalAR = np.sum(precModel.pData.ARavg * precModel.pData.precipitateDensity, axis=1)
         plotVariable = totalAR / totalN
     elif variable == 'Total Nucleation Rate':
-        plotVariable = np.sum(precModel.nucRate, axis=1)
+        plotVariable = np.sum(precModel.pData.nucRate, axis=1)
     elif variable == 'Total Precipitate Density':
-        plotVariable = np.sum(precModel.precipitateDensity, axis=1)
+        plotVariable = np.sum(precModel.pData.precipitateDensity, axis=1)
 
-    axes.semilogx(timeScale * precModel.time, plotVariable, *args, **kwargs)
+    axes.semilogx(timeScale * precModel.pData.time, plotVariable, *args, **kwargs)
     axes.set_ylabel(labels[variable])
     yb = 1 if variable == 'Total Aspect Ratio' else 0
     axes.set_ylim(bottom=yb)

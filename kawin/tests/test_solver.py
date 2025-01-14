@@ -1,10 +1,11 @@
+import numpy as np
+from numpy.testing import assert_allclose
+
 from kawin.precipitation import PrecipitateModel, VolumeParameter
 from kawin.diffusion import SinglePhaseModel
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.GenericModel import GenericModel, Coupler
 from kawin.solver import SolverType
-import numpy as np
-from numpy.testing import assert_allclose
 from kawin.tests.datasets import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
@@ -62,7 +63,7 @@ def test_coupler_shape():
     Flattening the arrays will result in a 1D array of [bins + elements*cells]
     '''
     #Create model
-    p_model = PrecipitateModel()
+    p_model = PrecipitateModel(phases=['AL3ZR'], elements=['ZR'])
     bins = 75
     minBins = 50
     maxBins = 100
@@ -79,8 +80,9 @@ def test_coupler_shape():
 
     D0 = 0.0768         #Diffusivity pre-factor (m2/s)
     Q = 242000          #Activation energy (J/mol)
-    Diff = lambda x, T: D0 * np.exp(-Q / (8.314 * T))
-    p_model.setDiffusivity(Diff)
+    Diff = lambda T: D0 * np.exp(-Q / (8.314 * T))
+    AlZrTherm.setDiffusivity(Diff, 'FCC_A1')
+    #p_model.setDiffusivity(Diff)
 
     a = 0.405e-9        #Lattice parameter
     Va = a**3           #Atomic volume of FCC-Al
@@ -94,7 +96,8 @@ def test_coupler_shape():
     p_model.setNucleationSite('dislocations')
 
     #Set thermodynamic functions
-    p_model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    #p_model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    p_model.setThermodynamics(AlZrTherm)
 
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
     #Since we defined L12, the disordered phase as DIS_ attached to the front
@@ -102,11 +105,14 @@ def test_coupler_shape():
     d_model = SinglePhaseModel([-1e-3, 1e-3], N, ['NI', 'AL', 'CR'], ['DIS_FCC_A1'])
 
     #Define Cr and Al composition, with step-wise change at z=0
+    #d_model.setCompositionLinear(0.077, 0.359, 'CR')
+    #d_model.setCompositionLinear(0.054, 0.062, 'AL')
     d_model.setCompositionLinear(0.077, 0.359, 'CR')
     d_model.setCompositionLinear(0.054, 0.062, 'AL')
 
     d_model.setThermodynamics(NiAlCrTherm)
-    d_model.setTemperature(1200 + 273.15)
+    #d_model.setTemperature(1200 + 273.15)
+    d_model.setTemperature(1200+273.15)
 
     coupled_model = Coupler([p_model, d_model])
     coupled_model.setup()

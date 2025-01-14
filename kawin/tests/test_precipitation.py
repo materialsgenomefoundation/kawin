@@ -1,8 +1,12 @@
-from kawin.tests.datasets import ALZR_TDB, NICRAL_TDB, ALMGSI_DB
-from kawin.precipitation import PrecipitateModel, VolumeParameter
-from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
+import os
+
 import numpy as np
 from numpy.testing import assert_allclose
+
+from kawin.tests.datasets import ALZR_TDB, NICRAL_TDB, ALMGSI_DB
+from kawin.precipitation import PrecipitateModel, StrainEnergy
+from kawin.precipitation import VolumeParameter, PrecipitateParameters, MatrixParameters, TemperatureParameters
+from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
 NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
@@ -24,7 +28,7 @@ def test_binary_precipitation_dxdt():
     This uses the parameters from 01_Binary_Precipitation example
     '''
     #Create model
-    model = PrecipitateModel()
+    model = PrecipitateModel(phases=['AL3ZR'], elements=['ZR'])
     bins = 75
     minBins = 50
     maxBins = 100
@@ -41,8 +45,9 @@ def test_binary_precipitation_dxdt():
 
     D0 = 0.0768         #Diffusivity pre-factor (m2/s)
     Q = 242000          #Activation energy (J/mol)
-    Diff = lambda x, T: D0 * np.exp(-Q / (8.314 * T))
-    model.setDiffusivity(Diff)
+    Diff = lambda T: D0 * np.exp(-Q / (8.314 * T))
+    AlZrTherm.setDiffusivity(Diff, 'FCC_A1')
+    #model.setDiffusivity(Diff)
 
     a = 0.405e-9        #Lattice parameter
     Va = a**3           #Atomic volume of FCC-Al
@@ -56,7 +61,8 @@ def test_binary_precipitation_dxdt():
     model.setNucleationSite('dislocations')
 
     #Set thermodynamic functions
-    model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    #model.setThermodynamics(AlZrTherm, addDiffusivity=False)
+    model.setThermodynamics(AlZrTherm)
 
     #This roughly follows the steps in model.solve so we can get dxdt
     model.setup()
@@ -91,7 +97,7 @@ def test_multi_precipitation_dxdt():
 
     This uses the parameters from 02_Multicomponent_Precipitation example
     '''
-    model = PrecipitateModel(elements=['Al', 'Cr'])
+    model = PrecipitateModel(elements=['Al', 'Cr'], phases=['FCC_L12'])
     bins = 75
     minBins = 50
     maxBins = 100
@@ -166,7 +172,7 @@ def test_multiphase_precipitation_x_shape():
 
     lowTemp = 175+273.15
     highTemp = 250+273.15
-    model.setTemperature(([0, 16, 17], [lowTemp, lowTemp, highTemp]))
+    model.setTemperature([0, 16, 17], [lowTemp, lowTemp, highTemp])
 
     gamma = {
         'MGSI_B_P': 0.18,
@@ -179,7 +185,8 @@ def test_multiphase_precipitation_x_shape():
     for i in range(len(phases)-1):
         model.setInterfacialEnergy(gamma[phases[i+1]], phase=phases[i+1])
         model.setVolumeBeta(1e-5, VolumeParameter.MOLAR_VOLUME, 4, phase=phases[i+1])
-        model.setThermodynamics(AlMgSitherm, phase=phases[i+1])
+        #model.setThermodynamics(AlMgSitherm, phase=phases[i+1])
+    model.setThermodynamics(AlMgSitherm)
 
     model.setup()
     t, x = model.getCurrentX()
@@ -195,3 +202,105 @@ def test_multiphase_precipitation_x_shape():
     assert(flatShape == (origLen*bins,))
     assert(len(x_restore) == origLen)
     assert(np.all(psd.shape == (bins,) for psd in x_restore))
+
+def test_precipitationBackCompatibility():
+    '''
+    Tests that old precipitation API still works
+    '''
+    matrix = MatrixParameters(['ZR'])
+    matrix.volume.setVolume(1e-5, 'VM', 4)
+    matrix.GBenergy = 0.15
+    matrix.initComposition = 0.01
+    matrix.nucleationSites.setNucleationDensity(grainSize=50, dislocationDensity=5e13)
+
+    prec = PrecipitateParameters('AL3ZR')
+    prec.gamma = 0.1
+    prec.volume.setVolume(1.1e-5, 'VM', 4)
+    prec.strainEnergy.setShape('ellipsoid')
+    prec.strainEnergy.setModuli(E=160e8, nu=0.3)
+    prec.nucleation.setNucleationType('grain boundaries')
+
+    temperature = TemperatureParameters(500)
+
+    m = PrecipitateModel(thermodynamics=AlZrTherm, 
+                         matrixParameters=matrix, 
+                         precipitateParameters=[prec], 
+                         temperatureParameters=temperature)
+
+    m2 = PrecipitateModel(phases=['AL3ZR'], elements=['ZR'])
+    m2.setThermodynamics(AlZrTherm)
+    m2.setTemperature(500)
+    m2.setVolumeAlpha(1e-5, 'VM', 4)
+    m2.setGrainBoundaryEnergy(0.15)
+    m2.setInitialComposition(0.01)
+    m2.setNucleationDensity(grainSize=50, dislocationDensity=5e13)
+
+    m2.setInterfacialEnergy(0.1)
+    m2.setVolumeBeta(1.1e-5, 'VM', 4)
+
+    se = StrainEnergy('ellipsoid')
+    se.setModuli(E=160e8, nu=0.3)
+    m2.setStrainEnergy(se)
+    m2.setNucleationSite('grain boundaries')
+
+    m.setup()
+    m2.setup()
+
+    assert_allclose([m.matrixParameters.volume.Vm], [m2.matrixParameters.volume.Vm], rtol=1e-3)
+    assert_allclose([m.matrixParameters.GBenergy], [m2.matrixParameters.GBenergy], rtol=1e-3)
+    assert_allclose([m.matrixParameters.initComposition], [m2.matrixParameters.initComposition], rtol=1e-3)
+    assert_allclose([m.matrixParameters.nucleationSites.dislocationN0], [m2.matrixParameters.nucleationSites.dislocationN0], rtol=1e-3)
+    assert_allclose([m.matrixParameters.nucleationSites.GBareaN0], [m2.matrixParameters.nucleationSites.GBareaN0], rtol=1e-3)
+    assert_allclose([m.precipitateParameters[0].gamma], [m2.precipitateParameters[0].gamma], rtol=1e-3)
+    assert_allclose([m.precipitateParameters[0].volume.Vm], [m2.precipitateParameters[0].volume.Vm], rtol=1e-3)
+    assert_allclose([m.precipitateParameters[0].strainEnergy.params.cMatrix_4th], [m2.precipitateParameters[0].strainEnergy.params.cMatrix_4th], rtol=1e-3)
+    assert m.precipitateParameters[0].nucleation.description.name == m2.precipitateParameters[0].nucleation.description.name
+
+def test_precipitationSavingLoading():
+    '''
+    Test saving loading behavior
+    '''
+    phases = ['FCC_A1', 'MGSI_B_P', 'MG5SI6_B_DP', 'B_PRIME_L', 'U1_PHASE', 'U2_PHASE']
+
+    matrix = MatrixParameters(['MG', 'SI'])
+    matrix.initComposition = [0.0072, 0.0057]
+    matrix.volume.setVolume(1e-5, 'VM', 4)
+
+    lowTemp = 175+273.15
+    highTemp = 250+273.15
+    temperature = TemperatureParameters([0, 16, 17], [lowTemp, lowTemp, highTemp])
+
+    gamma = {
+        'MGSI_B_P': 0.18,
+        'MG5SI6_B_DP': 0.084,
+        'B_PRIME_L': 0.18,
+        'U1_PHASE': 0.18,
+        'U2_PHASE': 0.18
+            }
+
+    precipitates = []
+    for p in phases[1:]:
+        params = PrecipitateParameters(p)
+        params.gamma = gamma[p]
+        params.volume.setVolume(1e-5, 'VM', 4)
+        precipitates.append(params)
+
+    model = PrecipitateModel(thermodynamics=AlMgSitherm,
+                            matrixParameters=matrix,
+                            precipitateParameters=precipitates,
+                            temperatureParameters=temperature)
+    
+    model.solve(0.1, verbose=True, vIt=1)
+
+    model.save('kawin/tests/prec.npz')
+
+    new_model = PrecipitateModel(thermodynamics=AlMgSitherm,
+                            matrixParameters=matrix,
+                            precipitateParameters=precipitates,
+                            temperatureParameters=temperature)
+    new_model.load('kawin/tests/prec.npz')
+    os.remove('kawin/tests/prec.npz')
+
+    assert_allclose(model.pData.Ravg, new_model.pData.Ravg)
+    assert_allclose(model.pData.time, new_model.pData.time)
+    assert_allclose(model.pData.precipitateDensity, new_model.pData.precipitateDensity)

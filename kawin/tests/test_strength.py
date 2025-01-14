@@ -1,5 +1,5 @@
-from kawin.precipitation.coupling import StrengthModel
 import numpy as np
+from kawin.precipitation.coupling import StrengthModel
 
 sm = StrengthModel()
 G, b, nu = 79.3e9, 0.25e-9, 1/3

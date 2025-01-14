@@ -9,6 +9,7 @@ from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.composition_set import CompositionSet
 from pycalphad.core.utils import extract_parameters
 
+from kawin.thermo.utils import _process_xT_arrays, _getMatrixPhase, _getPrecipitatePhase, _process_x
 from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
 from kawin.thermo.Mobility import MobilityModel, inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
@@ -73,7 +74,7 @@ class GeneralThermodynamics:
         self.elements = copy.copy(elements)
         if 'VA' not in self.elements:
             self.elements.append('VA')
-        self._isBinary = len(self.elements) == 3
+        self.numElements = len(set(self.elements) - {'VA'})
         
         if parameters is None:
             self._parameters = {}
@@ -86,7 +87,6 @@ class GeneralThermodynamics:
         if type(phases) == str:  # check if a single phase was passed as a string instead of a list of phases.
             phases = [phases]
         self.phases = phases
-        self.phaseSamplingConditions = {}
         self.vacancyPoorInterstitialSublattice = {}
 
         self._buildThermoModels()
@@ -158,14 +158,12 @@ class GeneralThermodynamics:
             param_search = self.db.search
             param_query_mob = (
                 (where('phase_name') == p) & \
-                (where('parameter_type') == 'MQ') | \
-                (where('parameter_type') == 'MF')
+                ((where('parameter_type') == 'MQ') | (where('parameter_type') == 'MF'))
             )
 
             param_query_diff = (
                 (where('phase_name') == p) & \
-                (where('parameter_type') == 'DQ') | \
-                (where('parameter_type') == 'DF')
+                ((where('parameter_type') == 'DQ') | (where('parameter_type') == 'DF'))
             )
             phase_mob_params[p] = param_search(param_query_mob)
             phase_diff_params[p] = param_search(param_query_diff)
@@ -282,9 +280,14 @@ class GeneralThermodynamics:
         '''
         self.pDens = density
 
-    def setMobility(self, mobility):
+    def _generateTdependentFunction(self, func):
+        index = self.stateVariables.index(v.T)
+        return lambda dof: func(dof[index])
+
+    def setMobility(self, mobility, phase, element = None):
         '''
         Allows user to define mobility functions
+        Functions will assume that mobility is only a function of temperature
 
         mobility : dict
             Dictionary of functions for each element (including reference)
@@ -293,9 +296,15 @@ class GeneralThermodynamics:
         Optional - only required for multicomponent systems where
             mobility terms are not defined in the TDB database
         '''
-        self.mobCallables = mobility
+        if element is None:
+            if isinstance(mobility, dict):
+                self.mobCallables[phase] = {e: self._generateTdependentFunction(mobility[e]) for e in mobility}
+            else:
+                self.mobCallables[phase] = {e: self._generateTdependentFunction(mobility) for e in list(set(self.elements) - {'VA'})}
+        else:
+            self.mobCallables[phase][element] = self._generateTdependentFunction(mobility[element])
 
-    def setDiffusivity(self, diffusivity):
+    def setDiffusivity(self, diffusivity, phase, element = None):
         '''
         Allows user to define diffusivity functions
 
@@ -307,7 +316,13 @@ class GeneralThermodynamics:
             diffusivity terms are not defined in the TDB database
             and if mobility terms are not defined
         '''
-        self.diffCallables = diffusivity
+        if element is None:
+            if isinstance(diffusivity, dict):
+                self.diffCallables[phase] = {e: self._generateTdependentFunction(diffusivity[e]) for e in diffusivity}
+            else:
+                self.diffCallables[phase] = {e: self._generateTdependentFunction(diffusivity) for e in list(set(self.elements) - {'VA'})}
+        else:
+            self.diffCallables[phase][element] = self._generateTdependentFunction(diffusivity[element])
 
     def setMobilityCorrection(self, element, factor):
         '''
@@ -326,17 +341,7 @@ class GeneralThermodynamics:
                 self.mobility_correction[e] = factor
         else:
             self.mobility_correction[element] = factor
-
-    def _process_x(self, x):
-        '''
-        Processes x to always be an array for len(elements) - 1
-        If x in len(elements), then we assume that the first item is the solute
-        '''
-        x = np.atleast_1d(x)
-        if len(x) == len(self.elements) - 1:
-            x = x[1:]
-        return x
-
+        
     def _getConditions(self, x, T, gExtra = 0):
         '''
         Creates dictionary of conditions from composition, temperature and gExtra
@@ -350,7 +355,7 @@ class GeneralThermodynamics:
         gExtra : float (optional)
             Gibbs free energy to add to phase. Defaults to 0
         '''
-        x = self._process_x(x)
+        x = _process_x(x, len(set(self.elements)-{'VA'}))
         cond = {v.X(self.elements[i+1]): x[i] for i in range(len(x))}
         cond.update({v.GE: gExtra, v.N: 1, v.P: 101325, v.T: T})
         return cond
@@ -488,10 +493,7 @@ class GeneralThermodynamics:
             For multicomponent - matrix or array of matrices
         '''
         dnkj = []
-        x = np.atleast_2d(x)
-        if self._isBinary:
-            x = x.T
-        T = np.atleast_1d(T)
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
         dnkj = [self._interdiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(dnkj)
 
@@ -513,7 +515,8 @@ class GeneralThermodynamics:
         Interdiffusivity as a matrix (will return float in binary case)
         '''
         # Compute local equilibrium on phase
-        phase = self.phases[0] if phase is None else phase
+        #phase = self.phases[0] if phase is None else phase
+        phase = _getMatrixPhase(self.phases, phase)
         comp_sets = self._diffusivity_cache.get(phase, None)
         result, comp_sets = self.getLocalEq(x, T, 0, [phase], composition_sets=comp_sets)
         cs_matrix = comp_sets[0]
@@ -534,7 +537,7 @@ class GeneralThermodynamics:
                                          parameters=self._parameters)
 
         # Sort Dnkj from alphabetical to the input order of the elements
-        if not self._isBinary:
+        if self.numElements != 2:
             sortIndices = np.argsort(self.elements[1:-1])
             unsortIndices = np.argsort(sortIndices)
             Dnkj = Dnkj[unsortIndices,:]
@@ -568,10 +571,7 @@ class GeneralThermodynamics:
         tracer diffusivity - will return array if T is an array
         '''
         td = []
-        x = np.atleast_2d(x)
-        if self._isBinary:
-            x = x.T
-        T = np.atleast_1d(T)
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
         td = [self._tracerDiffusivitySingle(xi, Ti, removeCache, phase) for xi, Ti in zip(x, T)]
         return np.squeeze(td)
 
@@ -593,7 +593,8 @@ class GeneralThermodynamics:
         Tracer diffusivity as a float
         '''
         # Compute local equilibrium on phase
-        phase = self.phases[0] if phase is None else phase
+        #phase = self.phases[0] if phase is None else phase
+        phase = _getMatrixPhase(self.phases, phase)
         comp_sets = self._diffusivity_cache.get(phase, None)
         result, comp_sets = self.getLocalEq(x, T, 0, [phase], composition_sets=comp_sets)
         cs_matrix = comp_sets[0]
@@ -618,7 +619,7 @@ class GeneralThermodynamics:
         self._diffusivity_cache[phase] = None if removeCache else comp_sets
         return Dtrace
 
-    def getDrivingForce(self, x, T, precPhase = None, removeCache = False):
+    def getDrivingForce(self, x, T, precPhase = None, removeCache = False, local_phase_sampling_conditions = None):
         '''
         Gets driving force using method defined upon initialization
 
@@ -644,11 +645,9 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        x = np.atleast_2d(x)
-        if self._isBinary:
-            x = x.T
-        T = np.atleast_1d(T)
-        dgArray, compArray = zip(*[self._drivingForce(xi, Ti, precPhase, removeCache) for xi, Ti in zip(x, T)])
+        x, T = _process_xT_arrays(x, T, self.numElements == 2)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        dgArray, compArray = zip(*[self._drivingForce(xi, Ti, precPhase, removeCache, local_phase_sampling_conditions) for xi, Ti in zip(x, T)])
         return np.squeeze(dgArray), np.squeeze(compArray)
     
     def _resetDrivingForceCache(self, phase, removeCache):
@@ -657,7 +656,7 @@ class GeneralThermodynamics:
             self._matrix_cs = None
             self._points_cache[phase] = SampledPointsCache()
 
-    def _getDrivingForceSampling(self, x, T, precPhase = None, removeCache = False):
+    def _getDrivingForceSampling(self, x, T, precPhase, removeCache = False, local_phase_sampling_conditions = None):
         '''
         Gets driving force for nucleation by sampling
 
@@ -689,8 +688,6 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
-
         # Calculate equilibrium with only the parent phase
         # Return (None, None) if equilibrium was not successful
         result, self._matrix_cs = self.getLocalEq(x, T, 0, [self.phases[0]], composition_sets=self._matrix_cs)
@@ -698,7 +695,7 @@ class GeneralThermodynamics:
             return None, None
         
         # Get precipitate composition set that maximizes driving force
-        dg, prec_cs = self._getPrecCompositionSetSamplingDF(x, T, result.chemical_potentials, precPhase)
+        dg, prec_cs = self._getPrecCompositionSetSamplingDF(x, T, result.chemical_potentials, precPhase, local_phase_sampling_conditions)
 
         # Sort precipitate composition from alphabetical to input order of elements
         sortIndices = np.argsort(self.elements[:-1])
@@ -709,7 +706,7 @@ class GeneralThermodynamics:
         self._resetDrivingForceCache(precPhase, removeCache)
         return np.squeeze(dg), np.squeeze(beta_x[1:])
 
-    def _getDrivingForceApprox(self, x, T, precPhase = None, removeCache = False):
+    def _getDrivingForceApprox(self, x, T, precPhase, removeCache = False, local_phase_sampling_conditions = None):
         '''
         Approximate method of driving force calculation
         Assumes equilibrium composition of precipitate phase
@@ -744,10 +741,9 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
         cs_results = self._getCompositionSetsForDF(x, T, precPhase)
         if cs_results is None:
-            return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache)
+            return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache, local_phase_sampling_conditions=local_phase_sampling_conditions)
         chemical_potentials, cs_matrix, cs_precip = cs_results
 
         # Calculate equilibrium with only the parent phase
@@ -765,7 +761,7 @@ class GeneralThermodynamics:
         self._resetDrivingForceCache(precPhase, removeCache)
         return np.squeeze(dg), np.squeeze(xP[unsortIndices[1:]])
 
-    def _getDrivingForceCurvature(self, x, T, precPhase = None, removeCache = False):
+    def _getDrivingForceCurvature(self, x, T, precPhase, removeCache = False, local_phase_sampling_conditions = None):
         '''
         Gets driving force from curvature of free energy function
         Assumes small saturation
@@ -800,12 +796,9 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
-        x = self._process_x(x)
-
         cs_results = self._getCompositionSetsForDF(x, T, precPhase)
         if cs_results is None:
-            return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache)
+            return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache, local_phase_sampling_conditions=local_phase_sampling_conditions)
         
         chemical_potentials, cs_matrix, cs_precip = cs_results
         non_va_elements = list(cs_matrix.phase_record.nonvacant_elements)
@@ -830,7 +823,7 @@ class GeneralThermodynamics:
         self._resetDrivingForceCache(precPhase, removeCache)
         return np.squeeze(dg), np.squeeze(xP[unsortIndices])
 
-    def _getDrivingForceTangent(self, x, T, precPhase = None, removeCache = False):
+    def _getDrivingForceTangent(self, x, T, precPhase, removeCache = False, local_phase_sampling_conditions = None):
         '''
         Gets driving force from parallel tangent calculation
 
@@ -864,8 +857,6 @@ class GeneralThermodynamics:
         Driving force is positive if precipitate can form
         Precipitate composition will be None if driving force is negative
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
-
         # Calculate equilibrium with only the parent phase
         # Return (None, None) if equilibrium was not successful
         result, self._matrix_cs = self.getLocalEq(x, T, 0, [self.phases[0]], composition_sets=self._matrix_cs)
@@ -880,7 +871,7 @@ class GeneralThermodynamics:
 
         # If we do not have a precipitate composition set, then find one by sampling
         if self._compset_cache_df.get(precPhase, None) is None:
-            dg, prec_cs = self._getPrecCompositionSetSamplingDF(x, T, result.chemical_potentials, precPhase)
+            dg, prec_cs = self._getPrecCompositionSetSamplingDF(x, T, result.chemical_potentials, precPhase, local_phase_sampling_conditions)
             self._compset_cache_df[precPhase] = [prec_cs]
 
         #Solving for local equilibrium on precipitate
@@ -905,7 +896,7 @@ class GeneralThermodynamics:
         mat_comps = np.array(self._matrix_cs[0].X, dtype=np.float64)
         if np.allclose(xb, mat_comps, 1e-6):
             self._compset_cache_df[precPhase] = None
-            return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache)
+            return self._getDrivingForceSampling(x, T, precPhase, removeCache=removeCache, local_phase_sampling_conditions=local_phase_sampling_conditions)
 
         # If all goes well, then we can store the cache
         self._compset_cache_df[precPhase] = prec_cs
@@ -916,7 +907,7 @@ class GeneralThermodynamics:
         self._resetDrivingForceCache(precPhase, removeCache)
         return np.squeeze(dg), np.squeeze(xb[unsortIndices[1:]])
     
-    def _getCompositionSetsForDF(self, x, T, precPhase = None):
+    def _getCompositionSetsForDF(self, x, T, precPhase):
         '''
         Wrapper for getting composition set from x and T by either global equilibrium or local from a cached composition set
 
@@ -949,7 +940,7 @@ class GeneralThermodynamics:
             self._compset_cache_df[precPhase] = [cs_matrix, cs_precip]
             return chemical_potentials, cs_matrix, cs_precip
     
-    def _getCompositionSetsEq(self, x, T, precPhase = None, cached_composition_sets = {}):
+    def _getCompositionSetsEq(self, x, T, precPhase, cached_composition_sets = {}):
         '''
         Gets composition set from x and T by global equilibrium
 
@@ -1023,7 +1014,7 @@ class GeneralThermodynamics:
         
         return chemical_potentials, cs_matrix, cs_precip
     
-    def _getPrecCompositionSetSamplingDF(self, x, T, matrix_chem_pot, precPhase = None):
+    def _getPrecCompositionSetSamplingDF(self, x, T, matrix_chem_pot, precPhase, local_phase_sampling_conditions = None):
         '''
         Gets samples for precipitate phase for use in sampling driving force method and returns driving force and precipitate composition
 
@@ -1068,7 +1059,7 @@ class GeneralThermodynamics:
         if precPoints is None or prevT != T:
             precPoints = calculate(self.db, self.elements, phases[0], 
                                    pdens=self.sampling_pDens, model=sub_models, output='GM', 
-                                   phase_records=self.phase_records, conditions=self.phaseSamplingConditions.get(precPhase, None), 
+                                   phase_records=self.phase_records, conditions=local_phase_sampling_conditions, 
                                    to_xarray=False, **str_cond)
             if self.orderedPhase[precPhase]:
                 orderedPoints = calculate(self.db, self.elements, phases[0], 

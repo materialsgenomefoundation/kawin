@@ -1,7 +1,10 @@
-from kawin.thermo.Thermodynamics import GeneralThermodynamics
 import numpy as np
+
 from pycalphad import Workspace, equilibrium, calculate, variables as v
 from pycalphad.core.composition_set import CompositionSet
+
+from kawin.thermo.utils import _process_TG_arrays, _getPrecipitatePhase
+from kawin.thermo.Thermodynamics import GeneralThermodynamics
 from kawin.thermo.FreeEnergyHessian import dMudX
 
 class BinaryThermodynamics (GeneralThermodynamics):
@@ -102,15 +105,15 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        gExtra = np.atleast_1d(gExtra)
-        T = np.atleast_1d(T)
-        if len(T) == 1:
+        T, gExtra = _process_TG_arrays(T, gExtra)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if len(np.unique(T)) == 1:
             caArray, cbArray = self._interfacialComposition(T[0], gExtra, precPhase)
         else:
             caArray, cbArray = zip(*[self._interfacialComposition(T[i], gExtra[i], precPhase) for i in range(len(T))])
         return np.squeeze(caArray), np.squeeze(cbArray)
 
-    def _interfacialCompositionFromEq(self, T, gExtra = 0, precPhase = None):
+    def _interfacialCompositionFromEq(self, T, gExtra, precPhase):
         '''
         Gets interfacial composition by calculating equilibrum with Gibbs-Thomson effect
 
@@ -131,7 +134,6 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
         gExtra = np.atleast_1d(gExtra)
         gExtra += self.gOffset
 
@@ -175,7 +177,7 @@ class BinaryThermodynamics (GeneralThermodynamics):
 
         return np.squeeze(xMatrixArray), np.squeeze(xPrecipArray)
 
-    def _interfacialCompositionFromCurvature(self, T, gExtra = 0, precPhase = None):
+    def _interfacialCompositionFromCurvature(self, T, gExtra, precPhase):
         '''
         Gets interfacial composition using free energy curvature
         G''(x - xM)(xP-xM) = 2*y*V/R
@@ -197,7 +199,6 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        precPhase = self.phases[1] if precPhase is None else precPhase
         gExtra = np.atleast_1d(gExtra)
 
         #Compute equilibrium at guess composition

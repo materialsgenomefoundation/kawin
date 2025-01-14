@@ -507,7 +507,7 @@ class StrengthModel:
         val = 0
         for i in range(len(model.elements)):
             if model.elements[i] in self.ssweights:
-                val += self.ssweights[model.elements[i]]*model.xComp[n,i]**self.ssexp
+                val += self.ssweights[model.elements[i]]*model.pData.composition[n,i]**self.ssexp
         return val
 
     def rssterm(self, model, p):
@@ -577,7 +577,7 @@ class StrengthModel:
 
         self.rss = np.append(self.rss, [[self.rssterm(model, p) for p in range(len(model.phases))]], axis=0)
         self.ls = np.append(self.ls, [[self.Lsterm(model, p) for p in range(len(model.phases))]], axis=0)
-        self.solidStrength = np.append(self.solidStrength, [self.ssStrength(model, model.n)], axis=0)
+        self.solidStrength = np.append(self.solidStrength, [self.ssStrength(model, model.pData.n)], axis=0)
 
     def precStrength(self, model):
         '''
@@ -587,8 +587,6 @@ class StrengthModel:
         ----------
         model : PrecipitateModel
         '''
-        #rss = model.getAdditionalOutput(self.rssName)
-        #Ls = model.getAdditionalOutput(self.LsName)
         rss = self.rss
         Ls = self.ls
 
@@ -751,9 +749,9 @@ class StrengthModel:
             If str, will plot selected contribution or all contributions
                 Options are: Coherency, Modulus, APB, SFE or Interfacial
         '''
-        timeScale, timeLabel, bounds = getTimeAxis(model, timeUnits, bounds)
+        timeScale, timeLabel, bounds = getTimeAxis(model.pData.time, timeUnits, bounds)
 
-        self.plotPrecipitateStrengthOverX(ax, model.time*timeScale, self.rss, self.ls, phase, strengthUnits, contribution, *args, **kwargs)
+        self.plotPrecipitateStrengthOverX(ax, model.pData.time*timeScale, self.rss, self.ls, phase, strengthUnits, contribution, *args, **kwargs)
         ax.set_xlabel(timeLabel)
         ax.set_xscale('log')
         ax.set_xlim(bounds)
@@ -842,22 +840,22 @@ class StrengthModel:
         strengthUnits : str
             Units for strength, options are 'Pa', 'kPa', 'MPa' or 'GPa'
         '''
-        timeScale, timeLabel, bounds = getTimeAxis(model, timeUnits, bounds)
+        timeScale, timeLabel, bounds = getTimeAxis(model.pData.time, timeUnits, bounds)
         yscale, ylabel = self.getStrengthUnits(strengthUnits)
 
-        sigma0 = self.sigma0 * np.ones(len(model.time))
+        sigma0 = self.sigma0 * np.ones(len(model.pData.time))
         #ssStrength = self.ssStrength(model) if len(self.ssweights) > 0 else np.zeros(len(model.time))
         ssStrength = self.solidStrength
         precStrength = self.precStrength(model)
 
         total = self.totalStrength(ssStrength, precStrength)
 
-        ax.plot(model.time*timeScale, total / yscale, *args, **kwargs)
+        ax.plot(model.pData.time*timeScale, total / yscale, *args, **kwargs)
 
         if plotContributions:
-            ax.plot(model.time*timeScale, sigma0 / yscale, *args, **kwargs)
-            ax.plot(model.time*timeScale, ssStrength / yscale, *args, **kwargs)
-            ax.plot(model.time*timeScale, precStrength / yscale, *args, **kwargs)
+            ax.plot(model.pData.time*timeScale, sigma0 / yscale, *args, **kwargs)
+            ax.plot(model.pData.time*timeScale, ssStrength / yscale, *args, **kwargs)
+            ax.plot(model.pData.time*timeScale, precStrength / yscale, *args, **kwargs)
             ax.legend(['Total Strength', r'$\sigma_0$', 'SS Strength', 'Precipitate Strength'])
 
         ax.set_xlabel(timeLabel)

@@ -127,8 +127,8 @@ def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, zOffset = 0, 
     if not diffModel.isSetup:
         diffModel.setup()
 
-    T = diffModel.parameters.temperature(diffModel.z, diffModel.t)
-    mob_data = computeMobility(diffModel.therm, diffModel.x.T, T, diffModel.parameters)
+    T = diffModel.temperatureParameters(diffModel.z, diffModel.t)
+    mob_data = computeMobility(diffModel.therm, diffModel.x.T, T, diffModel.hashTable)
 
     if plotPhase is not None:
         pf = []

@@ -34,7 +34,7 @@ class NonEquilibriumMobilityData:
         self.parameter_keys = [p for p in self.parameters]
         self.data_weight_dict = data_weight_dict if data_weight_dict is not None else {}
         self.output = get_output_base_name(data['output'])
-        self.reference = data['reference']
+        self.reference = data.get('reference', '')
 
         self.comps = data['components']
         self.elements = sorted(list(set([v.Species(c).name for c in self.comps])))
@@ -201,6 +201,15 @@ class NonEquilibriumMobilityResidual(ResidualFunction):
         parameters = dict(zip(symbols_to_fit, [0]*len(symbols_to_fit)))
 
         self.mob_data = get_mob_data(database, comps, phases, datasets, parameters, weight)
+
+    def get_residuals(self, parameters) -> tuple[list[float], list[float]]:
+        residuals = []
+        weights = []
+        for data in self.mob_data:
+            diffs, wts = calc_mob_differences(data, parameters)
+            residuals.append(diffs)
+            weights.append(wts)
+        return np.concatenate(residuals, axis=0), np.concatenate(weights, axis=0)
         
     def get_likelihood(self, parameters) -> float:
         likelihood = calculate_mob_probability(self.mob_data, parameters)

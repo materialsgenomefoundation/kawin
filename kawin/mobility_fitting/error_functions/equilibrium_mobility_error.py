@@ -3,7 +3,7 @@ Calculate error due to interdiffusivity, tracer diffusivity, activation energy a
 based off equilibrium
 """
 import logging
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 from typing import Dict, List, Optional, Union, Sequence
 
 from itertools import product
@@ -29,6 +29,8 @@ from kawin.mobility_fitting.error_functions.utils import get_output_base_name, g
 
 _log = logging.getLogger(__name__)
 
+CachedCS = namedtuple("CachedCS", ["elements", "temperature", "dof", "x", "dmudx"])
+
 class EquilibriumMobilityData:
     """
     Stores internal values for each dataset needed to compute output
@@ -38,7 +40,7 @@ class EquilibriumMobilityData:
         self.parameter_keys = [p for p in self.parameters]
         self.data_weight_dict = data_weight_dict if data_weight_dict is not None else {}
         self.output = get_output_base_name(data['output'])
-        self.reference = data['reference']
+        self.reference = data.get('reference', '')
 
         pot_conds = OrderedDict([(getattr(v, key), unpack_condition(data['conditions'][key])) for key in sorted(data['conditions'].keys()) if not key.startswith('X_')])
         comp_conds = OrderedDict([(v.X(key[2:]), unpack_condition(data['conditions'][key])) for key in sorted(data['conditions'].keys()) if key.startswith('X_')])
@@ -99,12 +101,11 @@ class EquilibriumMobilityData:
 
             #Grab data from global cache
             result, cs = local_equilibrium(dbf, self.elements, self.phases, currConds, self.models, self.phase_records)
-            cs_el = list(cs[0].phase_record.nonvacant_elements)
-            cs_T = cs[0].dof[cs[0].phase_record.state_variables.index(v.T)]
-            cs_dof = np.array(cs[0].dof)
-            cs_X = np.array(cs[0].X)
-            cs_dmudx = partialdMudX(result.chemical_potentials, cs[0])
-            self.cache[tuple(inds)] = (cs_el, cs_T, cs_dof, cs_X, cs_dmudx)
+            self.cache[tuple(inds)] = CachedCS(elements=list(cs[0].phase_record.nonvacant_elements),
+                                               temperature=cs[0].dof[cs[0].phase_record.state_variables.index(v.T)],
+                                               dof=np.array(cs[0].dof),
+                                               x=np.array(cs[0].X),
+                                               dmudx=partialdMudX(result.chemical_potentials, cs[0]))
 
 def get_mob_data(dbf: Database, comps: Sequence[str], phases: Sequence[str], datasets: PickleableTinyDB, parameters: Dict[str, float], data_weight_dict: Optional[Dict[str, float]] = None):
     '''
@@ -156,11 +157,12 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
         cs_data = data.cache[tuple(inds)]
 
         #Compute mobility from cached equilibrium data
-        cs_el, cs_T, cs_dof, cs_X, cs_dmudx = cs_data
-        #mob_from_CS = cmob.mobility_from_composition_set_quick(cs_dof, cs_el, data.mob_callables[data.phases[0]], data.mobility_correction, parameters = paramDict)
-        mob_from_CS = mobility_from_dof_phase_record(cs_dof, data.mob_phase_records, data.phases[0], cs_el, paramDict)
-
-        refIndex = data.non_va_elements.index(data.refComp[0])
+        #  For interdiffusivity, we want mobilities of the composition set elements
+        #  For tracer diffusivity, we want mobilities of the reference element
+        if data.output == 'INTER_DIFF':
+            mob_from_CS = mobility_from_dof_phase_record(cs_data.dof, data.mob_phase_records, data.phases[0], cs_data.elements, paramDict)
+        else:
+            mob_from_CS = mobility_from_dof_phase_record(cs_data.dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)
         
         #NOTE: for interdiffusivity, tracer diffusivity and prefactor, we multiply by the sign of the value
         #      This is for cases if the computed and desired values are of different signs
@@ -172,30 +174,32 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
         #         that exists in the database, then the sign of the calculated and desired interdiffusivity
         #         should be the same
         if data.output == 'INTER_DIFF':
-            mobMatrix = mobility_matrix_from_dof(cs_dof, cs_X, cs_el, mob_from_CS, data.phase_records[data.phases[0]], data.vacancyPoor)
-            cd, _ = chemical_diffusivity_from_mob(cs_dmudx, mobMatrix)
+            mobMatrix = mobility_matrix_from_dof(cs_data.dof, cs_data.x, cs_data.elements, mob_from_CS, data.phase_records[data.phases[0]], data.vacancyPoor)
+            cd, _ = chemical_diffusivity_from_mob(cs_data.dmudx, mobMatrix)
 
             depComp1 = data.non_va_elements.index(data.depComps[0])
             depComp2 = data.non_va_elements.index(data.depComps[1])
+            refIndex = data.non_va_elements.index(data.refComp[0])
+
             if data.depComps[1] in interstitials:
                 D = cd[depComp1, depComp2]
             else:
                 D = cd[depComp1, depComp2] - cd[depComp1, refIndex]
-            print(data.phases[0], cs_T, data.refComp, data.depComps, D, value)
+            print(data.phases[0], cs_data.temperature, data.refComp, data.depComps, D, value)
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_DIFF':
-            tracer_diff = tracer_diffusivity_from_mobility(cs_T, mob_from_CS)
-            D = tracer_diff[refIndex]
+            tracer_diff = tracer_diffusivity_from_mobility(cs_data.temperature, mob_from_CS)
+            D = tracer_diff[0]
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_D0':
-            D0 = prefactor_from_dof_phase_record(cs_dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
+            D0 = prefactor_from_dof_phase_record(cs_data.dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
             D = np.exp(D0)
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_Q':
-            Q = activation_energy_from_dof_phase_record(cs_dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
+            Q = activation_energy_from_dof_phase_record(cs_data.dof, data.mob_phase_records, data.phases[0], [data.refComp[0]], paramDict)[0]
             diffs.append(Q - value)
 
         wts.append(data.weights[i])
@@ -245,6 +249,15 @@ class EquilibriumMobilityResidual(ResidualFunction):
         parameters = dict(zip(symbols_to_fit, [0]*len(symbols_to_fit)))
 
         self.mob_data = get_mob_data(database, comps, phases, datasets, parameters, weight)
+
+    def get_residuals(self, parameters) -> tuple[list[float], list[float]]:
+        residuals = []
+        weights = []
+        for data in self.mob_data:
+            diffs, wts = calc_mob_differences(data, parameters)
+            residuals.append(diffs)
+            weights.append(wts)
+        return np.concatenate(residuals, axis=0), np.concatenate(weights, axis=0)
 
     def get_likelihood(self, parameters):
         likelihood = calculate_mob_probability(self.mob_data, parameters)

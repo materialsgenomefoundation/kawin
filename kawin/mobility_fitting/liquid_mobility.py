@@ -1,10 +1,10 @@
 import numpy as np
-from symengine import Piecewise, And, Symbol, log
+from symengine import Piecewise, And, log
 
 from pycalphad import Database, variables as v
 
 from kawin.Constants import GAS_CONSTANT, BOLTZMANN_CONSTANT
-from kawin.mobility_fitting.utils import _vname, find_last_variable, MobilityTerm
+from kawin.mobility_fitting.utils import MobilityTemplate
 
 def _getK0(melting_phase):
     phases = {'BCC': 1, 'HCP': 2, 'FCC': 3}
@@ -40,7 +40,7 @@ def _get_liquid_phase_name(database):
             return ph
     return 'LIQUID'
 
-def compute_liquid_mobility_liu(database: Database, species: list[LiuSpecies]):
+def compute_liquid_mobility_liu(dbf: Database, species: list[LiuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
     '''
     Species data will include {diameter, atomic_number, T_m, phase}
 
@@ -65,25 +65,23 @@ def compute_liquid_mobility_liu(database: Database, species: list[LiuSpecies]):
     
     In a calphad database, this becomes MQ = -Q + R*T*ln(D0_AB)
     '''
-    liq_name = _get_liquid_phase_name(database)
-    mobility_models = {}
+    liq_name = _get_liquid_phase_name(dbf)
+    components = [s.name for s in species]
+    templates = {c: MobilityTemplate(liq_name, c, [1], components, False) for c in components}
+    # Solute is the diffusing species while solvent is the endmember component
     for solute in species:
-        models = []
         for solvent in species:
             Q = -0.17 * GAS_CONSTANT * solvent.Tm * (16 + solvent.K0)
             D0 = (8.95 - 0.0734 * solvent.atomic_number) * 1e-8
             D0 *= solvent.diameter / solute.diameter
+            templates[solute.name].add_term([solvent.name], 0, Q + GAS_CONSTANT*np.log(D0)*v.T)
 
-            const_array = [[v.SiteFraction(liq_name, 0, solvent.name)]]
-            mob_term = MobilityTerm(const_array, 0)
-            mob_term.expr = Piecewise((Q + GAS_CONSTANT*np.log(D0)*v.T, And(1.0 < v.T, v.T < 10000)), (0, True))
-            models.append(mob_term)
+        if add_to_database:
+            templates[solute.name].add_to_database(dbf, {})
 
-        mobility_models[solute.name] = models
+    return templates
 
-    return mobility_models
-
-def compute_liquid_mobility_su(database: Database, species: list[SuSpecies]):
+def compute_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
     '''
     Species data will include {atomic_mass, density, T_m, CTE (optional)}
     If CTE is included, then density/molar volume will be assumed to be at room temperature
@@ -128,8 +126,10 @@ def compute_liquid_mobility_su(database: Database, species: list[SuSpecies]):
     C2 = 2.34
     R0 = 0.644e-10
 
-    liq_name = _get_liquid_phase_name(database)
-    mobility_models = {}
+    liq_name = _get_liquid_phase_name(dbf)
+    components = [s.name for s in species]
+    templates = {c: MobilityTemplate(liq_name, c, [1], components, False) for c in components}
+    # Solute is the diffusing species while solvent is the endmember component
     for solute in species:
         models = []
         for solvent in species:
@@ -148,12 +148,10 @@ def compute_liquid_mobility_su(database: Database, species: list[SuSpecies]):
             D3 = BOLTZMANN_CONSTANT / (4*np.pi)
             D0 = D3/(D1*D2) * v.T**(1/2) / (1 - 0.112 * (v.T / solvent.Tm)**(1/2))
 
-            const_array = [[v.SiteFraction(liq_name, 0, solvent.name)]]
-            mob_term = MobilityTerm(const_array, 0)
-            mob_term.expr = Piecewise((Q + GAS_CONSTANT*log(D0)*v.T, And(1.0 < v.T, v.T < 10000)), (0, True))
-            models.append(mob_term)
+            templates[solute.name].add_term([solvent.name], 0, Q + GAS_CONSTANT*np.log(D0)*v.T)
 
-        mobility_models[solute.name] = models
+        if add_to_database:
+            templates[solute.name].add_to_database(dbf, {})
 
-    return mobility_models
+    return templates
 

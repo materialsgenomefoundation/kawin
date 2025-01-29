@@ -137,6 +137,7 @@ class PrecipitateBase(GenericModel):
         '''
         Converts dictionary of data to precipitation data
         '''
+        self.setup()
         self.pData.fromDict(data)
     
     def _appendArrays(self, newVals):

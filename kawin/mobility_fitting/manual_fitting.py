@@ -1,100 +1,21 @@
 import itertools
 from typing import Union
-from abc import abstractmethod, ABC
+from collections import namedtuple
 
 import numpy as np
-import matplotlib.pyplot as plt
-from symengine import Symbol, Basic
+from symengine import Basic
 from tinydb import TinyDB, where
 
-from pycalphad import Database, Model, variables as v
-from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
+from pycalphad import variables as v
 from espei.datasets import load_datasets, recursive_glob
 
-from kawin.thermo.LocalEquilibrium import local_equilibrium
-from kawin.mobility_fitting.utils import DatasetPair, FittingResult, MobilityTemplate, _eval_symengine_expr
+from kawin.mobility_fitting.template import MobilityTemplate, SiteFractionGenerator
+from kawin.mobility_fitting.utils import _eval_symengine_expr
+
+DatasetPair = namedtuple('SystemPair', ['site_fractions', 'values'])
+FittingResult = namedtuple('FittingResult', ['template', 'parameters', 'aicc'])
     
-class SiteFractionGenerator(ABC):
-    '''
-    Object to compute site fractions from conditions
-    '''
-    @abstractmethod
-    def generate_site_fractions(self, phase: str, components: list[str], conditions : dict[v.StateVariable, float]) -> dict[v.Species, float]:
-        '''
-        Generate site fractions from conditions
-
-        Parameters
-        ----------
-        phase: str
-        components: list[str]
-        conditions: dict[v.StateVariable, float]
-
-        Returns
-        -------
-        {v.SiteFraction: float}
-        '''
-        raise NotImplementedError()
-
-class EquilibriumSiteFractionGenerator(SiteFractionGenerator):
-    '''
-    Grabs site fraction values from local equilibrium calculations
-
-    Parameters
-    ----------
-    database: Database
-    '''
-    def __init__(self, database : Database, override_conditions = {}):
-        if isinstance(database, str):
-            database = Database(database)
-        self.dbf = database
-        self.models = {}
-        self.phase_records = {}
-
-        self._conditions_override = {v.N: 1, v.GE: 0}
-        for key, value in override_conditions:
-            self.set_override_condition(key, value)
-
-    def set_override_condition(self, variable, value):
-        self._conditions_override[variable] = value
-
-    def remove_override_condition(self, variable):
-        self._conditions_override.pop(variable)
-
-    def _generate_comps_key(self, components):
-        comps = sorted(components)
-        return frozenset(comps), comps
-
-    def _generate_phase_records(self, phase, components):
-        # Caches models, phase_records and constituents based off active components and phase
-        active_comps, comps = self._generate_comps_key(components)
-        if active_comps not in self.models:
-            self.models[active_comps] = {}
-            self.phase_records[active_comps] = {}
-        
-        if phase not in self.models[active_comps]:
-            self.models[active_comps][phase] = {phase: Model(self.dbf, comps, phase)}
-            self.phase_records[active_comps][phase] = PhaseRecordFactory(self.dbf, comps, {v.T, v.P, v.N, v.GE}, self.models[active_comps][phase])
-        
-        return self.models[active_comps][phase], self.phase_records[active_comps][phase]
-
-    def generate_site_fractions(self, phase: str, components: list[str], conditions : dict[v.StateVariable: float]) -> dict[v.Species: float]:
-        # Get phase records from active components
-        active_comps, comps = self._generate_comps_key(components)
-        models, prf = self._generate_phase_records(phase, components)
-
-        # Override any conditions
-        for oc in self._conditions_override:
-            conditions[oc] = self._conditions_override[oc]
-
-        # Compute local equilibrium (to avoid miscibility gaps)
-        # Store site fractions
-        #    The first 4 items of CompositionSet.dof refers to v.GE, v.N, v.P and v.T
-        #    The order of the site fractions in CompositionSet.dof should correspond to the order in the pycalphad model
-        results, comp_sets = local_equilibrium(self.dbf, comps, [phase], conditions, models, prf)
-        sfg = {c:val for c,val in zip(prf[phase].variables, comp_sets[0].dof[4:])}
-        return sfg
-    
-def grab_datasets(datasets: Union[TinyDB, str], data_type: str, phase: str, components: list[str], diffusing_species: str) -> tuple[list, list]:
+def grab_datasets(datasets: Union[TinyDB, str], data_type: str, phase: str, components: list[str], diffusing_species: str, include_disabled: bool = False) -> tuple[list, list]:
     '''
     Grabs all datasets for diffusing species of data type
 
@@ -112,10 +33,10 @@ def grab_datasets(datasets: Union[TinyDB, str], data_type: str, phase: str, comp
         raise ValueError('Data type must be Q or D0')
     
     if type(datasets) == str:
-        datasets = load_datasets(sorted(recursive_glob(datasets, '*.json')))
+        datasets = load_datasets(sorted(recursive_glob(datasets, '*.json')), include_disabled)
 
     components = list(set(components).union(set(['VA'])))
-
+    
     query = (
         (where('components').test(lambda x: set(x).issubset(components))) & 
         (where('phases').test(lambda x: len(x) == 1 and x[0] == phase)) &
@@ -203,14 +124,14 @@ def least_squares_fit(A: np.ndarray, b: np.ndarray, p: int = 1) -> tuple[np.ndar
     aicc = aic + correction
     return x, aicc
 
-def _fit_model(datasets: Union[TinyDB, str], data_type: str, template: MobilityTemplate, function: Basic, site_fraction_generator: SiteFractionGenerator = None, p = 1, transform = None):
+def _fit_model(data: list, template: MobilityTemplate, function: Basic, site_fraction_generator: SiteFractionGenerator = None, p = 1, transform = None):
     '''
     Fits activation energy or prefactor model
     This is really more of a helper function for fit_prefactor and fit_activation_energy
 
     Parameters
     ----------
-    datasets: Union[TinyDB, str]
+    datasets: list
     data_type: str
         Either 'D0' or 'Q'
     template: MobilityTemplate
@@ -224,7 +145,6 @@ def _fit_model(datasets: Union[TinyDB, str], data_type: str, template: MobilityT
         For prefactor, this should be f(x) = ln(x)
         For activation energy, this is not needed (i.e. f(x) = x)
     '''
-    data = grab_datasets(datasets, data_type, template.phase, template.elements, template.diffusing_species.name)
     derivatives = template.get_derivatives(function)
     sf_data = generate_site_fractions(data, site_fraction_generator)
 
@@ -239,13 +159,13 @@ def _fit_model(datasets: Union[TinyDB, str], data_type: str, template: MobilityT
     x, aicc = least_squares_fit(A, b, p)
     return {s:xi for s,xi in zip(derivatives.symbols, x)}, aicc
 
-def fit_prefactor(datasets: Union[TinyDB, str], template: MobilityTemplate, site_fraction_generator: SiteFractionGenerator = None, p = 1):
+def fit_prefactor(data: list, template: MobilityTemplate, site_fraction_generator: SiteFractionGenerator = None, p = 1):
     '''
     Fits prefactor model
 
     Parameters
     ----------
-    datasets: Union[TinyDB, str]
+    data: list
     template: MobilityTemplate
     site_fraction_generate: SiteFractionGenerator
     p: int
@@ -256,15 +176,15 @@ def fit_prefactor(datasets: Union[TinyDB, str], template: MobilityTemplate, site
     symbols: {Symbol: float}
     aicc: int
     '''
-    return _fit_model(datasets, 'D0', template, template.prefactor, site_fraction_generator, p, lambda x: np.log(x))
+    return _fit_model(data, template, template.prefactor, site_fraction_generator, p, lambda x: np.log(x))
 
-def fit_activation_energy(datasets: Union[TinyDB, str], template: MobilityTemplate, site_fraction_generator: SiteFractionGenerator = None, p = 1):
+def fit_activation_energy(data: list, template: MobilityTemplate, site_fraction_generator: SiteFractionGenerator = None, p = 1):
     '''
     Fits activation energy model
 
     Parameters
     ----------
-    datasets: Union[TinyDB, str]
+    data: list
     template: MobilityTemplate
     site_fraction_generate: SiteFractionGenerator
     p: int
@@ -275,15 +195,15 @@ def fit_activation_energy(datasets: Union[TinyDB, str], template: MobilityTempla
     symbols: {Symbol: float}
     aicc: int
     '''
-    return _fit_model(datasets, 'Q', template, template.activation_energy, site_fraction_generator, p)
+    return _fit_model(data, template, template.activation_energy, site_fraction_generator, p)
 
-def select_best_model(datasets: Union[TinyDB, str], templates: list[MobilityTemplate], fit_function: callable, site_fraction_generator: SiteFractionGenerator = None, p = 1, return_all_models = False):
+def select_best_model(data: list, templates: list[MobilityTemplate], fit_function: callable, site_fraction_generator: SiteFractionGenerator = None, p = 1, return_all_models = False):
     '''
     Fits multiple templates and selects the best one based off the AICC criteria
 
     Parameters
     ----------
-    datasets: Union[TinyDB, str]
+    data: list
     templates: list[MobliityTemplate]
         List of mobility templates to fit and compare
     fit_function: callable
@@ -303,7 +223,7 @@ def select_best_model(datasets: Union[TinyDB, str], templates: list[MobilityTemp
     params_list = []
     aicc_list = []
     for template in templates:
-        params, aicc = fit_function(datasets, template, site_fraction_generator, p=p)
+        params, aicc = fit_function(data, template, site_fraction_generator, p=p)
         params_list.append(params)
         aicc_list.append(aicc)
 
@@ -314,70 +234,3 @@ def select_best_model(datasets: Union[TinyDB, str], templates: list[MobilityTemp
         return all_fits[best_index], all_fits
     else:
         return FittingResult(template=templates[best_index], parameters=params_list[best_index], aicc=aicc_list[best_index])
-
-def evaluate_model(template: MobilityTemplate, function: Basic, parameter_values: dict[Symbol, float], site_fraction_generator: SiteFractionGenerator, conditions: dict[v.StateVariable, float]):
-    '''
-    Evaluates model template along single variable
-
-    Parameters
-    ----------
-    template: MobilityTemplate
-    function: symengine.Basic
-        Function to evaluate
-    parameter_values: dict[Symbol, float]
-        Fitted parameters
-        Parameters in function that are not defined here will assume to be 0
-    site_fraction_generator: SiteFractionGenerator
-    conditions: dict[v.StateVariable, float]
-        Conditions to evaluate function, 1 variable must be a list
-
-    Returns
-    -------
-    xs: values of evaluated dependent condition
-    ys: values of evaluated function
-    dependent_var: dependent condition
-    '''
-    dependent_var = [key for key, val in conditions.items() if len(np.atleast_1d(val)) > 1]
-    if len(dependent_var) != 1:
-        raise ValueError(f"Number of free conditions must be 1, but is {len(dependent_var)}")
-    
-    dependent_vals = conditions[dependent_var[0]]
-    xs = np.linspace(dependent_vals[0], dependent_vals[1], int((dependent_vals[1] - dependent_vals[0])/dependent_vals[2]))
-    ys = np.zeros(len(xs))
-    for i,x in enumerate(xs):
-        new_conds = {v.N: 1, v.P: 101325, v.GE: 0, v.T: 298.15}
-        new_conds.update({**conditions})
-        new_conds[dependent_var[0]] = x
-        site_fractions = site_fraction_generator.generate_site_fractions(template.phase, template.elements, new_conds)
-        ys[i] = _eval_symengine_expr(function, {**site_fractions, **parameter_values, **new_conds})
-
-    return xs, ys, dependent_var[0]
-
-def plot_prefactor(template: MobilityTemplate, parameter_values: dict[Symbol, float], site_fraction_generator: SiteFractionGenerator, conditions: dict[v.StateVariable, float], ax=None, *args, **kwargs):
-    '''
-    Plots mobility prefactor using input parameters
-    '''
-    if ax is None:
-        fig, ax = plt.subplots()
-
-    xs, ys, dep_var = evaluate_model(template, template.prefactor, parameter_values, site_fraction_generator, conditions)
-    ax.plot(xs, np.exp(ys), *args, **kwargs)
-    ax.set_xlim([xs[0], xs[-1]])
-    ax.set_xlabel(dep_var)
-    ax.set_ylabel(r'Diffusion Prefactor ($cm^2/s$)')
-    ax.set_yscale('log')
-    return ax
-
-def plot_activation_energy(template: MobilityTemplate, parameter_values: dict[Symbol, float], site_fraction_generator: SiteFractionGenerator, conditions: dict[v.StateVariable, float], ax=None, *args, **kwargs):
-    '''
-    Plots mobility activation energy using input parameters
-    '''
-    if ax is None:
-        fig, ax = plt.subplots()
-
-    xs, ys, dep_var = evaluate_model(template, template.activation_energy, parameter_values, site_fraction_generator, conditions)
-    ax.plot(xs, ys, *args, **kwargs)
-    ax.set_xlim([xs[0], xs[-1]])
-    ax.set_xlabel(dep_var)
-    ax.set_ylabel('Activation Energy (J/mol)')
-    return ax

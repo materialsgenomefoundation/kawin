@@ -1,12 +1,14 @@
 import numpy as np
-from symengine import Piecewise, And, log
+from symengine import log
 
 from pycalphad import Database, variables as v
 
 from kawin.Constants import GAS_CONSTANT, BOLTZMANN_CONSTANT
-from kawin.mobility_fitting.utils import MobilityTemplate
+from kawin.mobility_fitting.template import MobilityTemplate
 
 def _getK0(melting_phase):
+    if melting_phase is None:
+        return 0
     phases = {'BCC': 1, 'HCP': 2, 'FCC': 3}
     for p in phases:
         if p in melting_phase:
@@ -14,6 +16,11 @@ def _getK0(melting_phase):
     return 0
 
 class LiuSpecies:
+    '''
+    Units:
+        diameter: Angstroms
+        T_m: K
+    '''
     def __init__(self, name, diameter, atomic_number, Tm, melting_phase = None):
         self.name = name
         self.diameter = diameter
@@ -23,6 +30,13 @@ class LiuSpecies:
         self.K0 = _getK0(melting_phase)
 
 class SuSpecies:
+    '''
+    Units:
+        atomic_mass: g/mol
+        density: g/cm3
+        T_m: K
+        CTE: m/m
+    '''
     def __init__(self, name, atomic_mass, density, Tm, cte = 0):
         self.name = name
         self.atomic_mass = atomic_mass
@@ -40,13 +54,9 @@ def _get_liquid_phase_name(database):
             return ph
     return 'LIQUID'
 
-def compute_liquid_mobility_liu(dbf: Database, species: list[LiuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
+def generate_liquid_mobility_liu(dbf: Database, species: list[LiuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
     '''
     Species data will include {diameter, atomic_number, T_m, phase}
-
-    Units:
-        diameter: Angstroms
-        T_m: K
 
     From Y. Liu et al, "A predictive equation for solute diffusivity in liquid metals" 
     Scripta Materialia 55 (2006), 367. doi:10.1016/j.scriptamat.2006.04.019
@@ -67,31 +77,25 @@ def compute_liquid_mobility_liu(dbf: Database, species: list[LiuSpecies], add_to
     '''
     liq_name = _get_liquid_phase_name(dbf)
     components = [s.name for s in species]
-    templates = {c: MobilityTemplate(liq_name, c, [1], components, False) for c in components}
+    templates = {c: MobilityTemplate(liq_name, c, [1], [components], False) for c in components}
     # Solute is the diffusing species while solvent is the endmember component
     for solute in species:
         for solvent in species:
             Q = -0.17 * GAS_CONSTANT * solvent.Tm * (16 + solvent.K0)
             D0 = (8.95 - 0.0734 * solvent.atomic_number) * 1e-8
             D0 *= solvent.diameter / solute.diameter
-            templates[solute.name].add_term([solvent.name], 0, Q + GAS_CONSTANT*np.log(D0)*v.T)
+            templates[solute.name].add_term([[solvent.name]], 0, Q + GAS_CONSTANT*np.log(D0)*v.T)
 
         if add_to_database:
             templates[solute.name].add_to_database(dbf, {})
 
     return templates
 
-def compute_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
+def generate_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
     '''
     Species data will include {atomic_mass, density, T_m, CTE (optional)}
     If CTE is included, then density/molar volume will be assumed to be at room temperature
         And will be adjusted to the melting point
-
-    Units:
-        atomic_mass: g/mol
-        density: g/cm3
-        T_m: K
-        CTE: m/m
 
     From X. Su et al, "A new equation for temperature dependent solute impurity diffusivity in liquid metals" 
     Journal of Phase Equilibria and Diffusion 31 (2010) 333. doi:10.1007/s11669-010-9726-4
@@ -128,7 +132,7 @@ def compute_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_d
 
     liq_name = _get_liquid_phase_name(dbf)
     components = [s.name for s in species]
-    templates = {c: MobilityTemplate(liq_name, c, [1], components, False) for c in components}
+    templates = {c: MobilityTemplate(liq_name, c, [1], [components], False) for c in components}
     # Solute is the diffusing species while solvent is the endmember component
     for solute in species:
         models = []
@@ -148,7 +152,7 @@ def compute_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_d
             D3 = BOLTZMANN_CONSTANT / (4*np.pi)
             D0 = D3/(D1*D2) * v.T**(1/2) / (1 - 0.112 * (v.T / solvent.Tm)**(1/2))
 
-            templates[solute.name].add_term([solvent.name], 0, Q + GAS_CONSTANT*np.log(D0)*v.T)
+            templates[solute.name].add_term([[solvent.name]], 0, Q + GAS_CONSTANT*log(D0)*v.T)
 
         if add_to_database:
             templates[solute.name].add_to_database(dbf, {})

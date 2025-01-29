@@ -109,7 +109,7 @@ class StepD0(FittingStep):
         return total_response
 
     @classmethod
-    def get_response_vector(cls, fixed_model: Model, fixed_portions: List[symengine.Basic], data: List[Dataset], sample_condition_dicts: [Dict[str, Any]]) -> ArrayLike:  # np.float_
+    def get_response_vector(cls, fixed_model: Model, fixed_portions: List[symengine.Basic], data: List[Dataset], sample_condition_dicts: list[dict[str, Any]]) -> ArrayLike:  # np.float64
         mole_atoms_per_mole_formula_unit = fixed_model._site_ratio_normalization
         # Define site fraction symbols that will be reused
         phase_name = fixed_model.phase_name
@@ -118,7 +118,7 @@ class StepD0(FittingStep):
         site_fractions = []
         for ds in data:
             for _ in ds['conditions']['T']:
-                sf = build_sitefractions(phase_name, ds['solver']['sublattice_configurations'], ds['solver'].get('sublattice_occupancies', np.ones((len(ds['solver']['sublattice_configurations']), len(ds['solver']['sublattice_configurations'][0])), dtype=np.float_)))
+                sf = build_sitefractions(phase_name, ds['solver']['sublattice_configurations'], ds['solver'].get('sublattice_occupancies', np.ones((len(ds['solver']['sublattice_configurations']), len(ds['solver']['sublattice_configurations'][0])), dtype=np.float64)))
                 site_fractions.append(sf)
         site_fractions = list(itertools.chain(*site_fractions))
 
@@ -139,7 +139,7 @@ class StepD0(FittingStep):
             sf.update(cond_dict)
         # also replace with database symbols in case we did higher order fitting
         data_qtys = [fixed_model.symbol_replace(symengine.S(i).xreplace(sf), fixed_model._symbols).evalf() for i, sf in zip(data_qtys, site_fractions)]
-        data_qtys = np.asarray(data_qtys, dtype=np.float_)
+        data_qtys = np.asarray(data_qtys, dtype=np.float64)
         return data_qtys
     
 class StepQ(StepD0):

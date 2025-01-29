@@ -144,6 +144,7 @@ class DiffusionModel(GenericModel):
         self.x = data['finalX']
         self._recordedX = data['recordX']
         self._recordedTime = data['recordTime']
+        self.isSetup = True
     
     def setHashSensitivity(self, s):
         '''

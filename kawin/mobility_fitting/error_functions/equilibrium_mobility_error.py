@@ -185,7 +185,6 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
                 D = cd[depComp1, depComp2]
             else:
                 D = cd[depComp1, depComp2] - cd[depComp1, refIndex]
-            print(data.phases[0], cs_data.temperature, data.refComp, data.depComps, D, value)
             diffs.append((np.sign(D)*np.log10(np.abs(D)) - np.sign(value)*np.log10(np.abs(value))))
 
         elif data.output == 'TRACER_DIFF':

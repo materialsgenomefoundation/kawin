@@ -29,6 +29,8 @@ jobs:
     - name: Save pycalphad version
       run: |
         echo "PYCALPHAD_VERSION=$(python -c "from importlib.metadata import version;print(version('pycalphad'))")" >> $GITHUB_ENV
+    # temporary - this will install the mobility fitting compatibility espei branch
+    - run: python -m pip install git+https://github.com/nury12n/ESPEI.git@mobility_fitting_compatibility
     - run: python -m pip install build
     - run: python -m build --wheel
     - run: python -m pip install dist/*.whl

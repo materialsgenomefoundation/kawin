@@ -144,6 +144,7 @@ class DiffusionModel(GenericModel):
         self.x = data['finalX']
         self._recordedX = data['recordX']
         self._recordedTime = data['recordTime']
+        self.isSetup = True
     
     def setHashSensitivity(self, s):
         '''
@@ -418,12 +419,13 @@ class DiffusionModel(GenericModel):
         print('Iteration\tSim Time (h)\tRun time (s)')
 
     def printStatus(self, iteration, modelTime, simTimeElapsed):
+        print('{}\t\t{:.3e}\t\t{:.1f}'.format(iteration, modelTime/3600, simTimeElapsed))
         # Convert time to hours
-        super().printStatus(iteration, modelTime/3600, simTimeElapsed)
+        #super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
         return self.t, [self.x]
-    
+          
     def getdXdt(self, t, x):
         '''
         dXdt is defined as -dJ/dz
@@ -477,7 +479,7 @@ class DiffusionModel(GenericModel):
             e = self._getElementIndex(element)
             return self.x[e]
 
-    def plot(self, ax = None, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
+    def plot(self, ax = None, plotReference = True, plotElement = None, zScale = 1, zOffset = 0, *args, **kwargs):
         '''
         Plots composition profile
 
@@ -492,9 +494,15 @@ class DiffusionModel(GenericModel):
         zScale : float
             Scale factor for z-coordinates
         '''
-        return diffPlot.plot(self, ax, plotReference, plotElement, zScale, *args, **kwargs)
+        return diffPlot.plot(diffModel=self, 
+                             ax=ax, 
+                             plotReference=plotReference, 
+                             plotElement=plotElement, 
+                             zScale=zScale,
+                             zOffset=zOffset, 
+                             *args, **kwargs)
 
-    def plotTwoAxis(self, Lelements, Relements, zScale = 1, axL = None, axR = None, *args, **kwargs):
+    def plotTwoAxis(self, Lelements, Relements, zScale = 1, zOffset = 0, axL = None, axR = None, *args, **kwargs):
         '''
         Plots composition profile with two y-axes
 
@@ -512,9 +520,16 @@ class DiffusionModel(GenericModel):
         zScale : float
             Scale factor for z-coordinates
         '''
-        return diffPlot.plotTwoAxis(self, Lelements, Relements, zScale, axL, axR, *args, **kwargs)
+        return diffPlot.plotTwoAxis(diffModel=self, 
+                                    Lelements=Lelements, 
+                                    Relements=Relements, 
+                                    zScale=zScale, 
+                                    zOffset=zOffset, 
+                                    axL=axL, 
+                                    axR=axR, 
+                                    *args, **kwargs)
 
-    def plotPhases(self, ax = None, plotPhase = None, zScale = 1, *args, **kwargs):
+    def plotPhases(self, ax = None, plotPhase = None, zScale = 1, zOffset = 0, *args, **kwargs):
         '''
         Plots phase fractions over z
 
@@ -527,4 +542,9 @@ class DiffusionModel(GenericModel):
         zScale : float
             Scale factor for z-coordinates
         '''
-        return diffPlot.plotPhases(self, ax, plotPhase, zScale, *args, **kwargs)
+        return diffPlot.plotPhases(diffModel=self, 
+                                   ax=ax, 
+                                   plotPhase=plotPhase, 
+                                   zScale=zScale,
+                                   zOffset=zOffset, 
+                                   *args, **kwargs)

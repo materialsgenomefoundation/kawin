@@ -15,7 +15,7 @@ from kawin.mobility_fitting.utils import _eval_symengine_expr
 DatasetPair = namedtuple('SystemPair', ['site_fractions', 'values'])
 FittingResult = namedtuple('FittingResult', ['template', 'parameters', 'aicc'])
     
-def grab_datasets(datasets: Union[TinyDB, str], data_type: str, phase: str, components: list[str], diffusing_species: str, include_disabled: bool = False) -> tuple[list, list]:
+def grab_tracer_datasets(datasets: Union[TinyDB, str], data_type: str, phase: str, components: list[str], diffusing_species: str, include_disabled: bool = False) -> tuple[list, list]:
     '''
     Grabs all datasets for diffusing species of data type
 
@@ -32,7 +32,7 @@ def grab_datasets(datasets: Union[TinyDB, str], data_type: str, phase: str, comp
     if data_type != 'Q' and data_type != 'D0':
         raise ValueError('Data type must be Q or D0')
     
-    if type(datasets) == str:
+    if isinstance(datasets, str):
         datasets = load_datasets(sorted(recursive_glob(datasets, '*.json')), include_disabled)
 
     components = list(set(components).union(set(['VA'])))

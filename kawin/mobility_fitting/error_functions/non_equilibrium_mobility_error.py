@@ -215,6 +215,4 @@ class NonEquilibriumMobilityResidual(ResidualFunction):
         likelihood = calculate_mob_probability(self.mob_data, parameters)
         return likelihood
 
-
 residual_function_registry.register(NonEquilibriumMobilityResidual)
-

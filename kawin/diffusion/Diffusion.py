@@ -128,6 +128,7 @@ class DiffusionModel(GenericModel):
         '''
         Converts diffusion data to dictionary
         '''
+        self._finalizeRecording()
         data = {
             'finalTime': self.t,
             'finalX': self.x,
@@ -144,6 +145,8 @@ class DiffusionModel(GenericModel):
         self.x = data['finalX']
         self._recordedX = data['recordX']
         self._recordedTime = data['recordTime']
+        if hasattr(self._recordedTime, '__len__'):
+            self._recordIndex = len(self._recordedTime)
         self.isSetup = True
     
     def setHashSensitivity(self, s):
@@ -182,6 +185,7 @@ class DiffusionModel(GenericModel):
         Enables recording of composition and phase
         '''
         self._record = True
+        self._recordIndex = 0
         self._recordedX = np.zeros((1, len(self.elements), self.N))
         self._recordedTime = np.zeros(1)
 
@@ -204,11 +208,21 @@ class DiffusionModel(GenericModel):
         '''
         if self._record:
             if time > 0:
-                self._recordedX = np.pad(self._recordedX, ((0, 1), (0, 0), (0, 0)))
-                self._recordedTime = np.pad(self._recordedTime, (0, 1))
+                self._recordIndex += 1
+            
+            # Pad a bunch of data to the array so we don't have to copy often
+            N = 10000
+            if self._recordIndex >= self._recordedTime.shape[0]:
+                self._recordedX = np.pad(self._recordedX, ((0, N), (0, 0), (0, 0)))
+                self._recordedTime = np.pad(self._recordedTime, (0, N))
+            
+            self._recordedX[self._recordIndex] = self.x
+            self._recordedTime[self._recordIndex] = time
 
-            self._recordedX[-1] = self.x
-            self._recordedTime[-1] = time
+    def _finalizeRecording(self):
+        if self._record:
+            self._recordedX = self._recordedX[:self._recordIndex]
+            self._recordedTime = self._recordedTime[:self._recordIndex]
 
     def setMeshtoRecordedTime(self, time):
         '''

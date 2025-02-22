@@ -1,3 +1,3 @@
-from .generate import fit_mobility
+from .generate import generate_mobility
 from .template import MobilityTemplate, SiteFractionGenerator, EquilibriumSiteFractionGenerator, plot_prefactor, plot_activation_energy, transform_activation_energy, transform_prefactor
 from .liquid_mobility import SuSpecies, LiuSpecies, generate_liquid_mobility_su, generate_liquid_mobility_liu

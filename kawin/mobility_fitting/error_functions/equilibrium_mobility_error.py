@@ -93,7 +93,7 @@ class EquilibriumMobilityData:
         allConds = [dict(zip(keys,p)) for p in product(*values)]
 
         for i in range(len(allConds)):
-            inds = np.array([self.conditions[k].index(v) for k,v in allConds[i].items()], dtype=np.int32)
+            inds = np.array([self.conditions[k].index(val) for k,val in allConds[i].items()], dtype=np.int32)
 
             currConds = {v.N: 1, v.GE: 0, v.P: allConds[i][v.P], v.T: allConds[i][v.T]}
             for c in allConds[i]['composition']:
@@ -152,7 +152,7 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
     keys, values = zip(*data.conditions.items())
     allConds = [dict(zip(keys,p)) for p in product(*values)]
     for i in range(len(allConds)):
-        inds = np.array([data.conditions[k].index(v) for k,v in allConds[i].items()], dtype=np.int32)
+        inds = np.array([data.conditions[k].index(val) for k,val in allConds[i].items()], dtype=np.int32)
         value = data.values[tuple(inds)]
         cs_data = data.cache[tuple(inds)]
 

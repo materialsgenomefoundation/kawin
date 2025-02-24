@@ -7,7 +7,7 @@ from kawin.diffusion import SinglePhaseModel, HomogenizationModel
 from kawin.diffusion.DiffusionParameters import computeMobility, CompositionProfile, BoundaryConditions, TemperatureParameters
 from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 from kawin.thermo import GeneralThermodynamics
-from kawin.tests.datasets import *
+from kawin.tests.databases import *
 
 N = 100
 singleModelBinary = SinglePhaseModel([-1e-3, 1e-3], N, ['NI', 'CR'], ['FCC_A1'])

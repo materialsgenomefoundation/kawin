@@ -1,5 +1,4 @@
 import json
-import copy
 
 from tinydb import where
 
@@ -81,6 +80,7 @@ def setup_mobility_fitting_description(diffusing_species, fit_to_tracer = False)
             to those values instead
     '''
     steps = []
+    print(diffusing_species)
     for e in diffusing_species:
         if fit_to_tracer:
             Dstar = type(f'Tracer_{e}', (StepTracerDiffusivity,), {'parameter_name': f'MQ_{e}', 'data_types_read': f'TRACER_DIFF_{e}'})
@@ -89,7 +89,6 @@ def setup_mobility_fitting_description(diffusing_species, fit_to_tracer = False)
             D0 = type(f'D0_{e}', (StepD0,), {'parameter_name': f'MQ_{e}', 'data_types_read': f'TRACER_D0_{e}'})
             Q = type(f'Q_{e}', (StepQ,), {'parameter_name': f'MQ_{e}', 'data_types_read': f'TRACER_Q_{e}'})
             steps += [D0, Q]
-        
     return ModelFittingDescription(steps, model=MobilityModel)
 
 def generate_mobility(phase_models, datasets, diffusing_species = None, ridge_alpha=None, aicc_penalty_factor=None, dbf=None, fit_to_tracer=False):
@@ -116,7 +115,7 @@ def generate_mobility(phase_models, datasets, diffusing_species = None, ridge_al
         datasets = load_datasets(sorted(recursive_glob(datasets, '*.json')))
 
     # Get non-VA components
-    components = list(set(phase_models['components']) - set(['VA']))
+    components = sorted(list(set(phase_models['components']) - set(['VA'])))
 
     # If no diffusing species, then assume same as components
     if diffusing_species is None:

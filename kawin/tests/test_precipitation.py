@@ -3,7 +3,7 @@ import os
 import numpy as np
 from numpy.testing import assert_allclose
 
-from kawin.tests.datasets import ALZR_TDB, NICRAL_TDB, ALMGSI_DB
+from kawin.tests.databases import ALZR_TDB, NICRAL_TDB, ALMGSI_DB
 from kawin.precipitation import PrecipitateModel, StrainEnergy
 from kawin.precipitation import VolumeParameter, PrecipitateParameters, MatrixParameters, TemperatureParameters
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics

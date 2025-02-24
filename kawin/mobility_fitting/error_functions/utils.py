@@ -1,6 +1,7 @@
 from pycalphad import Model, variables as v
 from pycalphad.codegen.phase_record_factory import PhaseRecordFactory
 from pycalphad.core.utils import extract_parameters
+
 from kawin.thermo.Mobility import MobilityModel
 
 def get_output_base_name(output_name):

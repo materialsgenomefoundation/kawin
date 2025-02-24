@@ -4,7 +4,7 @@ from tinydb import Query
 from pycalphad import Database, variables as v
 from espei.utils import database_symbols_to_fit
 
-def get_used_database_symbols(dbf, elements, diffusingSpecies, phases = None, includeSubsystems = False):
+def get_used_database_symbols(dbf, elements, diffusing_species, phases = None, include_subsystems = False):
     '''
     Given the database, grab all symbols that pertain only to the given elements and phases
 
@@ -23,40 +23,38 @@ def get_used_database_symbols(dbf, elements, diffusingSpecies, phases = None, in
     dbf : Database
     elements : list[str]
         Symbols will be taken from parameters that have all elements in the constituents
-    diffusingSpecies : str
+    diffusing_species : str
         Name of diffusing species
     phases : list[str] (optional)
         Default = None
         Symbols will be taken from parameters attributed to the phases
         If None, all phases will be considered
-    includeSubsystems : bool (optional)
+    include_subsystems : bool (optional)
         Default = False
         If True, then symbols will also be taken from parameters where constituents is a subset of elements
     '''
     if not isinstance(dbf, Database):
         dbf = Database(dbf)
     elements = sorted([e.upper() for e in elements])
-    numElements = len(elements)
-    elSet = frozenset(elements + ['VA'])
-    usedSyms = frozenset()
+    num_elements = len(elements)
+    element_set = frozenset(elements + ['VA'])
+    used_syms = frozenset()
     for p in dbf._parameters:
         if phases is not None:
             if p['phase_name'] not in phases:
                 continue
-        parameterSpecies = frozenset([s.name for c in p['constituent_array'] for s in c])
+        parameter_species = frozenset([s.name for c in p['constituent_array'] for s in c])
         #Add symbols under 2 conditions
         #   1. parameterSpecies is a subset of elSet
         #   2. freeSub is False and length of parameter species (excluding VA) is equal to number of elements
-        pIsSubset = len((parameterSpecies-set(['VA','*'])) - elSet) == 0
-        shouldBeFree = includeSubsystems or len(parameterSpecies - set(['VA', '*'])) == numElements
-        isDiffusingSpecies = p['diffusing_species'].name == diffusingSpecies
-        if pIsSubset and shouldBeFree and isDiffusingSpecies:
-            usedSyms = usedSyms.union(frozenset([s.name for s in p['parameter'].free_symbols]))
-        #if len(parameterSpecies - elSet) == 0:
-        #    usedSyms = usedSyms.union(frozenset([s.name for s in p['parameter'].free_symbols]))
-    allSyms = database_symbols_to_fit(dbf)
-    usedSyms = sorted(list(usedSyms.intersection(frozenset(allSyms))))
-    return usedSyms
+        p_is_subset = len((parameter_species-set(['VA','*'])) - element_set) == 0
+        should_be_free = include_subsystems or len(parameter_species - set(['VA', '*'])) == num_elements
+        is_diffusing_species = p['diffusing_species'].name == diffusing_species
+        if p_is_subset and should_be_free and is_diffusing_species:
+            used_syms = used_syms.union(frozenset([s.name for s in p['parameter'].free_symbols]))
+    all_syms = database_symbols_to_fit(dbf)
+    used_syms = sorted(list(used_syms.intersection(frozenset(all_syms))))
+    return used_syms
 
 def _vname(index: int) -> str:
     '''

@@ -400,20 +400,26 @@ class MobilityTemplate:
         dependent_var: dependent condition
         '''
         dependent_var = [key for key, val in conditions.items() if len(np.atleast_1d(val)) > 1]
-        if len(dependent_var) != 1:
-            raise ValueError(f"Number of free conditions must be 1, but is {len(dependent_var)}")
-        
-        dependent_vals = conditions[dependent_var[0]]
-        xs = np.linspace(dependent_vals[0], dependent_vals[1], int((dependent_vals[1] - dependent_vals[0])/dependent_vals[2]))
-        ys = np.zeros(len(xs))
-        for i,x in enumerate(xs):
-            new_conds = {v.N: 1, v.P: 101325, v.GE: 0, v.T: 298.15}
-            new_conds.update({**conditions})
-            new_conds[dependent_var[0]] = x
-            site_fractions = site_fraction_generator.generate_site_fractions(self.phase, self.elements, new_conds)
-            ys[i] = _eval_symengine_expr(function, {**site_fractions, **parameter_values, **new_conds})
+        # Single point condition, then return evaluated function
+        if len(dependent_var) == 0:
+            site_fractions = site_fraction_generator.generate_site_fractions(self.phase, self.elements, conditions)
+            y = _eval_symengine_expr(function, {**site_fractions, **parameter_values, **conditions})
+            return y
+        # If 1 dependent variable, then return coordinates of dependent variable (x), evaluated function (y), and variable
+        elif len(dependent_var) == 1:
+            dependent_vals = conditions[dependent_var[0]]
+            xs = np.linspace(dependent_vals[0], dependent_vals[1], int((dependent_vals[1] - dependent_vals[0])/dependent_vals[2]))
+            ys = np.zeros(len(xs))
+            for i,x in enumerate(xs):
+                new_conds = {v.N: 1, v.P: 101325, v.GE: 0, v.T: 298.15}
+                new_conds.update({**conditions})
+                new_conds[dependent_var[0]] = x
+                site_fractions = site_fraction_generator.generate_site_fractions(self.phase, self.elements, new_conds)
+                ys[i] = _eval_symengine_expr(function, {**site_fractions, **parameter_values, **new_conds})
 
-        return xs, ys, dependent_var[0]
+            return xs, ys, dependent_var[0]
+        else:
+            raise ValueError(f"Number of free conditions must be 1, but is {len(dependent_var)}")
     
     def add_to_database(self, dbf: Database, parameter_values: dict[Union[Symbol, str], float], add_if_exists=True):
         '''

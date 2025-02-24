@@ -1,14 +1,3 @@
-from espei.parameter_selection.fitting_steps import AbstractLinearPropertyStep, FittingStep
-from pycalphad import Model, variables as v
-import numpy as np
-import symengine
-from typing import Optional, Dict, Any, List
-from numpy.typing import ArrayLike
-from espei.utils import build_sitefractions
-import itertools
-
-Dataset = Dict[str, Any]
-
 '''
 Fitting steps for Mobility models from tracer diffusivity data
 
@@ -38,6 +27,18 @@ Option 2: Fit mobility directly to tracer diffusivity
     Then we could fit MQ as a linear model where each RK term is in the form of A+B*T
     NOTE: This method is not recommended since it can lead to overfitting
 '''
+import itertools
+from typing import Optional, Dict, Any, List
+
+import numpy as np
+from numpy.typing import ArrayLike
+import symengine
+
+from pycalphad import Model, variables as v
+from espei.parameter_selection.fitting_steps import AbstractLinearPropertyStep, FittingStep
+from espei.utils import build_sitefractions
+
+Dataset = Dict[str, Any]
     
 class StepD0(FittingStep):
     supported_reference_states: List[str] = [""]

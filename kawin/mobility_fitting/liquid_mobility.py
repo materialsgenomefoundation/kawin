@@ -1,5 +1,11 @@
+'''
+Tools for generating liquid mobility models and adding them to a database
+
+TODO: this is only valid for liquid models with 1 sublattice. wo-sublattice ionic
+      liquid models are not supported yet
+'''
 import numpy as np
-from symengine import log
+from symengine import Symbol, log
 
 from pycalphad import Database, variables as v
 
@@ -54,6 +60,22 @@ def _get_liquid_phase_name(database):
             return ph
     return 'LIQUID'
 
+def _generate_liquid_mobility(dbf: Database, parameters: dict[str, dict[str, Symbol]], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
+    '''
+    Creates liquid mobility templates and add to database
+    '''
+    liq_name = _get_liquid_phase_name(dbf)
+    components = sorted(list(parameters.keys()))
+    templates = {c: MobilityTemplate(liq_name, c, [1], [components], False) for c in components}
+    for solute in parameters:
+        for solvent in parameters[solute]:
+            templates[solute].add_term([[solvent]], 0, parameters[solute][solvent])
+
+        if add_to_database:
+            templates[solute].add_to_database(dbf, {})
+
+    return templates
+
 def generate_liquid_mobility_liu(dbf: Database, species: list[LiuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
     '''
     Species data will include {diameter, atomic_number, T_m, phase}
@@ -75,21 +97,17 @@ def generate_liquid_mobility_liu(dbf: Database, species: list[LiuSpecies], add_t
     
     In a calphad database, this becomes MQ = -Q + R*T*ln(D0_AB)
     '''
-    liq_name = _get_liquid_phase_name(dbf)
-    components = [s.name for s in species]
-    templates = {c: MobilityTemplate(liq_name, c, [1], [components], False) for c in components}
     # Solute is the diffusing species while solvent is the endmember component
+    parameters = {}
     for solute in species:
+        parameters[solute.name] = {}
         for solvent in species:
             Q = -0.17 * GAS_CONSTANT * solvent.Tm * (16 + solvent.K0)
             D0 = (8.95 - 0.0734 * solvent.atomic_number) * 1e-8
             D0 *= solvent.diameter / solute.diameter
-            templates[solute.name].add_term([[solvent.name]], 0, Q + GAS_CONSTANT*np.log(D0)*v.T)
+            parameters[solute.name][solvent.name] = Q + GAS_CONSTANT*np.log(D0)*v.T
 
-        if add_to_database:
-            templates[solute.name].add_to_database(dbf, {})
-
-    return templates
+    return _generate_liquid_mobility(dbf, parameters, add_to_database)
 
 def generate_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_database: bool = True) -> dict[str, MobilityTemplate]:
     '''
@@ -130,12 +148,10 @@ def generate_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_
     C2 = 2.34
     R0 = 0.644e-10
 
-    liq_name = _get_liquid_phase_name(dbf)
-    components = [s.name for s in species]
-    templates = {c: MobilityTemplate(liq_name, c, [1], [components], False) for c in components}
     # Solute is the diffusing species while solvent is the endmember component
+    parameters = {}
     for solute in species:
-        models = []
+        parameters[solute.name] = {}
         for solvent in species:
             rho_solv = solvent.density
             rho_solu = solute.density
@@ -152,10 +168,6 @@ def generate_liquid_mobility_su(dbf: Database, species: list[SuSpecies], add_to_
             D3 = BOLTZMANN_CONSTANT / (4*np.pi)
             D0 = D3/(D1*D2) * v.T**(1/2) / (1 - 0.112 * (v.T / solvent.Tm)**(1/2))
 
-            templates[solute.name].add_term([[solvent.name]], 0, Q + GAS_CONSTANT*log(D0)*v.T)
+            parameters[solute.name][solvent.name] = Q + GAS_CONSTANT*log(D0)*v.T
 
-        if add_to_database:
-            templates[solute.name].add_to_database(dbf, {})
-
-    return templates
-
+    return _generate_liquid_mobility(dbf, parameters, add_to_database)

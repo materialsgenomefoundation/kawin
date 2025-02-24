@@ -5,7 +5,7 @@ from espei.utils import PickleableTinyDB, MemoryStorage
 from espei.phase_models import PhaseModelSpecification
 
 from kawin.mobility_fitting.error_functions import NonEquilibriumMobilityResidual, EquilibriumMobilityResidual
-from kawin.tests.datasets import *
+from kawin.tests.databases import *
 
 def test_non_eq_tracer_D0():
     dataset = {

@@ -23,9 +23,11 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - run: python -m pip install -U pip setuptools
-    - name: Install pycalphad and espei development version
+    - name: Install pycalphad development version
       if: matrix.pycalphad_develop_version
       run: python -m pip install git+https://github.com/pycalphad/pycalphad.git@develop
+    - name: Install espei development version
+      if: matrix.pycalphad_develop_version
       run: python -m pip install git+https://github.com/PhasesResearchLab/ESPEI.git@master
     - name: Save pycalphad version
       run: |

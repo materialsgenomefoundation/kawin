@@ -146,3 +146,104 @@ Cu_tracer_diff_datasets = [
         "reference": "Ghosh2001"
     }
 ]
+
+AlSi_tracer_D0_Al = {
+    "components": ["AL", "SI", "VA"], 
+    "phases": ["FCC_A1"], 
+    "conditions": {
+        "P": 101325, 
+        "T": 298.15
+        }, 
+    "solver": {
+        "mode": "manual", 
+        "sublattice_site_ratios": [1, 3], 
+        "sublattice_configurations": [[["AL", "SI"], "VA"]], 
+        "sublattice_occupancies": [[[0.9, 0.1], 1]]
+        }, 
+    "output": "TRACER_D0_AL", 
+    "values": [[[1.75e-5]]]
+}
+
+AlSi_tracer_Q_Si = {
+    "components": ["AL", "SI", "VA"], 
+    "phases": ["FCC_A1"], 
+    "conditions": {
+        "P": 101325, 
+        "T": 298.15
+        }, 
+    "solver": {
+        "mode": "manual", 
+        "sublattice_site_ratios": [1, 3], 
+        "sublattice_configurations": [[["AL", "SI"], "VA"]], 
+        "sublattice_occupancies": [[[0.9, 0.1], 1]]
+        }, 
+    "output": "TRACER_Q_SI", 
+    "values": [[[160000]]]
+}
+
+AlSi_tracer_diff_Mg = {
+    "components": ["AL", "SI", "VA"], 
+    "phases": ["FCC_A1"], 
+    "conditions": {
+        "P": 101325, 
+        "T": 298.15
+        }, 
+    "solver": {
+        "mode": "manual", 
+        "sublattice_site_ratios": [1, 3], 
+        "sublattice_configurations": [[["AL", "SI"], "VA"]], 
+        "sublattice_occupancies": [[[0.9, 0.1], 1]]
+        }, 
+    "output": "TRACER_DIFF_MG", 
+    "values": [[[5.2e-26]]]
+}
+
+AlSi_eq_tracer_D0_Al = {
+    "components": ["AL", "SI", "VA"], 
+    "phases": ["FCC_A1"], 
+    "conditions": {
+        "P": 101325, 
+        "T": 298.15,
+        "X_SI": 0.1
+        }, 
+    "output": "TRACER_D0_AL", 
+    "values": [[[1.75e-5]]]
+}
+
+AlSi_eq_tracer_Q_Si = {
+    "components": ["AL", "SI", "VA"], 
+    "phases": ["FCC_A1"], 
+    "conditions": {
+        "P": 101325, 
+        "T": 298.15,
+        "X_SI": 0.1
+        }, 
+    "output": "TRACER_Q_SI", 
+    "values": [[[160000]]]
+}
+
+AlSi_eq_diff_Mg = {
+    "components": ["AL", "SI", "VA"], 
+    "phases": ["FCC_A1"], 
+    "conditions": {
+        "P": 101325, 
+        "T": 298.15,
+        "X_SI": 0.1
+        }, 
+    "output": "TRACER_DIFF_MG", 
+    "values": [[[5.2e-26]]]
+}
+
+AlSi_eq_interdiff = {
+    "components": ["AL", "MG", "VA"], 
+    "phases": ["FCC_A1"], 
+    "ref_el": ["AL"],
+    "dependent_el": ["MG", "MG"],
+    "conditions": {
+        "P": 101325, 
+        "T": 298.15,
+        "X_MG": 0.1
+        }, 
+    "output": "INTER_DIFF", 
+    "values": [[[4.6e-25]]]
+}

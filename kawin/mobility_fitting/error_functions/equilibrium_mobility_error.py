@@ -208,19 +208,13 @@ def calc_mob_differences(data : EquilibriumMobilityData, parameters : np.ndarray
     return diffs, wts
 
 def calculate_mob_probability(mob_data : Sequence[EquilibriumMobilityData], parameters : np.ndarray) -> float:
-    differences = []
-    weights = []
+    prob_error = 0.0
     for data in mob_data:
         diffs, wts = calc_mob_differences(data, parameters)
         if np.any(np.isinf(diffs) | np.isnan(diffs)):
             return -np.inf
-        differences.append(diffs)
-        weights.append(wts)
-    
-    differences = np.concatenate(differences, axis=0)
-    weights = np.concatenate(weights, axis=0)
-    probs = norm(loc=0.0, scale=weights).logpdf(differences)
-    return np.sum(probs)
+        prob_error += norm(loc=0.0, scale=wts).logpdf(diffs)
+    return prob_error
 
 class EquilibriumMobilityResidual(ResidualFunction):
     def __init__(
@@ -230,7 +224,6 @@ class EquilibriumMobilityResidual(ResidualFunction):
         phase_models: Union[PhaseModelSpecification, None],
         symbols_to_fit: Optional[List[SymbolName]] = None,
         weight: Optional[Dict[str, float]] = None,
-        additional_mcmc_args: Optional[Dict] = {},
         ):
         super().__init__(database, datasets, phase_models, symbols_to_fit)
         if weight is not None:

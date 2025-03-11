@@ -291,8 +291,11 @@ class GrainGrowthModel(GenericModel):
         z = np.zeros(len(model.phases))
         for p in range(len(model.phases)):
             phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
-            if model.avgR[model.n, p] > 0:
-                z[p] += np.power(model.betaFrac[model.n, p], self.m[phaseName]) / (self.K[phaseName] * model.avgR[model.n, p])
+            #if model.avgR[model.n, p] > 0:
+            #    z[p] += np.power(model.betaFrac[model.n, p], self.m[phaseName]) / (self.K[phaseName] * model.avgR[model.n, p])
+            
+            if model.pData.Ravg[model.pData.n,p] > 0:
+                z[p] += np.power(model.pData.volFrac[model.pData.n,p], self.m[phaseName]) / (self.K[phaseName] * model.pData.Ravg[model.pData.n,p])
         self._z = np.sum(z)
 
     def computeZenerRadiusByN(self, model, x):
@@ -312,11 +315,13 @@ class GrainGrowthModel(GenericModel):
         '''
         z = np.zeros(len(model.phases))
         for p in range(len(model.phases)):
-            volRatio = model.VmAlpha / model.VmBeta[p]
+            #volRatio = model.VmAlpha / model.VmBeta[p]
+            volRatio = model.matrixParameters.volume.Vm / model.precipitateParameters[p].volume.Vm
             phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
             Ntot = model.PBM[p].ZeroMomentFromN(x[p])
             RadSum = model.PBM[p].MomentFromN(x[p], 1)
-            fBeta = np.amin([volRatio * model.GB[p].volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
+            #fBeta = np.amin([volRatio * model.GB[p].volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
+            fBeta = np.amin([volRatio * model.precipitateParameters[p].nucleation.volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
             avgR = 0 if Ntot == 0 else RadSum / Ntot
 
             if avgR > 0:
@@ -334,7 +339,7 @@ class GrainGrowthModel(GenericModel):
         model : PrecpitateModel
         '''
         self.computeZenerRadius(model)
-        self.solve(model.time[model.n] - model.time[model.n-1], solverType=self.solverType)
+        self.solve(model.pData.time[model.pData.n] - model.pData.time[model.pData.n-1], solverType=self.solverType)
 
     def plotDistribution(self, ax, *args, **kwargs):
         '''
@@ -366,7 +371,7 @@ class GrainGrowthModel(GenericModel):
         ----------
         ax : matplotlib axes
         '''
-        timeScale, timeLabel, bounds = getTimeAxis(self, timeUnits, bounds)
+        timeScale, timeLabel, bounds = getTimeAxis(self.time, timeUnits, bounds)
         ax.plot(self.time*timeScale, self.avgR, *args, **kwargs)
         ax.set_xlabel(timeLabel)
         ax.set_ylabel('Grain Radius (m)')

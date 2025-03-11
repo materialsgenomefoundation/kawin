@@ -1,7 +1,10 @@
 import numpy as np
+
+from kawin.Constants import AVOGADROS_NUMBER
+from kawin.precipitation.PrecipitationParameters import PrecipitationData
 from kawin.precipitation.KWNBase import PrecipitateBase
 from kawin.precipitation.PopulationBalance import PopulationBalanceModel
-from kawin.precipitation.non_ideal.GrainBoundaries import GBFactors
+from kawin.precipitation.parameters.Nucleation import NucleationBarrierParameters, DislocationDescription, BulkDescription, GrainBoundaryDescription, GrainCornerDescription, GrainEdgeDescription
 from kawin.precipitation.Plot import plotEuler
 
 class PrecipitateModel (PrecipitateBase):
@@ -18,18 +21,6 @@ class PrecipitateModel (PrecipitateBase):
         Note: order of elements must correspond to order of elements set in Thermodynamics module
         If binary system, then defualt is ['solute']
     '''
-    def __init__(self, phases = ['beta'], elements = ['solute']):
-        super().__init__(phases, elements)
-
-        if self.numberOfElements == 1:
-            self._growthRate = self._growthRateBinary
-            self._Beta = self._BetaBinary1
-        else:
-            self._growthRate = self._growthRateMulti
-            self._Beta = self._BetaMulti
-
-        self.eqAspectRatio = [None for p in range(len(self.phases))]
-
     def _resetArrays(self):
         '''
         Resets and initializes arrays for all variables
@@ -38,6 +29,7 @@ class PrecipitateModel (PrecipitateBase):
         '''
         super()._resetArrays()
         self.PBM = [PopulationBalanceModel() for p in self.phases]
+        self.eqAspectRatio = [None for p in range(len(self.phases))]
 
         self.RdrivingForceIndex = np.zeros(len(self.phases), dtype=np.int32)
         self.dissolutionIndex = np.zeros(len(self.phases), dtype=np.int32)
@@ -52,21 +44,18 @@ class PrecipitateModel (PrecipitateBase):
             self.PBM[i].reset()
             self.PBM[i].resetRecordedData()
 
-    def _addExtraSaveVariables(self, saveDict):
+    def toDict(self):
+        data = super().toDict()
         for p in range(len(self.phases)):
-            saveDict['PBM_data_' + self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
-            saveDict['PBM_PSD_' + self.phases[p]] = self.PBM[p].PSD
-            saveDict['PBM_bounds_' + self.phases[p]] = self.PBM[p].PSDbounds
-            saveDict['PBM_size_' + self.phases[p]] = self.PBM[p].PSDsize
-            saveDict['eqAspectRatio_' + self.phases[p]] = self.eqAspectRatio[p]
-
-    def load(filename):
-        data = np.load(filename)
-        model = PrecipitateModel(data['phases'], data['elements'])
-        model._loadData(data)
-        return model
-
-    def _loadExtraVariables(self, data):
+            data['PBM_data_' + self.phases[p]] = [self.PBM[p].min, self.PBM[p].max, self.PBM[p].bins]
+            data['PBM_PSD_' + self.phases[p]] = self.PBM[p].PSD
+            data['PBM_bounds_' + self.phases[p]] = self.PBM[p].PSDbounds
+            data['PBM_size_' + self.phases[p]] = self.PBM[p].PSDsize
+            data['eqAspectRatio_' + self.phases[p]] = self.eqAspectRatio[p]
+        return data
+    
+    def fromDict(self, data):
+        super().fromDict(data)
         for p in range(len(self.phases)):
             PBMdata = data['PBM_data_' + self.phases[p]]
             psd = data['PBM_PSD_' + self.phases[p]]
@@ -208,7 +197,7 @@ class PrecipitateModel (PrecipitateBase):
         index = self.phaseIndex(phase)
         return self.PBM[index].PSD
     
-    def createLookup(self):
+    def _createLookupBinary(self, T):
         '''
         This creates a lookup table mapping the particle size classes to the interfacial composition
         '''
@@ -224,14 +213,10 @@ class PrecipitateModel (PrecipitateBase):
         
         xEqAlpha = np.zeros((1, len(self.phases), self.numberOfElements))
         xEqBeta = np.zeros((1, len(self.phases), self.numberOfElements))
-        T = self._currY[self.TEMPERATURE][0]
         for p in range(len(self.phases)):
             #Interfacial compositions at equilibrium (planar interface)
-            xAResult, xBResult = self.interfacialComposition[p](T, 0)
-            if xAResult == -1 or xAResult is None:
-                xEqAlpha[0,p,0] = 0
-                xEqBeta[0,p,0] = 0
-            else:
+            xAResult, xBResult = self.therm.getInterfacialComposition(T, 0, precPhase=self.precipitateParameters[p].phase)
+            if xAResult is not None and xAResult != -1:
                 xEqAlpha[0,p,0] = xAResult
                 xEqBeta[0,p,0] = xBResult
 
@@ -239,10 +224,9 @@ class PrecipitateModel (PrecipitateBase):
             self.PSDXalpha.append(np.zeros((self.PBM[p].bins + 1, 1)))
             self.PSDXbeta.append(np.zeros((self.PBM[p].bins + 1, 1)))
 
-            self.PSDXalpha[p][:,0], self.PSDXbeta[p][:,0] = self.interfacialComposition[p](T, self.particleGibbs(self.PBM[p].PSDbounds, self.phases[p]))
-            self.RdrivingForceIndex[p] = np.argmax(self.PSDXalpha[p][:,0] != -1)-1
-            self.RdrivingForceIndex[p] = 0 if self.RdrivingForceIndex[p] < 0 else self.RdrivingForceIndex[p]
-            self.RdrivingForceLimit[p] = self.PBM[p].PSDbounds[self.RdrivingForceIndex[p]]
+            self.PSDXalpha[p][:,0], self.PSDXbeta[p][:,0] = self.therm.getInterfacialComposition(T, self.particleGibbs(self.PBM[p].PSDbounds, self.precipitateParameters[p].phase), precPhase=self.precipitateParameters[p].phase)
+            self.RdrivingForceIndex[p] = np.amax([np.argmax(self.PSDXalpha[p][:,0] != -1) - 1, 0])
+            self.precipitateParameters[p].RdrivingForceLimit = self.PBM[p].PSDbounds[self.RdrivingForceIndex[p]]
 
             #Sets particle radii smaller than driving force limit to driving force limit composition
             #If RdrivingForceIndex is at the end of the PSDX arrays, then no precipitate in the size classes of the PSD is stable
@@ -255,6 +239,20 @@ class PrecipitateModel (PrecipitateBase):
                 self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1,1))
 
         return xEqAlpha, xEqBeta
+    
+    def _setupAspectRatio(self):
+        #If calculateAspectRatio is True, then use strain energy to calculate aspect ratio for each size class in PSD
+        #Else, then use aspect ratio defined in shape factors
+        self.eqAspectRatio = [None for p in range(len(self.phases))]
+        for p in range(len(self.phases)):
+            self.PBM[p].reset()
+
+            if self.precipitateParameters[p].calculateAspectRatio:
+                self.eqAspectRatio[p] = self.precipitateParameters[p].strainEnergy.eqAR_bySearch(self.PBM[p].PSDbounds, self.precipitateParameters[p].gamma, self.precipitateParameters[p].shapeFactor)
+                arFunc = lambda R, p1=p : self._interpolateAspectRatio(R, p1)
+                self.precipitateParameters[p].shapeFactor.setAspectRatio(arFunc)
+            else:
+                self.eqAspectRatio[p] = self.precipitateParameters[p].shapeFactor.aspectRatio(self.PBM[p].PSDbounds)
             
     def setup(self):
         '''
@@ -268,26 +266,16 @@ class PrecipitateModel (PrecipitateBase):
         super().setup()
 
         #Equilibrium aspect ratio and PBM setup
-        #If calculateAspectRatio is True, then use strain energy to calculate aspect ratio for each size class in PSD
-        #Else, then use aspect ratio defined in shape factors
-        self.eqAspectRatio = [None for p in range(len(self.phases))]
-        for p in range(len(self.phases)):
-            self.PBM[p].reset()
+        self._setupAspectRatio()
 
-            if self.calculateAspectRatio[p]:
-                self.eqAspectRatio[p] = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDbounds, self.gamma[p], self.shapeFactors[p])
-                arFunc = lambda R, p1=p : self._interpolateAspectRatio(R, p1)
-                self.shapeFactors[p].setAspectRatio(arFunc)
-            else:
-                self.eqAspectRatio[p] = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds)
+        #Setup precipitation data for n = 0
+        Y = self.pData.copySlice(self.pData.n)
+        Y.time = np.array([self.pData.time[self.pData.n]])
+        Y.temperature = np.array([self.temperatureParameters(Y.time[0])])
 
-        self._currY = [np.array([self.varList[i][self.n]]) for i in range(self.NUM_TERMS)]
-        self._currY[self.TIME] = np.array([self.time[self.n]])
-        self._currY[self.TEMPERATURE] = np.array([self.getTemperature(self.time[self.n])])
-        
         #Setup interfacial composition
         if self.numberOfElements == 1:
-            self.xEqAlpha[self.n], self.xEqBeta[self.n] = self.createLookup()
+            self.pData.xEqAlpha[self.pData.n], self.pData.xEqBeta[self.pData.n] = self._createLookupBinary(self.pData.temperature[self.pData.n])
         else:
             self.PSDXalpha = [None for p in range(len(self.phases))]
             self.PSDXbeta = [None for p in range(len(self.phases))]
@@ -295,17 +283,16 @@ class PrecipitateModel (PrecipitateBase):
             #Set first index of eq composition
             for p in range(len(self.phases)):
                 #Use arbitrary dg, R and gE since only the eq compositions are needed here
-                _, _, _, xEqAlpha, xEqBeta = self.interfacialComposition[p](self.xComp[self.n], self.temperature[self.n], 0, 1, 0)
-                if xEqAlpha is not None:
-                    self.xEqAlpha[self.n,p] = xEqAlpha
-                    self.xEqBeta[self.n,p] = xEqBeta
-        
+                growth_result = self.therm.getGrowthAndInterfacialComposition(self.pData.composition[self.pData.n], self.pData.temperature[self.pData.n], 0, 1, 0, precPhase=self.precipitateParameters[p].phase, removeCache=self.removeCache)
+                if growth_result is not None:
+                    _, _, _, c_eq_alpha, c_eq_beta = growth_result
+                    self.pData.xEqAlpha[self.pData.n,p] = c_eq_alpha
+                    self.pData.xEqBeta[self.pData.n,p] = c_eq_beta
+
         x = [self.PBM[p].PSD for p in range(len(self.phases))]
-        self._calcDrivingForce(self.time[self.n], x)
-        self._growthRate()
-        self._calcNucleationRate(self.time[self.n], x)
-        for i in range(self.NUM_TERMS):
-            self.varList[i][self.n] = self._currY[i][0]
+        Y = self._calcNucleationRate(self.pData.time[self.pData.n], x, Y)
+        self.growth, Y = self._growthRate(Y)
+        self.pData.setSlice(Y, self.pData.n)
     
     def _interpolateAspectRatio(self, R, p):
         '''
@@ -336,69 +323,25 @@ class PrecipitateModel (PrecipitateBase):
                 Estimates the change in volume fraction from the nucleation rate and nucleation radius
         '''
         #Start test dt at 0.01 or previous dt
-        i = self.n
-        dtPrev = 0.01 if self.n == 0 else self.time[i] - self.time[i-1]
+        i = self.pData.n
+        dtPrev = 0.01 if self.pData.n == 0 else self.pData.time[i] - self.pData.time[i-1]
         #Try to slowly increase the time step
         #  Precipitation kinetics is more on a log scale than linear (unless temperature changes are involve)
         #  Thus, we can get away with increasing the time step over time assuming that kinetics are slowing down
         #  Plus, unlike the single phase diffusion module, there's no form way to define a good time step apart from the checks here
-        dtPropose = (1 + self.dtScale) * dtPrev
-        dtMax = self.finalTime - self.time[i]
+        dtPropose = (1 + self.constraints.dtScale) * dtPrev
+        dtMax = self.finalTime - self.pData.time[i]
         
         dtAll = [dtMax]
-        if self.checkPSD:
-            dtPBM = [dtMax]
-            if i > 0 and self.temperature[i] == self.temperature[i-1]:
-                dtPBM += [self.PBM[p].getDTEuler(dtMax, self.growth[p], self.dissolutionIndex[p]) for p in range(len(self.phases))]
-            dtPBM = np.amin(dtPBM)
-            dtAll.append(dtPBM)
+        dtAll.append(self.constraints.computeDTfromPSD(self.pData.n, self.pData.temperature, self.PBM, self.growth, self.dissolutionIndex, self.phases, dtMax))
+        dtAll.append(self.constraints.computeDTfromNucleationRate(self.pData.n, self.pData.nucRate, self.phases, dtPrev, dtMax))
+        dtAll.append(self.constraints.computeDTfromTemperature(self.pData.n, self.pData.temperature, dtPrev, dtMax))
+        dtAll.append(self.constraints.computeDTfromRcrit(self.pData.n, self.pData.Rcrit, self.pData.drivingForce, self.phases, dtPrev, dtMax))
         
-        if self.checkNucleation:
-            dtNuc = dtMax * np.ones(len(self.phases))
-            if i > 0:
-                nRateCurr = self.nucRate[i]
-                nRatePrev = self.nucRate[i-1]
-                for p in range(len(self.phases)):
-                    if nRateCurr[p] > self.minNucleationRate and nRatePrev[p] > self.minNucleationRate and nRatePrev[p] != nRateCurr[p]:
-                        dtNuc[p] = self.maxNucleationRateChange * dtPrev / np.abs(np.log10(nRatePrev[p] / nRateCurr[p]))
-            else:
-                for p in range(len(self.phases)):
-                    if self.nucRate[i,p] * dtPrev > 1e5:
-                        dtNuc[p] = 1e5 / self.nucRate[i,p]
-            dtNuc = np.amin(dtNuc)
-            dtAll.append(dtNuc)
-
-        #Temperature change constraint
-        if self.checkTemperature and i > 0:
-            Tchange = self.temperature[i] - self.temperature[i-1]
-            dtTemp = dtMax
-            if Tchange > self.maxNonIsothermalDT:
-                dtTemp = self.maxNonIsothermalDT * dtPrev / Tchange
-            dtAll.append(dtTemp)
-
-        if self.checkRcrit and i > 0:
-            dtRad = dtMax * np.ones(len(self.phases))
-            if not all((self.Rcrit[i-1,:] == 0) & (self.Rcrit[i,:] - self.Rcrit[i-1,:] == 0) & (self.dGs[i,:] <= 0)):
-                indices = (self.Rcrit[i-1,:] > 0) & (self.Rcrit[i,:] - self.Rcrit[i-1,:] != 0) & (self.dGs[i,:] > 0)
-                dtRad[indices] = self.maxRcritChange * dtPrev / np.abs((self.Rcrit[i,:][indices] - self.Rcrit[i-1,:][indices]) / self.Rcrit[i-1,:][indices])
-            dtRad = np.amin(dtRad)
-            dtAll.append(dtRad)
-
-        if self.checkVolumePre:
-            dV = np.zeros(len(self.phases))
-            for p in range(len(self.phases)):
-                #Calculate estimate volume change based off growth rate and nucleated particles
-                #TODO: account for non-spherical precipitates
-                dVi = self.PBM[p].PSD * self.PBM[p].PSDsize**2 * 0.5 * (self.growth[p][1:] + self.growth[p][:-1])
-                dVi[dVi < 0] = 0
-                dV = self.VmAlpha / self.VmBeta[p] * (self.GB[p].areaFactor * np.sum(dVi) + self.GB[p].volumeFactor * self.nucRate[i,p] * self.Rad[i,p]**3)
-
-            dtVol = dtMax * np.ones(len(self.phases))
-            for p in range(len(self.phases)):
-                if dV != 0:
-                    dtVol[p] = self.maxVolumeChange / (2 * np.abs(dV))
-            dtVol = np.amin(dtVol)
-            dtAll.append(dtVol)
+        VmAlpha = self.matrixParameters.volume.Vm
+        VmBetas = [self.precipitateParameters[p].volume.Vm for p in range(len(self.phases))]
+        nucParams = [self.precipitateParameters[p].nucleation for p in range(len(self.phases))]
+        dtAll.append(self.constraints.computeDTfromVolume(self.pData.n, self.pData.nucRate, self.pData.Rnuc, self.PBM, self.growth, VmAlpha, VmBetas, nucParams, self.phases, dtMax))
 
         dt = np.amin(dtAll)
         #If all time checks pass, then go back to previous time step and increase it slowly
@@ -418,10 +361,10 @@ class PrecipitateModel (PrecipitateBase):
         '''
         for p in range(len(self.phases)):
             x[p][:self.RdrivingForceIndex[p]+1] = 0
-            x[p][self.PBM[p].PSDsize < self.minRadius] = 0
+            x[p][self.PBM[p].PSDsize < self.constraints.minRadius] = 0
         return
     
-    def _calcNucleationRate(self, t, x):
+    def _calcNucleationSites(self, t, x, p):
         '''
         The _calcNucleationRate function in KWNBase calculates the nucleation rate as the
             probability that a site can form a nucleate that will continue to grow
@@ -436,58 +379,42 @@ class PrecipitateModel (PrecipitateBase):
                 Dislocation and grain edges - number of sites filled along the edges (assumes average radius of precipitates)
                 Grain boundaries - number of sites filled along the faces (assumes average cross sectional area of precipitates)
         '''
-        super()._calcNucleationRate(t, x)
-        for p in range(len(self.phases)):
-            #If parent phases exists, then calculate the number of potential nucleation sites on the parent phase
-            #This is the number of lattice sites on the total surface area of the parent precipitate
-            nucleationSites = np.sum([4 * np.pi * self.PBM[p2].SecondMomentFromN(x[p2]) * (self.avo / self.VmBeta[p2])**(2/3) for p2 in self.parentPhases[p]])
+        VmBetas = [self.precipitateParameters[p2].volume.Vm for p2 in range(len(self.precipitateParameters))]
+        nucParams = [self.precipitateParameters[p2].nucleation for p2 in range(len(self.precipitateParameters))]
+        parentPhases = [self.precipitateParameters[p2].parentPhases for p2 in range(len(self.precipitateParameters))]
 
-            if self.GB[p].nucleationSiteType == GBFactors.BULK:
-                #bulkPrec = np.sum([self.GB[p2].volumeFactor * self.PBM[p2].ThirdMoment() for p2 in range(len(self.phases)) if self.GB[p2].nucleationSiteType == GBFactors.BULK])
-                #nucleationSites += self.bulkN0 - bulkPrec * (self.avo / self.VmAlpha)
-                bulkPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if self.GB[p2].nucleationSiteType == GBFactors.BULK])
-                nucleationSites += self.bulkN0 - bulkPrec
-            elif self.GB[p].nucleationSiteType == GBFactors.DISLOCATION:
-                bulkPrec = np.sum([self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if self.GB[p2].nucleationSiteType == GBFactors.DISLOCATION])
-                nucleationSites += self.dislocationN0 - bulkPrec * (self.avo / self.VmAlpha)**(1/3)
-            elif self.GB[p].nucleationSiteType == GBFactors.GRAIN_BOUNDARIES:
-                boundPrec = np.sum([self.GB[p2].gbRemoval * self.PBM[p2].SecondMomentFromN(x[p2]) for p2 in range(len(self.phases)) if self.GB[p2].nucleationSiteType == GBFactors.GRAIN_BOUNDARIES])
-                nucleationSites += self.GBareaN0 - boundPrec * (self.avo / self.VmAlpha)**(2/3)
-            elif self.GB[p].nucleationSiteType == GBFactors.GRAIN_EDGES:
-                edgePrec = np.sum([np.sqrt(1 - self.GB[p2].GBk**2) * self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if self.GB[p2].nucleationSiteType == GBFactors.GRAIN_EDGES])
-                nucleationSites += self.GBedgeN0 - edgePrec * (self.avo / self.VmAlpha)**(1/3)
-            elif self.GB[p].nucleationSiteType == GBFactors.GRAIN_CORNERS:
-                cornerPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if self.GB[p2].nucleationSiteType == GBFactors.GRAIN_CORNERS])
-                nucleationSites += self.GBcornerN0 - cornerPrec
-               
-            if nucleationSites < 0:
-                nucleationSites = 0
-            self._currY[self.NUC_RATE][0,p] *= nucleationSites
+        #If parent phases exists, then calculate the number of potential nucleation sites on the parent phase
+        # #This is the number of lattice sites on the total surface area of the parent precipitate
+        nucleationSites = np.sum([4*np.pi*self.PBM[p2].SecondMomentFromN(x[p2]) * (AVOGADROS_NUMBER/VmBetas[p2])**(2/3) for p2 in parentPhases[p]])
+        if isinstance(nucParams[p].description, BulkDescription):
+            bulkPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, BulkDescription)])
+            nucleationSites += self.matrixParameters.nucleationSites.bulkN0 - bulkPrec
+
+        elif isinstance(nucParams[p].description, DislocationDescription):
+            bulkPrec = np.sum([self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, DislocationDescription)])
+            nucleationSites += self.matrixParameters.nucleationSites.dislocationN0 - bulkPrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(1/3)
+
+        elif isinstance(nucParams[p].description, GrainBoundaryDescription):
+            boundPrec = np.sum([nucParams[p2].gbRemoval * self.PBM[p2].SecondMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainBoundaryDescription)])
+            nucleationSites += self.matrixParameters.nucleationSites.GBareaN0 - boundPrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(2/3)
+
+        elif isinstance(nucParams[p].description, GrainEdgeDescription):
+            # TODO: where did sqrt(1-GBk^2) come from?
+            edgePrec = np.sum([np.sqrt(1 - nucParams[p2].GBk**2) * self.PBM[p2].FirstMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainEdgeDescription)])
+            nucleationSites += self.matrixParameters.nucleationSites.GBedgeN0 - edgePrec * (AVOGADROS_NUMBER / self.matrixParameters.volume.Vm)**(1/3)
+
+        elif isinstance(nucParams[p].description, GrainCornerDescription):
+            cornerPrec = np.sum([self.PBM[p2].ZeroMomentFromN(x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainCornerDescription)])
+            nucleationSites += self.matrixParameters.nucleationSites.GBcornerN0 - cornerPrec
+
+        return np.amax([nucleationSites, 0])
     
-    def _calcMassBalance(self, t, x):
+    def _calcMassBalance(self, t, x, Y : PrecipitationData):
         '''
         Mass balance to find matrix composition with new particle size distribution
-
         This also includes: volume fraction, precipitate density, average radius, average aspect ratio and sum of precipitate composition
-        '''
-        fBeta = np.zeros((1,len(self.phases)))
-        fConc = np.zeros((1, len(self.phases),self.numberOfElements))
-        precDens = np.zeros((1,len(self.phases)))
-        avgR = np.zeros((1,len(self.phases)))
-        avgAR = np.zeros((1,len(self.phases)))
-        xComp = np.zeros((1,self.numberOfElements))
-        
-        for p in range(len(self.phases)):
-            volRatio = self.VmAlpha / self.VmBeta[p]
-            Ntot = self.PBM[p].ZeroMomentFromN(x[p])
-            #If no precipitates, then avgR, avgAR, precDens, fConc and fBeta for phase p is all 0
-            if Ntot == 0:
-                continue
-            RadSum = self.PBM[p].MomentFromN(x[p], 1)
-            ARsum = self.PBM[p].WeightedMomentFromN(x[p], 0, self.shapeFactors[p].aspectRatio(self.PBM[p].PSDsize))
-            fBeta[0,p] = np.amin([volRatio * self.GB[p].volumeFactor * self.PBM[p].ThirdMomentFromN(x[p]), 1])
 
-            '''
+        Notes on computing composition from mass balance
             Concentration of the precipitates - needed to get matrix composition
 
             For a line compound with composition x^beta, this boils down to:
@@ -506,49 +433,50 @@ class PrecipitateModel (PrecipitateBase):
             We just have to convert the summation to an integral of the time derivative of the terms inside
             f_conc = r_vol * vol_factor * sum(int(d(n_i * R_i^3 * x_i^beta)/dt, dt))
             We'll assume x_i^beta is constant with time (for 3 or more components, this is not true, but assume it doesn't change significantly per iteration - it'll also be a lot harder to account for)
-            d(f_conc)/dt = r_vol * vol_factor * sum(d(n_i)/dt * R_i^3 * x_i^beta + 3 * R_i^3 * d(R_i)/dt * n_i * x_i^beta)
+            d(f_conc)/dt = r_vol * vol_factor * sum(d(n_i)/dt * R_i^3 * x_i^beta + 3 * R_i^2 * d(R_i)/dt * n_i * x_i^beta)
                 d(n_i)/dt is the change in precipitates, since we don't record this, this is just (x[p] - self.PBM[p].PSD) / dt - with x[p] being the new number density for phase p
                 d(R_i)/dt is the growth rate, however, since we use a eulerian solver, this corresponds to the growth rate of the bins themselves, which is 0
                     If we were to use a langrangian solver, then d(n_i)/dt would be 0 (since the density in each bin would be constant) and d(R_i)/dt would be the growth rate at R_i
             Then we can calculate f_conc per iteration as a time integration like we do with some of the other variables
-            '''
-            if self.infinitePrecipitateDiffusion[p]:
+        '''
+        for p in range(len(self.phases)):
+            precParams = self.precipitateParameters[p]
+            volRatio = self.matrixParameters.volume.Vm / precParams.volume.Vm
+            Y.precipitateDensity[0,p] = self.PBM[p].ZeroMomentFromN(x[p])
+            #If no precipitates, then avgR, avgAR, precDens, fConc and fBeta for phase p is all 0
+            if Y.precipitateDensity[0,p] < self.constraints.minNucleateDensity:
+                Y.Ravg[0,p] = 0
+                Y.ARavg[0,p] = 0
+                Y.fconc[0,p] = np.zeros(Y.fconc[0,p].shape)
+                Y.volFrac[0,p] = 0
+                continue
+
+            Y.Ravg[0,p] = self.PBM[p].MomentFromN(x[p], 1) / Y.precipitateDensity[0,p]
+            Y.ARavg[0,p] = self.PBM[p].WeightedMomentFromN(x[p], 0, precParams.shapeFactor.aspectRatio(self.PBM[p].PSDsize)) / Y.precipitateDensity[0,p]
+            Y.volFrac[0,p] = np.amin([volRatio * precParams.nucleation.volumeFactor * self.PBM[p].ThirdMomentFromN(x[p]), 1])
+            #Not sure if needed, but just in case
+            if self.pData.volFrac[self.pData.n,p] == 1:
+                Y.volFrac[0,p] = 1
+
+            # Compute fconc as described above
+            if precParams.infinitePrecipitateDiffusion:
+                # f_conc = r_vol * vol_factor * sum(n_i * R_i^3 * x_i^beta)
                 compAvg = 0.5 * (self.PSDXbeta[p][:-1] + self.PSDXbeta[p][1:])
                 for e in range(self.numberOfElements):
-                    fConc[0,p,e] = volRatio * self.GB[p].volumeFactor * self.PBM[p].WeightedMomentFromN(x[p], 3, compAvg[:,e])
+                    Y.fconc[0,p,e] = volRatio * precParams.nucleation.volumeFactor * self.PBM[p].WeightedMomentFromN(x[p], 3, compAvg[:,e])
             else:
+                # d(f_conc)/dt = r_vol * vol_factor * sum(d(n_i)/dt * R_i^3 * x_i^beta)
+                # where dt cancels out, so d(f_conc) = r_vol * vol_factor * sum((new_psd - curr_psd) * R_i^3 * x_i^beta)
                 midX = (self.PSDXbeta[p][1:] + self.PSDXbeta[p][:-1]) / 2
                 for e in range(self.numberOfElements):
-                    #y = volRatio * self.GB[p].volumeFactor * np.sum((3*midG*self.PBM[p].PSDsize**2*self.PBM[p].PSD*dt + self.PBM[p].PSDsize**3*(x[p]-self.PBM[p].PSD))*midX[:,e])
-                    y = volRatio * self.GB[p].volumeFactor * np.sum((self.PBM[p].PSDsize**3*(x[p]-self.PBM[p].PSD))*midX[:,e])
-                    fConc[0,p,e] = self.fConc[self.n,p,e] + y
+                    y = volRatio * precParams.nucleation.volumeFactor * np.sum((self.PBM[p].PSDsize**3*(x[p] - self.PBM[p].PSD))*midX[:,e])
+                    Y.fconc[0,p,e] = self.pData.fconc[self.pData.n,p,e] + y
 
-            #Only record these terms if there are non-zero number of precipitates
-            #Otherwise we will be dividing by 0 for avgR and avgAR
-            #   Argueably, RadSum and ARsum would be 0 if Ntot is 0, so it should be fine to do this
-            if Ntot > self.minNucleateDensity:
-                avgR[0,p] = RadSum / Ntot
-                precDens[0,p] = Ntot
-                avgAR[0,p] = ARsum / Ntot
-            else:
-                avgR[0,p] = 0
-                precDens[0,p] = 0
-                avgAR[0,p] = 0
+        if np.sum(Y.volFrac[0]) < 1:
+            Y.composition[0] = (self.pData.composition[0] - np.sum(Y.fconc[0], axis=0)) / (1 - np.sum(Y.volFrac[0]))
+            Y.composition[0,Y.composition[0] < 0] = self.constraints.minComposition
 
-            #Not sure if needed, but just in case
-            if self.betaFrac[self.n,p] == 1:
-                fBeta[0,p] = 1
-
-        if np.sum(fBeta[0]) < 1:
-            xComp[0] = (self.xComp[0] - np.sum(fConc[0], axis=0)) / (1 - np.sum(fBeta[0]))
-            xComp[0,xComp[0] < 0] = self.minComposition
-
-        self._currY[self.VOL_FRAC] = fBeta
-        self._currY[self.FCONC] = fConc
-        self._currY[self.PREC_DENS] = precDens
-        self._currY[self.R_AVG] = avgR
-        self._currY[self.AR_AVG] = avgAR
-        self._currY[self.COMPOSITION] = xComp
+        return Y
 
     def getCurrentX(self):
         '''
@@ -557,62 +485,64 @@ class PrecipitateModel (PrecipitateBase):
         '''
         return [self.PBM[p].PSD for p in range(len(self.phases))]
 
-    def _getdXdt(self, t, x):
+    def _getdXdt(self, t, x, Y : PrecipitationData, growth):
         '''
         Returns dn_i/dt for each PBM of each phase
         '''
-        return [self.PBM[p].getdXdtEuler(self.growth[p], self._currY[self.NUC_RATE][0,p], self._currY[self.R_NUC][0,p], x[p]) for p in range(len(self.phases))]
+        return [self.PBM[p].getdXdtEuler(growth[p], Y.nucRate[0,p], Y.Rnuc[0,p], x[p]) for p in range(len(self.phases))]
 
-    def correctdXdt(self, dt, x, dXdt):
+    def _correctdXdt(self, dt, x, dXdt, Y : PrecipitationData, growth):
         '''
         Corrects dXdt with the newly found dt, this adjusts the fluxes at the ends of the PBM so that we don't get negative bins
         '''
         for p in range(len(self.phases)):
-            dXdt[p] = self.PBM[p].correctdXdtEuler(dt, self.growth[p], self._currY[self.NUC_RATE][0,p], self._currY[self.R_NUC][0,p], x[p])
+            dXdt[p] = self.PBM[p].correctdXdtEuler(dt, growth[p], Y.nucRate[0,p], Y.Rnuc[0,p], x[p])
 
-    def _singleGrowthBinary(self, p):
+    def _growthRate(self, Y : PrecipitationData):
+        if self.numberOfElements == 1:
+            return self._growthRateBinary(Y)
+        else:
+            return self._growthRateMulti(Y)
+
+    def _singleGrowthBinary(self, p, Y : PrecipitationData):
         '''
         Calculates growth rate for a single phase
         This is separated from _growthRateBinary since it's used in _calculatePSD
 
         Matrix/precipitate composition are not calculated here since it's
-        already calculated in createLookup
+        already calculated in _createLookupBinary
         '''
-        xComp = self._currY[self.COMPOSITION][0]
-        T = self._currY[self.TEMPERATURE][0]
+        xComp = Y.composition[0]
+        T = Y.temperature[0]
         growthRate = np.zeros(self.PBM[p].bins + 1)
         #If no precipitates are stable, don't calculate growth rate and set PSD to 0
         #This should represent dissolution of the precipitates
         if self.RdrivingForceIndex[p]+1 < len(self.PSDXalpha[p][:,0]):
-            superSaturation = (xComp[0] - self.PSDXalpha[p][:,0]) / (self.VmAlpha * self.PSDXbeta[p][:,0] / self.VmBeta[p] - self.PSDXalpha[p][:,0])
-            growthRate = self.shapeFactors[p].kineticFactor(self.PBM[p].PSDbounds) * self.Diffusivity(xComp[0], T) * superSaturation / (self.effDiffDistance(superSaturation) * self.PBM[p].PSDbounds)
+            superSaturation = (xComp[0] - self.PSDXalpha[p][:,0]) / (self.matrixParameters.volume.Vm * self.PSDXbeta[p][:,0] / self.precipitateParameters[p].volume.Vm - self.PSDXalpha[p][:,0])
+            D = self.therm.getInterdiffusivity(xComp[0], T, removeCache=self.removeCache)
+            growthRate = self.precipitateParameters[p].shapeFactor.kineticFactor(self.PBM[p].PSDbounds) * D * superSaturation / (self.matrixParameters.effectiveDiffusion(superSaturation) * self.PBM[p].PSDbounds)
 
         return growthRate
     
-    def _growthRateBinary(self):
+    def _growthRateBinary(self, Y : PrecipitationData):
         '''
         Determines current growth rate of all particle size classes in a binary system
         '''
         #Update equilibrium interfacial compositions
-        #This will be override if createLookup is called
-        T = self._currY[self.TEMPERATURE]
-        self.dTemp += T - self.temperature[self.n]
-        if np.abs(self.dTemp) > self.maxTempChange:
-            xEqAlpha, xEqBeta = self.createLookup()
+        #This will be override if _createLookupBinary is called
+        T = Y.temperature[0]
+        self.dTemp += T - self.pData.temperature[self.pData.n]
+        if np.abs(self.dTemp) > self.constraints.maxTempChange:
+            xEqAlpha, xEqBeta = self._createLookupBinary(T)
         else:
-            xEqAlpha, xEqBeta = np.array([self.xEqAlpha[self.n]]), np.array([self.xEqBeta[self.n]])
+            xEqAlpha, xEqBeta = np.array([self.pData.xEqAlpha[self.pData.n]]), np.array([self.pData.xEqBeta[self.pData.n]])
             self.dTemp = 0
-        self._currY[self.EQ_COMP_ALPHA] = xEqAlpha
-        self._currY[self.EQ_COMP_BETA] = xEqBeta
+        Y.xEqAlpha = xEqAlpha
+        Y.xEqBeta = xEqBeta
         
-        #growthRate = np.zeros((len(self.phases), self.bins + 1))
-        growthRate = []
-        for p in range(len(self.phases)):
-            growthRate.append(self._singleGrowthBinary(p))
-            
-        self.growth = growthRate
+        return [self._singleGrowthBinary(p, Y) for p in range(len(self.phases))], Y
 
-    def _singleGrowthMulti(self, p):
+    def _singleGrowthMulti(self, p, Y : PrecipitationData):
         '''
         Calculates growth rate for a single phase
         This is separated from _growthRateMulti since it's used in _calculatePSD
@@ -620,23 +550,22 @@ class PrecipitateModel (PrecipitateBase):
         This will also calculate the matrix/precipitate composition 
         for the radius in the PSD as well as equilibrium (infinite radius)
         '''
-        xComp = self._currY[self.COMPOSITION][0]
-        dGs = self._currY[self.DRIVING_FORCE][0]
-        T = self._currY[self.TEMPERATURE][0]
-        precDens = self._currY[self.PREC_DENS][0]
+        xComp = Y.composition[0]
+        dGs = Y.drivingForce[0]
+        T = Y.temperature[0]
+        precDens = Y.precipitateDensity[0]
         if dGs[p] < 0 and precDens[p] <= 0:
             xEqAlpha = np.zeros(self.numberOfElements)
             xEqBeta = np.zeros(self.numberOfElements)
             growthRate = np.zeros(self.PBM[p].bins + 1)
             return growthRate, xEqAlpha, xEqBeta
 
-
-        growth, xAlpha, xBeta, xEqAlpha, xEqBeta = self.interfacialComposition[p](xComp, T, dGs[p] * self.VmBeta[p], self.PBM[p].PSDbounds, self.particleGibbs(phase=self.phases[p]), searchDir = self._precBetaTemp[p])
+        growth_result = self.therm.getGrowthAndInterfacialComposition(xComp, T, dGs[p] * self.precipitateParameters[p].volume.Vm, self.PBM[p].PSDbounds, self.particleGibbs(phase=self.precipitateParameters[p].phase), precPhase=self.precipitateParameters[p].phase, removeCache=self.removeCache, searchDir = self._precBetaTemp[p])
 
         #If two-phase equilibrium not found, two possibilities - precipitates are unstable or equilibrium calculations didn't converge
         #We try to avoid this as much as possible to where if precipitates are unstable, then attempt to get a growth rate from the nearest composition on the phase boundary
         #And if equilibrium calculations didn't converge, try to use the previous calculations assuming the new composition is close to the previous
-        if growth is None:
+        if growth_result is None:
             #If driving force is negative, then precipitates are unstable
             if dGs[p] < 0:
                 #Completely reset the PBM, including bounds and number of bins
@@ -652,16 +581,17 @@ class PrecipitateModel (PrecipitateBase):
             else:
                 growthRate = self.growth[p]
         else:
+            growth, xAlpha, xBeta, xEqAlpha, xEqBeta = growth_result
             #Update interfacial composition for each precipitate size
             self.PSDXalpha[p] = xAlpha
             self.PSDXbeta[p] = xBeta
 
             #Add shape factor to growth rate - will need to add effective diffusion distance as well
-            growthRate = self.shapeFactors[p].kineticFactor(self.PBM[p].PSDbounds) * growth
+            growthRate = self.precipitateParameters[p].shapeFactor.kineticFactor(self.PBM[p].PSDbounds)*growth
 
         return growthRate, xEqAlpha, xEqBeta
     
-    def _growthRateMulti(self):
+    def _growthRateMulti(self, Y : PrecipitationData):
         '''
         Determines current growth rate of all particle size classes in a multicomponent system
         '''
@@ -669,13 +599,13 @@ class PrecipitateModel (PrecipitateBase):
         xEqBeta = np.zeros((1,len(self.phases), self.numberOfElements))
         growthRate = []
         for p in range(len(self.phases)):
-            growthRate_p, xEqAlpha_p, xEqBeta_p = self._singleGrowthMulti(p)
+            growthRate_p, xEqAlpha_p, xEqBeta_p = self._singleGrowthMulti(p, Y)
             growthRate.append(growthRate_p)
             xEqAlpha[0,p] = xEqAlpha_p
             xEqBeta[0,p] = xEqBeta_p
-        self._currY[self.EQ_COMP_ALPHA] = xEqAlpha
-        self._currY[self.EQ_COMP_BETA] = xEqBeta
-        self.growth = growthRate
+        Y.xEqAlpha = xEqAlpha
+        Y.xEqBeta = xEqBeta
+        return growthRate, Y
 
     def _updateParticleSizeDistribution(self, t, x):
         '''
@@ -692,7 +622,7 @@ class PrecipitateModel (PrecipitateBase):
                 This is to prevent very small dt as the growth rate increases rapidly when R->0
         '''
         for p in range(len(self.phases)):
-            if self.dGs[self.n,p] < 0 and np.all(self.xEqAlpha[self.n,p,:] == 0):
+            if self.pData.drivingForce[self.pData.n,p] < 0 and np.all(self.pData.xEqAlpha[self.pData.n,p,:] == 0):
                 self.PBM[p].reset()
                 self.PSDXalpha[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
                 self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
@@ -701,28 +631,27 @@ class PrecipitateModel (PrecipitateBase):
             self.PBM[p].UpdatePBMEuler(t, x[p])
             change, addedIndices = self.PBM[p].adjustSizeClassesEuler(all(self.growth[p] < 0))
             if change:
-                if self.calculateAspectRatio[p]:
-                    self.eqAspectRatio[p] = self.strainEnergy[p].eqAR_bySearch(self.PBM[p].PSDbounds, self.gamma[p], self.shapeFactors[p])
+                if self.precipitateParameters[p].calculateAspectRatio:
+                    self.eqAspectRatio[p] = self.precipitateParameters[p].strainEnergy.eqAR_bySearch(self.PBM[p].PSDbounds, self.precipitateParameters[p].gamma, self.precipitateParameters[p].shapeFactor)
                 else:
-                    self.eqAspectRatio[p] = self.shapeFactors[p].aspectRatio(self.PBM[p].PSDbounds)
+                    self.eqAspectRatio[p] = self.precipitateParameters[p].shapeFactor.aspectRatio(self.PBM[p].PSDbounds)
 
                 self.growth[p] = np.zeros(len(self.PBM[p].PSDbounds))
                 if self.numberOfElements == 1:
                     if addedIndices is None:
                         #This is very slow to do
-                        self.createLookup()
+                        self._createLookupBinary(self.pData.temperature[self.pData.n])
                     else:
                         self.PSDXalpha[p] = np.concatenate((self.PSDXalpha[p], np.zeros((self.PBM[p].bins+1 - len(self.PSDXalpha[p]),1))))
                         self.PSDXbeta[p] = np.concatenate((self.PSDXbeta[p], np.zeros((self.PBM[p].bins+1 - len(self.PSDXbeta[p]),1))))
-                        self.PSDXalpha[p][addedIndices:,0], self.PSDXbeta[p][addedIndices:,0] = self.interfacialComposition[p](self.temperature[self.n], self.particleGibbs(self.PBM[p].PSDbounds[addedIndices:], self.phases[p]))
+                        self.PSDXalpha[p][addedIndices:,0], self.PSDXbeta[p][addedIndices:,0] = self.therm.getInterfacialComposition(self.pData.temperature[self.pData.n], self.particleGibbs(self.PBM[p].PSDbounds[addedIndices:], self.precipitateParameters[p].phase), precPhase=self.precipitateParameters[p].phase)
                 else:
                     self.PSDXalpha[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
                     self.PSDXbeta[p] = np.zeros((self.PBM[p].bins + 1, self.numberOfElements))
-                self._growthRate()
+                self.growth, _ = self._growthRate(self.pData.copySlice(self.pData.n))
             self.PBM[p].PSD[:self.RdrivingForceIndex[p]+1] = 0
-            self.PBM[p].PSD[self.PBM[p].PSDsize < self.minRadius] = 0
-            self.dissolutionIndex[p] = self.PBM[p].getDissolutionIndex(self.maxDissolution, self.RdrivingForceIndex[p])
-            #self.PBM[p].PSD[:self.dissolutionIndex[p]] = 0
+            self.PBM[p].PSD[self.PBM[p].PSDsize < self.constraints.minRadius] = 0
+            self.dissolutionIndex[p] = self.PBM[p].getDissolutionIndex(self.constraints.maxDissolution, self.RdrivingForceIndex[p])
 
     def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
         '''

@@ -4,7 +4,7 @@ Python implementation of the Kampmann-Wagner Numerical (KWN) model to predict pr
 
 Notes
 -----
-There are some API changes between kawin 0.3.0 and 0.2.0. Please see the examples for more details.
+There has been a lot of changes in the API between the current release and the development version of kawin. The current examples reflect the API of the development version. Examples using the release API can be found in commit f748761. Users of the development version are encouraged to switch to the new API. While back-compatibility was sought to be maintained, there may have been some changes. If there are any issues in running the development or release version of kawin, please open an issue.
 
 Installation
 ------------

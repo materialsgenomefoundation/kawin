@@ -33,40 +33,20 @@ class GenericModel:
         self.currentTime = 0
         self.clearCouplingModels()
 
-    def _getVarDict(self):
+    def toDict(self):
         '''
-        Returns variable dictionary mapping variable name to internal member name
+        Creates a dictionary data set of the following:
+            - this will only save the data that was solved for and not model parameters
 
-        This is used to when saving the model into a npz format, where the member names
-        will be replaced with the variable names defined by this dictionary
+        TODO: eventually support saving model parameters. This is a bit tough with all the nested parameters right now
         '''
         return {}
     
-    def _addExtraSaveVariables(self, saveDict):
-        '''
-        Adds extra variables to the save dictionary that are not covered by the variable dictionary
-            The variable dictionary only cover members that can be retrieved from getattr, so
-            this function is used to save data if it is from another class that itself is an attribute
-        
-        Parameters
-        ----------
-        saveDict : dictionary { str : np.ndarray }
-            Dictionary to add data to
-        '''
-        return
+    @classmethod
+    def fromDict(self, data):
+        pass
     
-    def _loadExtraVariables(self, data):
-        '''
-        Loads extra variables in data not covered by the variable dictionary
-
-        Parameters
-        ----------
-        data : dictionary { str : np.ndarray }
-            Dictionary to read data from
-        '''
-        return
-    
-    def save(self, filename, compressed = True):
+    def save(self, filename: str):
         '''
         Saves model data into file
 
@@ -81,32 +61,16 @@ class GenericModel:
         compressed : bool (defaults to True)
             Whether to save in compressed format
         '''
-        varDict = self._getVarDict()
-        saveDict = {}
-        for var in varDict:
-            saveDict[var] = getattr(self, varDict[var])
-        self._addExtraSaveVariables(saveDict)
-        if compressed:
-            np.savez_compressed(filename, **saveDict)
-        else:
-            np.savez(filename, **saveDict)
+        data = self.toDict()
+        if not filename.endswith('.npz'):
+            filename += '.npz'
+        np.savez_compressed(filename, **data)
 
-    def _loadData(self, data):
-        '''
-        Loads data taken from .npz file into model
-
-        1. Sets attributes using mapping defined from _getVarDict
-        2. Loads extra variables using _loadExtraVariables
-
-        Parameters
-        ----------
-        data : dictionary { str : np.ndarray }
-            Data to load from
-        '''
-        varDict = self._getVarDict()
-        for var in varDict:
-            setattr(self, varDict[var], data[var])
-        self._loadExtraVariables(data)
+    def load(self, filename: str):
+        if not filename.endswith('.npz'):
+            filename += '.npz'
+        data = np.load(filename)
+        self.fromDict(dict(data))
 
     def addCouplingModel(self, model):
         '''
@@ -266,7 +230,7 @@ class GenericModel:
         This is sometimes useful for determining the time step
         '''
         self.deltaTime = simTime
-        self.startTime = currTime
+        self.initialTime = currTime
         self.finalTime = currTime+simTime
 
     def flattenX(self, X):

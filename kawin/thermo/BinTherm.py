@@ -1,7 +1,10 @@
-from kawin.thermo.Thermodynamics import GeneralThermodynamics
 import numpy as np
+
 from pycalphad import Workspace, equilibrium, calculate, variables as v
 from pycalphad.core.composition_set import CompositionSet
+
+from kawin.thermo.utils import _process_TG_arrays, _getPrecipitatePhase
+from kawin.thermo.Thermodynamics import GeneralThermodynamics
 from kawin.thermo.FreeEnergyHessian import dMudX
 
 class BinaryThermodynamics (GeneralThermodynamics):
@@ -30,17 +33,11 @@ class BinaryThermodynamics (GeneralThermodynamics):
     '''
     def __init__(self, database, elements, phases, drivingForceMethod = 'tangent', interfacialCompMethod = 'equilibrium', parameters = None):
         super().__init__(database, elements, phases, drivingForceMethod, parameters)
-
-        if self.elements[1] < self.elements[0]:
-            self.reverse = True
-        else:
-            self.reverse = False
+        self.reverse = self.elements[1] < self.elements[0]
 
         #Guess composition for when finding tieline
         self._guessComposition = {self.phases[i]: (0, 1, 0.1) for i in range(1, len(self.phases))}
-
         self.setInterfacialMethod(interfacialCompMethod)
-
 
     def setInterfacialMethod(self, interfacialCompMethod):
         '''
@@ -108,27 +105,15 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if hasattr(gExtra, '__len__'):
-            if not hasattr(T, '__len__'):
-                caArray, cbArray = self._interfacialComposition(T, gExtra, precPhase)
-            else:
-                #If T is also an array, then iterate through T and gExtra
-                #Otherwise, pycalphad will create a cartesian product of the two
-                caArray = []
-                cbArray = []
-                for i in range(len(gExtra)):
-                    ca, cb = self._interfacialComposition(T[i], gExtra[i], precPhase)
-                    caArray.append(ca)
-                    cbArray.append(cb)
-                caArray = np.array(caArray)
-                cbArray = np.array(cbArray)
-
-            return caArray, cbArray
+        T, gExtra = _process_TG_arrays(T, gExtra)
+        precPhase = _getPrecipitatePhase(self.phases, precPhase)
+        if len(np.unique(T)) == 1:
+            caArray, cbArray = self._interfacialComposition(T[0], gExtra, precPhase)
         else:
-            return self._interfacialComposition(T, gExtra, precPhase)
+            caArray, cbArray = zip(*[self._interfacialComposition(T[i], gExtra[i], precPhase) for i in range(len(T))])
+        return np.squeeze(caArray), np.squeeze(cbArray)
 
-
-    def _interfacialCompositionFromEq(self, T, gExtra = 0, precPhase = None):
+    def _interfacialCompositionFromEq(self, T, gExtra, precPhase):
         '''
         Gets interfacial composition by calculating equilibrum with Gibbs-Thomson effect
 
@@ -149,13 +134,7 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if precPhase is None:
-            precPhase = self.phases[1]
-
-        if hasattr(gExtra, '__len__'):
-            gExtra = np.array(gExtra)
-        else:
-            gExtra = np.array([gExtra])
+        gExtra = np.atleast_1d(gExtra)
         gExtra += self.gOffset
 
         #Compute equilibrium at guess composition
@@ -167,8 +146,8 @@ class BinaryThermodynamics (GeneralThermodynamics):
         coord_keys = list(wks.eq.coords.keys())
         ge_var_idx = coord_keys.index('GE')
 
-        xMatrixArray = -1*np.ones(len(gExtra), dtype=np.float64)
-        xPrecipArray = -1*np.ones(len(gExtra), dtype=np.float64)
+        xMatrixArray = -1*np.ones(gExtra.shape, dtype=np.float64)
+        xPrecipArray = -1*np.ones(gExtra.shape, dtype=np.float64)
         gIndex = 0
         # cs_idx is a 5 len tuple of (GE, N, P, T, X)
         # where it iterates by X first, then by GE
@@ -196,12 +175,9 @@ class BinaryThermodynamics (GeneralThermodynamics):
                     xPrecipArray[gIndex] = cs_precip.X[c_idx]
                     gIndex += 1
 
-        if len(gExtra) == 1:
-            return xMatrixArray[0], xPrecipArray[0]
-        else:
-            return xMatrixArray, xPrecipArray
+        return np.squeeze(xMatrixArray), np.squeeze(xPrecipArray)
 
-    def _interfacialCompositionFromCurvature(self, T, gExtra = 0, precPhase = None):
+    def _interfacialCompositionFromCurvature(self, T, gExtra, precPhase):
         '''
         Gets interfacial composition using free energy curvature
         G''(x - xM)(xP-xM) = 2*y*V/R
@@ -223,20 +199,13 @@ class BinaryThermodynamics (GeneralThermodynamics):
         Both will be either float or array based off shape of gExtra
         Will return (None, None) if precipitate is unstable
         '''
-        if precPhase is None:
-            precPhase = self.phases[1]
-
-        if hasattr(gExtra, '__len__'):
-            gExtra = np.array(gExtra)
-        else:
-            gExtra = np.array([gExtra])
+        gExtra = np.atleast_1d(gExtra)
 
         #Compute equilibrium at guess composition
         cond = {v.X(self.elements[1]): self._guessComposition[precPhase], v.T: T, v.P: 101325, v.GE: self.gOffset, v.N: 1}
         phases, sub_models = self._setupSubModels(precPhase)
         wks = Workspace(self.db, self.elements, phases, cond, models=sub_models,
                         phase_record_factory = self.phase_records, calc_opts={'pdens': self.pDens})
-        
         chemical_potentials = np.squeeze(wks.eq.MU)
 
         idx = 0
@@ -247,38 +216,37 @@ class BinaryThermodynamics (GeneralThermodynamics):
                 cs_precip = [cs for cs in cs_list if cs.phase_record.phase_name == precPhase][0]
                 chem_pot = chemical_potentials[idx]
 
-                dMudxMatrix = dMudX(chem_pot, cs_matrix, self.elements[0])[0,0]
-                dMudxPrecip = dMudX(chem_pot, cs_precip, self.elements[0])[0,0]
+                #Free energy curvature
+                dMudxMatrix = np.squeeze(dMudX(chem_pot, cs_matrix, self.elements[0]))
+                dMudxPrecip = np.squeeze(dMudX(chem_pot, cs_precip, self.elements[0]))
 
                 c_idx = 0 if self.reverse else 1
                 xMatrixEq = cs_matrix.X[c_idx]
                 xPrecipEq = cs_precip.X[c_idx]
 
+                #Compute composition of matrix and precipitate phase
+                # x_meq, x_peq - matrix and precipitate composition at bulk equilibrum
+                # x_m, x_p - matrix and precipitate composition for particle
+                # (x_m - x_meq) * dmu/dx * (x_peq - x_meq) = gExtra
+                # (x_m - x_meq) * dmu_m/dx = (x_p - x_peq) * dmu_p/dx
+                # If dmu/dx is 0 (or undefined), then we use the equilibrium compositions
                 if dMudxMatrix != 0:
                     xMatrix = gExtra / dMudxMatrix / (xPrecipEq - xMatrixEq) + xMatrixEq
                 else:
-                    xMatrix = xMatrixEq*np.ones(len(gExtra))
+                    xMatrix = xMatrixEq*np.ones(gExtra.shape)
 
                 if dMudxPrecip != 0:
                     xPrecip = dMudxMatrix * (xMatrix - xMatrixEq) / dMudxPrecip + xPrecipEq
                 else:
-                    xPrecip = xPrecipEq*np.ones(len(gExtra))
+                    xPrecip = xPrecipEq*np.ones(gExtra.shape)
 
-                xMatrix[xMatrix < 0] = 0
-                xMatrix[xMatrix > 1] = 1
-                xPrecip[xPrecip < 0] = 0
-                xPrecip[xPrecip > 1] = 1
+                xMatrix = np.clip(xMatrix, 0, 1, dtype=np.float64)
+                xPrecip = np.clip(xPrecip, 0, 1, dtype=np.float64)
+                return np.squeeze(xMatrix), np.squeeze(xPrecip)
 
-                if len(gExtra) == 1:
-                    return xMatrix[0], xPrecip[0]
-                else:
-                    return xMatrix, xPrecip
             idx += 1
 
-        if len(gExtra) == 1:
-            return -1, -1
-        else:
-            return -1*np.ones(len(gExtra)), -1*np.ones(len(gExtra))
+        return -1*np.ones(gExtra.shape), -1*np.ones(gExtra.shape)
 
     def plotPhases(self, ax, T, gExtra = 0, plotGibbsOffset = False, *args, **kwargs):
         '''

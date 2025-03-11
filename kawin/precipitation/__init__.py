@@ -1,6 +1,6 @@
-from .KWNBase import PrecipitateBase, VolumeParameter
+from .KWNBase import PrecipitateBase
 from .KWNEuler import PrecipitateModel
+from .PrecipitationParameters import PrecipitationData, TemperatureParameters, MatrixParameters, PrecipitateParameters, Constraints
+from .parameters import NucleationSiteParameters, NucleationBarrierParameters, ShapeFactor, StrainEnergy, VolumeParameter
 from .PopulationBalance import PopulationBalanceModel
-from .non_ideal.ElasticFactors import StrainEnergy
-from .non_ideal.ShapeFactors import ShapeFactor
 from .TimeTemperaturePrecipitation import TTPCalculator

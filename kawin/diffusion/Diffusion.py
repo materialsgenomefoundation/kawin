@@ -6,28 +6,36 @@ from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
 from kawin.diffusion.Mesh import MeshBase, Cartesian1D, PeriodicBoundary, MixedBoundary
 import kawin.diffusion.Plot as diffPlot
+from kawin.diffusion.DiffusionParameters import TemperatureParameters, BoundaryConditions, CompositionProfile, DiffusionConstraints, HashTable
 
 
 class DiffusionModel(GenericModel):
+    '''
+    Class for defining a 1-dimensional mesh
+
+    Parameters
+    ----------
+    zlim : tuple
+        Z-bounds of mesh (lower, upper)
+    N : int
+        Number of nodes
+    elements : list of str
+        Elements in system (first element will be assumed as the reference element)
+    phases : list of str
+        Number of phases in the system
+    '''
     #Boundary conditions
     FLUX = 0
     COMPOSITION = 1
 
-    def __init__(self, zlim, N, elements = ['A', 'B'], phases = ['alpha'], mesh: MeshBase = None, record = True):
-        '''
-        Class for defining a 1-dimensional mesh
-
-        Parameters
-        ----------
-        zlim : tuple
-            Z-bounds of mesh (lower, upper)
-        N : int
-            Number of nodes
-        elements : list of str
-            Elements in system (first element will be assumed as the reference element)
-        phases : list of str
-            Number of phases in the system
-        '''
+    def __init__(self, zlim, N, elements, phases, 
+                 thermodynamics = None,
+                 temperatureParameters = None, 
+                 boundaryConditions = None,
+                 compositionProfile = None,
+                 constraints = None,
+                 mesh: MeshBase = None,
+                 record = True):
         super().__init__()
         if isinstance(phases, str):
             phases = [phases]
@@ -45,24 +53,21 @@ class DiffusionModel(GenericModel):
         #self.dz = self.z[1] - self.z[0]
         #self.t = 0
 
+        self.temperatureParameters = temperatureParameters if temperatureParameters is not None else TemperatureParameters()
+        self.boundaryConditions = boundaryConditions if boundaryConditions is not None else BoundaryConditions()
+        self.compositionProfile = compositionProfile if compositionProfile is not None else CompositionProfile()
+        self.constraints = constraints if constraints is not None else DiffusionConstraints()
+        self.setThermodynamics(thermodynamics)
+
+        self.hashTable = HashTable()
+
         self.reset()
-
-        #self.LBC, self.RBC = self.FLUX*np.ones(len(self.elements)), self.FLUX*np.ones(len(self.elements))
-        #self.LBCvalue, self.RBCvalue = np.zeros(len(self.elements)), np.zeros(len(self.elements))
-
-        self.cache = True
-        self.setHashSensitivity(4)
-        self.minComposition = 1e-8
-
-        self.maxCompositionChange = 0.002
 
         if record:
             self.enableRecording()
         else:
             self.disableRecording()
             self._recordedX = None
-            self._recordedP = None
-            self._recordedZ = None
             self._recordedTime = None
 
     def reset(self):
@@ -77,11 +82,7 @@ class DiffusionModel(GenericModel):
         if self.therm is not None:
             self.therm.clearCache()
         
-        #self.x = np.zeros((self.N, len(self.elements)))
-        self.x = self.mesh.y
-        self.p = np.ones((self.N,len(self.phases)))
-        #self.p = np.ones((1,self.N)) if len(self.phases) == 1 else np.zeros((len(self.phases), self.N))
-        self.hashTable = {}
+        self.x = np.zeros((len(self.elements), self.N))
         self.isSetup = False
         #self.t = 0
 
@@ -98,119 +99,99 @@ class DiffusionModel(GenericModel):
 
     def setTemperature(self, T):
         '''
-        Sets iso-thermal temperature
+        Sets isothermal temperature
 
         Parameters
         ----------
         T : float
-            Temperature in Kelvin
         '''
-        self.Tparam = T
-        self.T = T
-        self.Tfunc = lambda z, t: self.Tparam * np.ones(len(z))
+        self.temperatureParameters.setIsothermalTemperature(T)
 
     def setTemperatureArray(self, times, temperatures):
-        self.Tparam = (times, temperatures)
-        self.T = temperatures[0]
-        self.Tfunc = lambda z, t: np.interp(t/3600, self.Tparam[0], self.Tparam[1], self.Tparam[1][0], self.Tparam[1][-1]) * np.ones(len(z))
+        '''
+        Sets array of times/temperatures
+
+        Example:
+            time = [0, 1, 2]
+            temperature = [100, 200, 300]
+            This will set temperature to 100 at t = 0 hours, then at 1 hour, temperature = 200, then after 2 hours, temperature = 300
+
+        Parameters
+        ----------
+        times : list[float]
+        temperatures : list[float]
+        '''
+        self.temperatureParameters.setTemperatureArray(times, temperatures)
 
     def setTemperatureFunction(self, func):
         '''
-        Function should be T = (x, t)
-        '''
-        self.Tparam = func
-        self.Tfunc = lambda z, t: self.Tparam(z, t)
+        Sets temperature function
 
-    def _getVarDict(self):
+        Parameters
+        ----------
+        func : Callable
+            Function is in the form f(z,t) = T, where z is spatial coordinate and t is time
         '''
-        Returns mapping of { variable name : attribute name } for saving
-        The variable name will be the name in the .npz file
+        self.temperatureParameters.setTemperatureFunction(func)
+
+    def toDict(self):
         '''
-        saveDict = {
-            'elements': 'elements',
-            'phases': 'phases',
-            'z': 'z',
-            'zLim': 'zLim',
-            'N': 'N',
-            'finalTime': 't',
-            'finalX': 'x',
-            'finalP': 'p',
-            'recordX': '_recordedX',
-            'recordP': '_recordedP',
-            'recordZ': '_recordedZ',
-            'recordTime': '_recordedTime',
+        Converts diffusion data to dictionary
+        '''
+        data = {
+            'finalTime': self.t,
+            'finalX': self.x,
+            'recordX': self._recordedX,
+            'recordTime': self._recordedTime
         }
-        return saveDict
+        return data
 
-    def load(filename):
+    def fromDict(self, data):
         '''
-        Loads data from filename and returns a PrecipitateModel
+        Converts dictionary of data to diffusion data
         '''
-        data = np.load(filename)
-        model = DiffusionModel(data['zLim'], data['N'], data['elements'], data['phases'])
-        model._loadData(data)
-        model.isSetup = True
-        return model
-
+        self.t = data['finalTime']
+        self.x = data['finalX']
+        self._recordedX = data['recordX']
+        self._recordedTime = data['recordTime']
+    
     def setHashSensitivity(self, s):
         '''
-        Sets sensitivity of the hash table by significant digits
+        If composition caching is used, this sets the composition precision (in sig figs) when creating a hash
 
-        For example, if a composition set is (0.5693, 0.2937) and s = 3, then
-        the hash will be stored as (0.569, 0.294)
-
-        Lower s values will give faster simulation times at the expense of accuracy
+        Ex. if s = 2, then a composition of [0.3334, 0.3333, 0.3333] will be converted to [0.33, 0.33, 0.33] when hashing
+            While this can lead to faster compute times if new compositions has the same hash, this can also lower fidelity of
+            the calculations since a range of compositions could correspond to the same moblity values
 
         Parameters
         ----------
         s : int
-            Number of significant digits to keep for the hash table
+            Number of sig figs when creating composition hash
         '''
-        self.hashSensitivity = np.power(10, int(s))
-
-    def _getHash(self, x, T):
-        '''
-        Gets hash value for a composition set
-
-        Parameters
-        ----------
-        x : list of floats
-            Composition set to create hash
-        '''
-        return hash(tuple((np.concatenate((x, [T]))*self.hashSensitivity).astype(np.int32)))
+        self.hashTable.setHashSensitivity(s)
 
     def useCache(self, use):
         '''
-        Whether to use the hash table
+        Whether to cache compositions
 
         Parameters
         ----------
         use : bool
-            If True, then the hash table will be used
         '''
-        self.cache = use
+        self.hashTable.enableCaching(use)
 
     def clearCache(self):
         '''
-        Clears hash table
+        Clears the composition cache
         '''
-        self.hashTable = {}
+        self.hashTable.clearCache()
 
-    def enableRecording(self, dtype = np.float32):
+    def enableRecording(self):
         '''
         Enables recording of composition and phase
-        
-        Parameters
-        ----------
-        dtype : numpy data type (optional)
-            Data type to record particle size distribution in
-            Defaults to np.float32
         '''
         self._record = True
-        self._recordedX = np.zeros((1, self.N, len(self.elements)))
-        self._recordedP = np.zeros((1, self.N, len(self.phases)))
-        #self._recordedP = np.zeros((1, 1,self.N)) if len(self.phases) == 1 else np.zeros((1, len(self.phases), self.N))
-        self._recordedZ = self.z
+        self._recordedX = np.zeros((1, len(self.elements), self.N))
         self._recordedTime = np.zeros(1)
 
     def disableRecording(self):
@@ -224,8 +205,6 @@ class DiffusionModel(GenericModel):
         Removes recorded data
         '''
         self._recordedX = None
-        self._recordedP = None
-        self._recordedZ = None
         self._recordedTime = None
 
     def record(self, time):
@@ -235,12 +214,9 @@ class DiffusionModel(GenericModel):
         if self._record:
             if time > 0:
                 self._recordedX = np.pad(self._recordedX, ((0, 1), (0, 0), (0, 0)))
-                self._recordedP = np.pad(self._recordedP, ((0, 1), (0, 0), (0, 0)))
                 self._recordedTime = np.pad(self._recordedTime, (0, 1))
 
-            #self._recordedX[-1] = self.x
-            self._recordedX[-1] = self.mesh.y
-            self._recordedP[-1] = self.p
+            self._recordedX[-1] = self.x
             self._recordedTime[-1] = time
 
     def setMeshtoRecordedTime(self, time):
@@ -250,23 +226,18 @@ class DiffusionModel(GenericModel):
         if self._record:
             if time < self._recordedTime[0]:
                 print('Input time is lower than smallest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[0]))
-                self.x, self.p = self._recordedX[0], self._recordedP[0]
+                self.x = self._recordedX[0]
             elif time > self._recordedTime[-1]:
                 print('Input time is larger than longest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[-1]))
-                self.x, self.p = self._recordedX[-1], self._recordedP[-1]
+                self.x = self._recordedX[-1]
             else:
                 uind = np.argmax(self._recordedTime > time)
                 lind = uind - 1
 
-                ux, up, utime = self._recordedX[uind], self._recordedP[uind], self._recordedTime[uind]
-                lx, lp, ltime = self._recordedX[lind], self._recordedP[lind], self._recordedTime[lind]
+                ux, utime = self._recordedX[uind], self._recordedTime[uind]
+                lx, ltime = self._recordedX[lind], self._recordedTime[lind]
 
                 self.x = (ux - lx) * (time - ltime) / (utime - ltime) + lx
-                self.mesh.y = self.x
-                self.p = (up - lp) * (time - ltime) / (utime - ltime) + lp
-            
-            self.mesh.z = self._recordedZ
-            #self.z = self.mesh.z
 
     def _getElementIndex(self, element = None):
         '''
@@ -295,169 +266,130 @@ class DiffusionModel(GenericModel):
             return 0
         else:
             return self.phases.index(phase)
-
-    def setBC(self, LBCtype = 'flux', LBCvalue = 0, RBCtype = 'flux', RBCvalue = 0, element = None):
+        
+    def setBC(self, LBCtype = BoundaryConditions.FLUX_BC, LBCValue = 0, RBCType = BoundaryConditions.FLUX_BC, RBCValue = 0, element = None):
         '''
-        Set boundary conditions
+        Sets boundary conditions
 
         Parameters
         ----------
-        LBCtype : int | str
-            Left boundary condition type
-                'flux' or 'composition'
+        LBCtype : int
+            Type of boundary condition on left side. Either BoundaryConditions.FLUX_BC or BoundaryConditions.COMPOSITION_BC
         LBCvalue : float
             Value of left boundary condition
-        RBCtype : int  | str
-            Right boundary condition type
-                'flux' or 'composition'
+        RBCtype : int
+            Type of boundary condition on right side. Either BoundaryConditions.FLUX_BC or BoundaryConditions.COMPOSITION_BC
         RBCvalue : float
             Value of right boundary condition
-        element : str
-            Specified element to apply boundary conditions on
         '''
-        if isinstance(self.mesh.boundaryConditions, PeriodicBoundary):
-            self.mesh.boundaryConditions = MixedBoundary(len(self.elements))
-
-        eIndex = self._getElementIndex(element)
-        # self.LBC[eIndex] = LBCtype
-        # self.LBCvalue[eIndex] = LBCvalue
-        # if LBCtype == self.COMPOSITION:
-        #     self.x[0,eIndex] = LBCvalue
-
-        # self.RBC[eIndex] = RBCtype
-        # self.RBCvalue[eIndex] = RBCvalue
-        # if RBCtype == self.COMPOSITION:
-        #     self.x[-1,eIndex] = RBCvalue
-
-        if LBCtype == 'flux':
-            LBCtype = MixedBoundary.NEUMANN
-        elif LBCtype == 'composition':
-            LBCtype = MixedBoundary.DIRICHLET
-        else:
-            raise ValueError("LBCtype must be 'flux' or 'composition'")
+        self.boundaryConditions.setBoundaryCondition(BoundaryConditions.LEFT, 
+                                                                LBCtype, LBCValue, element)
+        self.boundaryConditions.setBoundaryCondition(BoundaryConditions.RIGHT,
+                                                                RBCType, RBCValue, element)
         
-        if RBCtype == 'flux':
-            RBCtype = MixedBoundary.NEUMANN
-        elif RBCtype == 'composition':
-            RBCtype = MixedBoundary.DIRICHLET
-        else:
-            raise ValueError("RBCtype must be 'flux' or 'composition'")
-
-        self.mesh.boundaryConditions.LBCtype[eIndex] = LBCtype
-        self.mesh.boundaryConditions.LBCvalue[eIndex] = LBCvalue
-
-        self.mesh.boundaryConditions.RBCtype[eIndex] = RBCtype
-        self.mesh.boundaryConditions.RBCvalue[eIndex] = RBCvalue
-
-    def setPeriodicBoundary(self):
-        self.mesh.boundaryConditions = PeriodicBoundary()
-
     def setCompositionLinear(self, Lvalue, Rvalue, element = None):
         '''
-        Sets composition as a linear function between ends of the mesh
+        Creates linear composition profile for element
 
         Parameters
         ----------
         Lvalue : float
-            Value at left boundary
+            Composition of element on left
         Rvalue : float
-            Value at right boundary
+            Composition of element on right
         element : str
-            Element to apply composition profile to
+            Element to apply linear profile. If None, will use first independent element
         '''
-        eIndex = self._getElementIndex(element)
-        self.x[:,eIndex] = np.linspace(Lvalue, Rvalue, self.N)
+        element = self.elements[0] if element is None else element
+        self.compositionProfile.clearCompositionBuildSteps(element)
+        self.compositionProfile.addLinearCompositionStep(element, Lvalue, Rvalue)
 
     def setCompositionStep(self, Lvalue, Rvalue, z, element = None):
         '''
-        Sets composition as a step-wise function
+        Creates step composition profile for element
 
         Parameters
         ----------
         Lvalue : float
-            Value on left side of mesh
+            Composition of element on left
         Rvalue : float
-            Value on right side of mesh
+            Composition of element on right
         z : float
-            Position on mesh where composition switches from Lvalue to Rvalue
+            Z coordinate where composition switches from left to right value
         element : str
-            Element to apply composition profile to
+            Element to apply step profile. If None, will use first independent element
         '''
-        eIndex = self._getElementIndex(element)
-        Lindices = self.z <= z
-        self.x[Lindices,eIndex] = Lvalue
-        self.x[~Lindices,eIndex] = Rvalue
+        element = self.elements[0] if element is None else element
+        self.compositionProfile.clearCompositionBuildSteps(element)
+        self.compositionProfile.addStepCompositionStep(element, Lvalue, Rvalue, z)
 
     def setCompositionSingle(self, value, z, element = None):
         '''
-        Sets single node to specified composition
+        Creates composition of element at single node
 
         Parameters
         ----------
         value : float
-            Composition
+            Composition of element at node
         z : float
-            Position to set value to (will use closest node to z)
+            Z coordinate where the closest node will be used
         element : str
-            Element to apply composition profile to
+            Element to apply delta profile. If None, will use first independent element
         '''
-        eIndex = self._getElementIndex(element)
-        zIndex = np.argmin(np.abs(self.z-z))
-        self.x[zIndex,eIndex] = value
+        element = self.elements[0] if element is None else element
+        self.compositionProfile.clearCompositionBuildSteps(element)
+        self.compositionProfile.addSingleCompositionStep(element, value, z)
 
     def setCompositionInBounds(self, value, Lbound, Rbound, element = None):
         '''
-        Sets single node to specified composition
+        Set nodes between boundaries to composition for an element
 
         Parameters
         ----------
         value : float
-            Composition
+            Composition of element
         Lbound : float
-            Position of left bound
+            Left coordinate of nearest node
         Rbound : float
-            Position of right bound
+            Right coordinate of nearest node
         element : str
-            Element to apply composition profile to
+            Element to apply profile. If None, will use first independent element
         '''
-        eIndex = self._getElementIndex(element)
-        indices = (self.z >= Lbound) & (self.z <= Rbound)
-        self.x[indices,eIndex] = value
+        element = self.elements[0] if element is None else element
+        self.compositionProfile.clearCompositionBuildSteps(element)
+        self.compositionProfile.addBoundedCompositionStep(element, value, Lbound, Rbound)
 
     def setCompositionFunction(self, func, element = None):
         '''
-        Sets composition as a function of z
+        Set composition of element according to function
 
         Parameters
         ----------
-        func : function
-            Function taking in z and returning composition
+        func : Callable
+            Function in form of f(z) = c where z is spatial coordinate and c is composition
         element : str
-            Element to apply composition profile to
+            Element to apply profile. If None, will use first independent element
         '''
-        eIndex = self._getElementIndex(element)
-        self.x[:,eIndex] = func(self.z)
+        element = self.elements[0] if element is None else element
+        self.compositionProfile.clearCompositionBuildSteps(element)
+        self.compositionProfile.addFunctionCompositionStep(element, func)
 
     def setCompositionProfile(self, z, x, element = None):
         '''
-        Sets composition profile by linear interpolation
+        Set composition of element as interpolation of input profile
 
         Parameters
         ----------
-        z : array
-            z-coords of composition profile
-        x : array
-            Composition profile
+        z : list[float]
+            Spatial coordinates of dataset
+        x : list[float]
+            Composition of dataset (corresponds to z)
         element : str
-            Element to apply composition profile to
+            Element to apply profile. If None, will use first independent element
         '''
-        eIndex = self._getElementIndex(element)
-        z = np.array(z)
-        x = np.array(x)
-        sortIndices = np.argsort(z)
-        z = z[sortIndices]
-        x = x[sortIndices]
-        self.x[:,eIndex] = np.interp(self.z, z, x)
+        element = self.elements[0] if element is None else element
+        self.compositionProfile.clearCompositionBuildSteps(element)
+        self.compositionProfile.addProfileCompositionStep(element, x, z)
 
     def setup(self):
         '''
@@ -467,26 +399,20 @@ class DiffusionModel(GenericModel):
 
         This will also make sure that all compositions are not 0 or 1 to speed up equilibrium calculations
         '''
-        if self.therm is not None:
-            self.therm.clearCache()
+        if not self.isSetup:
+            if self.therm is not None:
+                self.therm.clearCache()
 
-        if isinstance(self.mesh.boundaryConditions, MixedBoundary):
-            for e in range(len(self.elements)):
-                if self.mesh.boundaryConditions.LBCtype[e] == MixedBoundary.DIRICHLET:
-                    self.x[0,e] = self.mesh.boundaryConditions.LBCvalue[e]
-                if self.mesh.boundaryConditions.RBCtype[e] == MixedBoundary.DIRICHLET:
-                    self.x[-1,e] = self.mesh.boundaryConditions.RBCvalue[e]
+            self.compositionProfile.buildProfile(self.elements, self.x, self.z)
+            self.boundaryConditions.setupDefaults(self.elements)
+            self.boundaryConditions.applyBoundaryConditionsToInitialProfile(self.elements, self.x, self.z)
 
-        xsum = np.sum(self.x, axis=1)
+        xsum = np.sum(self.x, axis=0)
         if any(xsum > 1):
             print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[xsum>1]), np.amax(self.z[xsum>1])))
             raise Exception('Some compositions sum up to above 1')
-        self.x[self.x > self.minComposition] = self.x[self.x > self.minComposition] - len(self.allElements) * self.minComposition
-        self.x[self.x < self.minComposition] = self.minComposition
-        self.T = self.Tfunc(self.z, 0)
-
-        self.mesh.y = self.x
-
+        self.x[self.x > self.constraints.minComposition] = self.x[self.x > self.constraints.minComposition] - len(self.allElements)*self.constraints.minComposition
+        self.x[self.x < self.constraints.minComposition] = self.constraints.minComposition
         self.isSetup = True
         self.record(self.currentTime) #Record at t = 0
 
@@ -502,6 +428,7 @@ class DiffusionModel(GenericModel):
         print('Iteration\tSim Time (h)\tRun time (s)')
 
     def printStatus(self, iteration, modelTime, simTimeElapsed):
+        # Convert time to hours
         super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
@@ -523,11 +450,10 @@ class DiffusionModel(GenericModel):
         Stores new x and t
         Records new values if recording is enabled
         '''
-        super().postProcess(time, x)
-        #self.x = x[0]
-        self.mesh.y = x[0]
-        self.x = self.mesh.y
-        self.record(self.currentTime)
+        self.t = time
+        self.x = x[0]
+        self.x = np.clip(self.x, self.constraints.minComposition, 1-self.constraints.minComposition)
+        self.record(self.t)
         self.updateCoupledModels()
         return self.getCurrentX(), False
     
@@ -561,18 +487,6 @@ class DiffusionModel(GenericModel):
         else:
             e = self._getElementIndex(element)
             return self.x[:,e]
-
-    def getP(self, phase):
-        '''
-        Gets phase profile
-
-        Parameters
-        ----------
-        phase : str
-            Phase to get profile of
-        '''
-        p = self._getPhaseIndex(phase)
-        return self.p[p]
 
     def plot(self, ax = None, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
         '''

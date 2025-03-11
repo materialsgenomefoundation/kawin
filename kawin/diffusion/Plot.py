@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from kawin.diffusion.DiffusionParameters import computeMobility
+
 def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
     '''
     Plots composition profile
@@ -125,12 +127,20 @@ def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, *args, **kwar
     if not diffModel.isSetup:
         diffModel.setup()
 
+    T = diffModel.temperatureParameters(diffModel.z, diffModel.t)
+    mob_data = computeMobility(diffModel.therm, diffModel.x.T, T, diffModel.hashTable)
+
     if plotPhase is not None:
-        p = diffModel._getPhaseIndex(plotPhase)
-        ax.plot(diffModel.z/zScale, diffModel.p[:,p], *args, **kwargs)
+        pf = []
+        for p_labels, p_fracs in zip(mob_data.phases, mob_data.phase_fractions):
+            pf.append(np.sum(p_fracs[p_labels==plotPhase]))
+        ax.plot(diffModel.z/zScale, pf, *args, **kwargs)
     else:
         for p in range(len(diffModel.phases)):
-            ax.plot(diffModel.z/zScale, diffModel.p[:,p], label=diffModel.phases[p], *args, **kwargs)
+            pf = []
+            for p_labels, p_fracs in zip(mob_data.phases, mob_data.phase_fractions):
+                pf.append(np.sum(p_fracs[p_labels==diffModel.phases[p]]))
+            ax.plot(diffModel.z/zScale, pf, label=diffModel.phases[p], *args, **kwargs)
     ax.set_xlim([diffModel.zlim[0]/zScale, diffModel.zlim[1]/zScale])
     ax.set_ylim([0, 1])
     ax.set_xlabel('Distance (m)')

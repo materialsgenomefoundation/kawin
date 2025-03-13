@@ -1,6 +1,6 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.diffusion.Mesh import geometricMean, arithmeticMean
+from kawin.diffusion.mesh.MeshBase import geometricMean, arithmeticMean, logMean
 
 class SinglePhaseModel(DiffusionModel):
     def _getFluxes(self, t, x_curr):
@@ -26,21 +26,6 @@ class SinglePhaseModel(DiffusionModel):
         '''
         #Calculate diffusivity at cell centers
         x = x_curr[0]
-<<<<<<< HEAD
-        T = self.Tfunc(self.z, t)
-        if len(self.elements) == 1:
-            d = np.zeros(self.N)
-        else:
-            d = np.zeros((self.N, len(self.elements), len(self.elements)))
-        if self.cache:
-            for i in range(self.N):
-                hashValue = self._getHash(x[i], T[i])
-                if hashValue not in self.hashTable:
-                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(x[i], T[i], phase=self.phases[0])
-                d[i] = self.hashTable[hashValue]
-        else:
-            d = self.therm.getInterdiffusivity(x.T, T, phase=self.phases[0])
-=======
         T = self.temperatureParameters(self.z, t)
         d = np.zeros(self.N) if len(self.elements) == 1 else np.zeros((self.N, len(self.elements), len(self.elements)))
         for i in range(self.N):
@@ -49,7 +34,6 @@ class SinglePhaseModel(DiffusionModel):
                 inter_diff = self.therm.getInterdiffusivity(x[:,i], T[i], phase=self.phases[0])
                 self.hashTable.addToHashTable(x[:,i], T[i], inter_diff)
             d[i] = inter_diff
->>>>>>> f67bdb2da3a75b5d37edc71c300cda72709a058d
         
         #Get diffusivity and composition gradient at cell boundaries
         dmid = (d[1:] + d[:-1]) / 2
@@ -65,13 +49,7 @@ class SinglePhaseModel(DiffusionModel):
             fluxes[1:-1] = -np.matmul(dmid, dxdz)[:,:,0]
 
         #Boundary condition
-<<<<<<< HEAD
-        for e in range(len(self.elements)):
-            fluxes[0,e] = self.LBCvalue[e] if self.LBC[e] == self.FLUX else fluxes[1,e]
-            fluxes[-1,e] = self.RBCvalue[e] if self.RBC[e] == self.FLUX else fluxes[-2,e]
-=======
         self.boundaryConditions.applyBoundaryConditionsToFluxes(self.elements, fluxes)
->>>>>>> f67bdb2da3a75b5d37edc71c300cda72709a058d
 
         #Time step from von Neumann analysis (using 0.4 instead of 0.5 to be safe)
         self._currdt = self.constraints.vonNeumannThreshold * self.dz**2 / np.amax(np.abs(dmid))
@@ -107,25 +85,25 @@ class SinglePhaseModel(DiffusionModel):
     def getdXdt(self, t, xCurr):
         #Calculate diffusivity at cell centers
         x = xCurr[0]
-        T = self.Tfunc(self.z, t)
-        if len(self.elements) == 1:
-            d = np.zeros(self.N)
-        else:
-            d = np.zeros((self.N, len(self.elements), len(self.elements)))
-        if self.cache:
-            for i in range(self.N):
-                hashValue = self._getHash(x[i], T[i])
-                if hashValue not in self.hashTable:
-                    self.hashTable[hashValue] = self.therm.getInterdiffusivity(x[i], T[i], phase=self.phases[0])
-                d[i] = self.hashTable[hashValue]
-        else:
-            d = self.therm.getInterdiffusivity(x.T, T, phase=self.phases[0])
+        yD, zD = self.mesh.getDiffusivityCoordinates(x)
+        yR, zR = self.mesh.getResponseCoordinates(x)
+
+        T = self.temperatureParameters(zD, t)
+        dims = self.mesh.dims
+        N = len(yD)
+        d = np.zeros(N) if dims == 1 else np.zeros((N, dims, dims))
+        for i in range(N):
+            inter_diff = self.hashTable.retrieveFromHashTable(yD[i], T[i])
+            if inter_diff is None:
+                inter_diff = self.therm.getInterdiffusivity(yD[i], T[i], phase=self.phases[0])
+                self.hashTable.addToHashTable(yD[i], T[i], inter_diff)
+            d[i] = inter_diff
 
         pairs = []
-        if len(self.elements) == 1:
-            pairs.append((d[:,np.newaxis], self.mesh.y, arithmeticMean))
+        if dims == 1:
+            pairs.append((d[:,np.newaxis], yR, logMean))
         else:
             for i in range(len(self.elements)):
-                pairs.append((d[:,:,i], np.tile([x[:,i]], (len(self.elements), 1)).T, arithmeticMean))
+                pairs.append((d[:,:,i], np.tile([yR[:,i]], (dims, 1)).T, logMean))
         dxdt = self.mesh.computedXdt(pairs)
         return [dxdt]

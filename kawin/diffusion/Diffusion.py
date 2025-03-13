@@ -4,7 +4,7 @@ import csv
 from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
-from kawin.diffusion.Mesh import MeshBase, Cartesian1D, PeriodicBoundary, MixedBoundary
+from kawin.diffusion.mesh import MeshBase, Cartesian1D, FiniteVolume1D, PeriodicBoundary1D, MixedBoundary1D
 import kawin.diffusion.Plot as diffPlot
 from kawin.diffusion.DiffusionParameters import TemperatureParameters, BoundaryConditions, CompositionProfile, DiffusionConstraints, HashTable
 
@@ -39,19 +39,16 @@ class DiffusionModel(GenericModel):
         super().__init__()
         if isinstance(phases, str):
             phases = [phases]
-        self.zlim, self.N = zlim, N
         self.allElements, self.elements = elements, elements[1:]
         self.phases = phases
         self.therm = None
 
         if mesh is None:
-           self.mesh = Cartesian1D(self.zlim, self.N, len(self.elements))
+           self.mesh = Cartesian1D(zlim, N, len(self.elements))
         else:
            self.mesh = mesh
-        self.z = self.mesh.z
-        #self.z = np.linspace(zlim[0], zlim[1], N)
-        #self.dz = self.z[1] - self.z[0]
-        #self.t = 0
+        if self.mesh.dims != len(self.elements):
+            raise ValueError("Mesh dimensions must match independent elements")
 
         self.temperatureParameters = temperatureParameters if temperatureParameters is not None else TemperatureParameters()
         self.boundaryConditions = boundaryConditions if boundaryConditions is not None else BoundaryConditions()
@@ -82,9 +79,7 @@ class DiffusionModel(GenericModel):
         if self.therm is not None:
             self.therm.clearCache()
         
-        self.x = np.zeros((len(self.elements), self.N))
         self.isSetup = False
-        #self.t = 0
 
     def setThermodynamics(self, thermodynamics):
         '''
@@ -267,25 +262,38 @@ class DiffusionModel(GenericModel):
         else:
             return self.phases.index(phase)
         
-    def setBC(self, LBCtype = BoundaryConditions.FLUX_BC, LBCValue = 0, RBCType = BoundaryConditions.FLUX_BC, RBCValue = 0, element = None):
-        '''
-        Sets boundary conditions
+    def _verify1DMesh(self, msg):
+        if not isinstance(self.mesh, FiniteVolume1D):
+            raise ValueError("Mesh must be Cartesian1D, Cylindrical1D or Spherical1D" + msg)
+        
+    def setBC(self, LBCtype = 'flux', LBCvalue = 0, RBCtype = 'flux', RBCvalue = 0, element = None):
+        self._verify1DMesh(f" to set boundary conditions through {self.__class__}")
+        if isinstance(self.mesh.boundaryConditions, PeriodicBoundary1D):
+            self.mesh.boundaryConditions = MixedBoundary1D(len(self.elements))
 
-        Parameters
-        ----------
-        LBCtype : int
-            Type of boundary condition on left side. Either BoundaryConditions.FLUX_BC or BoundaryConditions.COMPOSITION_BC
-        LBCvalue : float
-            Value of left boundary condition
-        RBCtype : int
-            Type of boundary condition on right side. Either BoundaryConditions.FLUX_BC or BoundaryConditions.COMPOSITION_BC
-        RBCvalue : float
-            Value of right boundary condition
-        '''
-        self.boundaryConditions.setBoundaryCondition(BoundaryConditions.LEFT, 
-                                                                LBCtype, LBCValue, element)
-        self.boundaryConditions.setBoundaryCondition(BoundaryConditions.RIGHT,
-                                                                RBCType, RBCValue, element)
+        eIndex = self._getElementIndex(element)
+        if LBCtype == 'flux' or LBCtype == MixedBoundary1D.NEUMANN:
+            LBCtype = MixedBoundary1D.NEUMANN
+        elif LBCtype == 'composition' or LBCtype == MixedBoundary1D.DIRICHLET:
+            LBCtype = MixedBoundary1D.DIRICHLET
+        else:
+            raise ValueError("LBCtype must be 'flux' or 'composition'")
+
+        if RBCtype == 'flux' or RBCtype == MixedBoundary1D.NEUMANN:
+            RBCtype = MixedBoundary1D.NEUMANN
+        elif RBCtype == 'composition' or RBCtype == MixedBoundary1D.DIRICHLET:
+            RBCtype = MixedBoundary1D.DIRICHLET
+        else:
+            raise ValueError("RBCtype must be 'flux' or 'composition'")
+        
+        self.mesh.boundaryConditions.LBCtype[eIndex] = LBCtype
+        self.mesh.boundaryConditions.LBCvalue[eIndex] = LBCvalue
+        self.mesh.boundaryConditions.RBCtype[eIndex] = RBCtype
+        self.mesh.boundaryConditions.RBCvalue[eIndex] = RBCvalue
+
+    def setPeriodicBoundary(self):
+        self._verify1DMesh(f" to set boundary conditions through {self.__class__}")
+        self.mesh.boundaryConditions = MixedBoundary1D()
         
     def setCompositionLinear(self, Lvalue, Rvalue, element = None):
         '''
@@ -300,6 +308,7 @@ class DiffusionModel(GenericModel):
         element : str
             Element to apply linear profile. If None, will use first independent element
         '''
+        self._verify1DMesh(f" to set composition profile through {self.__class__}")
         element = self.elements[0] if element is None else element
         self.compositionProfile.clearCompositionBuildSteps(element)
         self.compositionProfile.addLinearCompositionStep(element, Lvalue, Rvalue)
@@ -319,6 +328,7 @@ class DiffusionModel(GenericModel):
         element : str
             Element to apply step profile. If None, will use first independent element
         '''
+        self._verify1DMesh(f" to set composition profile through {self.__class__}")
         element = self.elements[0] if element is None else element
         self.compositionProfile.clearCompositionBuildSteps(element)
         self.compositionProfile.addStepCompositionStep(element, Lvalue, Rvalue, z)
@@ -336,6 +346,7 @@ class DiffusionModel(GenericModel):
         element : str
             Element to apply delta profile. If None, will use first independent element
         '''
+        self._verify1DMesh(f" to set composition profile through {self.__class__}")
         element = self.elements[0] if element is None else element
         self.compositionProfile.clearCompositionBuildSteps(element)
         self.compositionProfile.addSingleCompositionStep(element, value, z)
@@ -355,6 +366,7 @@ class DiffusionModel(GenericModel):
         element : str
             Element to apply profile. If None, will use first independent element
         '''
+        self._verify1DMesh(f" to set composition profile through {self.__class__}")
         element = self.elements[0] if element is None else element
         self.compositionProfile.clearCompositionBuildSteps(element)
         self.compositionProfile.addBoundedCompositionStep(element, value, Lbound, Rbound)
@@ -370,6 +382,7 @@ class DiffusionModel(GenericModel):
         element : str
             Element to apply profile. If None, will use first independent element
         '''
+        self._verify1DMesh(f" to set composition profile through {self.__class__}")
         element = self.elements[0] if element is None else element
         self.compositionProfile.clearCompositionBuildSteps(element)
         self.compositionProfile.addFunctionCompositionStep(element, func)
@@ -387,6 +400,7 @@ class DiffusionModel(GenericModel):
         element : str
             Element to apply profile. If None, will use first independent element
         '''
+        self._verify1DMesh(f" to set composition profile through {self.__class__}")
         element = self.elements[0] if element is None else element
         self.compositionProfile.clearCompositionBuildSteps(element)
         self.compositionProfile.addProfileCompositionStep(element, x, z)
@@ -403,16 +417,12 @@ class DiffusionModel(GenericModel):
             if self.therm is not None:
                 self.therm.clearCache()
 
-            self.compositionProfile.buildProfile(self.elements, self.x, self.z)
-            self.boundaryConditions.setupDefaults(self.elements)
-            self.boundaryConditions.applyBoundaryConditionsToInitialProfile(self.elements, self.x, self.z)
+            #if isinstance(self.mesh, Cartesian1D):
+            #    self.compositionProfile.buildProfile(self.elements, self.mesh.y, self.mesh.z)
+            #    self.boundaryConditions.setupDefaults(self.elements)
+            #    self.boundaryConditions.applyBoundaryConditionsToInitialProfile(self.elements, self.mesh.y, self.mesh.z)
 
-        xsum = np.sum(self.x, axis=0)
-        if any(xsum > 1):
-            print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[xsum>1]), np.amax(self.z[xsum>1])))
-            raise Exception('Some compositions sum up to above 1')
-        self.x[self.x > self.constraints.minComposition] = self.x[self.x > self.constraints.minComposition] - len(self.allElements)*self.constraints.minComposition
-        self.x[self.x < self.constraints.minComposition] = self.constraints.minComposition
+        self.mesh.validateCompositions(len(self.allElements), self.constraints.minComposition)
         self.isSetup = True
         self.record(self.currentTime) #Record at t = 0
 
@@ -450,10 +460,12 @@ class DiffusionModel(GenericModel):
         Stores new x and t
         Records new values if recording is enabled
         '''
-        self.t = time
-        self.x = x[0]
-        self.x = np.clip(self.x, self.constraints.minComposition, 1-self.constraints.minComposition)
-        self.record(self.t)
+        super().postProcess(time, x)
+        #self.t = time
+        #self.x = x[0]
+        #self.x = np.clip(self.x, self.constraints.minComposition, 1-self.constraints.minComposition)
+        #self.record(self.t)
+        self.mesh.y = x[0]
         self.updateCoupledModels()
         return self.getCurrentX(), False
     

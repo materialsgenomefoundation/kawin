@@ -316,8 +316,7 @@ class GenericModel:
         
         X0 = self.getCurrentX()
         self.setTimeInfo(self.currentTime, simTime)
-        solver.solve(self.startTime, X0, self.finalTime, verbose, vIt)
-        #solver.solve(self.getdXdt, self.startTime, X0, self.finalTime, verbose, vIt, self.correctdXdt, self.flattenX, self.unflattenX)
+        solver.solve(self.initialTime, X0, self.finalTime, verbose, vIt)
 
 class Coupler(GenericModel):
     '''
@@ -467,7 +466,6 @@ class Coupler(GenericModel):
             xnew_sub, s = m.postProcess(time, xsub)
             stop = stop or s
             xNew.append(xnew_sub)
-        #self.time = np.append(self.time, time)
         self.couplePostProcess()
         return xNew, stop
     

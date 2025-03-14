@@ -79,8 +79,7 @@ class SinglePhaseModel(DiffusionModel):
         Returns dt that was calculated from _getFluxes
         This prevents double calculation of the diffusivity just to get a time step
         '''
-        return self.mesh.dt
-        #return self._currdt
+        return self._currdt
 
     def getdXdt(self, t, xCurr):
         #Calculate diffusivity at cell centers
@@ -89,9 +88,9 @@ class SinglePhaseModel(DiffusionModel):
         yR, zR = self.mesh.getResponseCoordinates(x)
 
         T = self.temperatureParameters(zD, t)
-        dims = self.mesh.dims
+        numElements = self.mesh.numResponses
         N = len(yD)
-        d = np.zeros(N) if dims == 1 else np.zeros((N, dims, dims))
+        d = np.zeros(N) if numElements == 1 else np.zeros((N, numElements, numElements))
         for i in range(N):
             inter_diff = self.hashTable.retrieveFromHashTable(yD[i], T[i])
             if inter_diff is None:
@@ -100,10 +99,12 @@ class SinglePhaseModel(DiffusionModel):
             d[i] = inter_diff
 
         pairs = []
-        if dims == 1:
-            pairs.append((d[:,np.newaxis], yR, logMean))
+        if numElements == 1:
+            pairs.append((d[:,np.newaxis], yR, arithmeticMean))
         else:
             for i in range(len(self.elements)):
-                pairs.append((d[:,:,i], np.tile([yR[:,i]], (dims, 1)).T, logMean))
+                pairs.append((d[:,:,i], np.tile([yR[:,i]], (numElements, 1)).T, arithmeticMean))
+
+        self._currdt = 0.4 * np.amin(self.mesh.dz)**2 / np.amax(d) / self.mesh.dims
         dxdt = self.mesh.computedXdt(pairs)
         return [dxdt]

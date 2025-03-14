@@ -29,6 +29,7 @@ Basic idea:
     TODO: I want an averaging function that can account for both log scale and negative numbers, which are two not so friendly terms
 '''
 from abc import ABC, abstractmethod
+from typing import Union
 import numpy as np
 
 def arithmeticMean(Ds):
@@ -52,99 +53,283 @@ def harmonicMean(Ds):
     '''
     return np.power(np.sum(np.power(Ds, -1), axis=0), -1)
 
-class BoundaryCondition:
+def _getResponseVariables(responses: Union[int, list[str]]) -> tuple[int, list[str]]:
+    '''
+    This returns the number of response variables and names for each variable
+
+    Parameters
+    ----------
+    responses: int | list[str]
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
+    '''
+    if np.issubdtype(np.array(responses).dtype, int):
+        return responses, [f"R{i}" for i in range(responses)]
+    # If dims is a list of str, then dims is the length of array
+    if hasattr(responses, "__len__"):
+        return len(responses), [str(r) for r in responses]
+    else:
+        raise ValueError("dims must be int or list[str]")
+    
+def _getResponseIndex(responseVar: Union[int, str], responses):
+        '''
+        Given the response variable, return the corresponding index
+        '''
+        numResponses = len(responses)
+        # If integer, then index is just the response variable
+        if np.issubdtype(np.array(responseVar).dtype, int):
+            if responseVar < 0 or responseVar >= numResponses:
+                raise ValueError(f"Response index must be [0, {numResponses-1}]")
+            return responseVar
+        # If string, then get the index in the self.responses list
+        else:
+            if responseVar not in responses:
+                raise ValueError(f"responseVar must be one of the following: {responses}")
+            else:
+                return responses.index(responseVar)
+            
+def _formatSpatial(z):
+    z = np.atleast_2d(z)
+    if z.shape[0] == 1:
+        return z.T
+    else:
+        return z
+    
+class BoundaryCondition(ABC):
+    @abstractmethod
+    def setInitialResponse(self, y):
+        raise NotImplementedError()
+
+    @abstractmethod
     def adjustFluxes(self, fluxes):
-        pass
+        raise NotImplementedError()
 
+    @abstractmethod
     def adjustdXdt(self, dXdt):
-        pass
+        raise NotImplementedError()
 
-class PeriodicBoundary1D(BoundaryCondition):
+    
+class ProfileBuilder:
+    def __init__(self):
+        self.buildSteps = {}
+
+    def addBuildStep(self, func, responseVar=0):
+        if responseVar not in self.buildSteps:
+            self.buildSteps[responseVar] = []
+        self.buildSteps[responseVar].append(func)
+
+class ConstantProfile:
+    def __init__(self, value):
+        self.value = value
+
+    def __call__(self, z):
+        return np.squeeze(self.value*np.ones(np.array(z).shape))
+    
+class DiracDeltaProfile:
+    def __init__(self, z, value):
+        self.value = value
+        self.z = np.atleast_1d(z)
+
+    def __call__(self, z):
+        z = _formatSpatial(z)
+        y = np.zeros(z.shape[0])
+        r = np.sqrt(np.sum((z-self.z[np.newaxis,:])**2, axis=1))
+        nearestIndex = np.argmin(r)
+        y[nearestIndex] = self.value
+        return np.squeeze(y)
+    
+class GaussianProfile:
+    def __init__(self, z, sigma, maxValue):
+        self.maxValue = maxValue
+        self.z = np.atleast_1d(z)
+        
+        if np.isscalar(sigma):
+            self.sigma = sigma*np.ones(len(self.z))
+        else:
+            self.sigma = np.atleast_1d(sigma)
+
+    def __call__(self, z):
+        z = _formatSpatial(z)
+        r2 = (z-self.z[np.newaxis,:])**2
+        y = np.exp(-np.sum(r2 / self.sigma[np.newaxis,:]**2, axis=1))
+        # maximum value of y will be 1, so we can just multiply the max value
+        y *= self.maxValue
+        return np.squeeze(y)
+    
+class BoundedRectangleProfile:
+    def __init__(self, lowerZ, upperZ, innerValue, outerValue = 0):
+        self.iv = innerValue
+        self.ov = outerValue
+        self.lz = np.atleast_1d(lowerZ)
+        self.uz = np.atleast_1d(upperZ)
+
+    def __call__(self, z):
+        z = _formatSpatial(z)
+        y = self.ov*np.ones(z.shape[0])
+        indices = (self.lz[0] < z[:,0]) & (z[:,0] <= self.uz[0])
+        for i in range(1, len(self.lz)):
+            indices &= (self.lz[i] < z[:,i]) & (z[:,i] <= self.uz[i])
+        y[indices] = self.iv
+        return np.squeeze(y)
+    
+class BoundedEllipseProfile:
+    def __init__(self, z, r, innerValue, outerValue = 0):
+        self.iv = innerValue
+        self.ov = outerValue
+        self.z = np.atleast_1d(z)
+        if np.isscalar(r):
+            self.r = r*np.ones(len(self.z))
+        else:
+            self.r = np.atleast_1d(r)
+
+    def __call__(self, z):
+        z = _formatSpatial(z)
+        y = self.ov*np.ones(z.shape[0])
+        r2 = np.sum((z-self.z[np.newaxis,:])**2 / self.r[np.newaxis,:]**2, axis=1)
+        y[r2 < 1] = self.iv
+        return y
+
+class AbstractMesh (ABC):
     '''
-    This doesn't do anything, but rather is used in the Mesh to compute the fluxes accordingly
-    Unfortunately, we can't just wrap the fluxes around and instead have to wrap the response variable
-    around. Which means that we would have to have knowledge on how to compute the flux
+    Abstract mesh class that defines basic methods to be used in a diffusion model
+
+    Attributes
+    ----------
+    numResponses: int
+        Number of response variables
+    responses: list[str]
+        Names of response variables
+    y: np.ndarray
+        Values of response variables
+    z: np.ndarray
+        Values of spatial coordinates corresponding to y
+
+    Default assumptions in this mesh:
+        y has shape [N,e] - e is number of responses
+        z has shape [N,d] - d is number of dimensiosn
     '''
-    pass
-
-class MixedBoundary1D(BoundaryCondition):
-    '''
-    Currently, left and right boundary conditions both are defined here
-    We'll need a way to define boundary conditions at any edge, which will
-    especially be the case if we add a 2D mesh
-    '''
-    NEUMANN = 0
-    DIRICHLET = 1
-
-    def __init__(self, dims):
-        self.dims = dims
-        self.LBCtype = MixedBoundary1D.NEUMANN * np.ones(dims)
-        self.LBCvalue = np.zeros(dims)
-        self.RBCtype = MixedBoundary1D.NEUMANN * np.ones(dims)
-        self.RBCvalue = np.zeros(dims)
-
-    def adjustFluxes(self, fluxes):
-        for d in range(self.dims):
-            if self.LBCtype[d] == MixedBoundary1D.NEUMANN:
-                fluxes[0,d] = self.LBCvalue[d]
-            if self.RBCtype[d] == MixedBoundary1D.NEUMANN:
-                fluxes[-1,d] = self.RBCvalue[d]
-
-    def adjustdXdt(self, dXdt):
-        for d in range(self.dims):
-            if self.LBCtype[d] == MixedBoundary1D.DIRICHLET:
-                dXdt[0,d] = 0
-            if self.RBCtype[d] == MixedBoundary1D.DIRICHLET:
-                dXdt[-1,d] = 0
-
-class MeshBase (ABC):
-    def __init__(self, dims):
-        self.dims = dims
-        self._dt = 0
+    def __init__(self, responses):
+        self.numResponses, self.responses = _getResponseVariables(responses)
+        
+        self.N = None
+        self.dims = None
+        self.y = None
+        self.z = None
+        self.dz = None
+    
+    def setResponseProfile(self, profileBuilder: ProfileBuilder, boundaryConditions: BoundaryCondition = None):
+        '''
+        Creates initial profile on mesh based off a series of build steps
+        '''
+        yFlat = np.zeros(self.flattenResponse(self.y).shape)
+        for responseVar, steps in profileBuilder.buildSteps.items():
+            flatZ = self.flattenSpatial(self.z)
+            index = _getResponseIndex(responseVar, self.responses)
+            yFlat[:,index] = np.sum([singleStep(flatZ) for singleStep in steps], axis=0)
+        self.y = self.unflattenResponse(yFlat)
+        if boundaryConditions is not None:
+            boundaryConditions.setInitialResponse(self.y)
     
     @abstractmethod
     def computedXdt(self, pairs):
         '''
+        Given list of diffusivity and response pairs, compute dX/dt from diffusion fluxes
+
+        Parameters
+        ----------
         Pairs is a list of tuples
             Tuple will contain (diffusivity, response, averaging function)
             Note that the diffusivity and response will be in the form of [N,e] (corresponding
             to getDiffusivityCoordinates and getResponseCoordinates), which may not be the 
             shape of self.y. This function is responsible for accounting for this difference
             and the shape of dxdt and y should be the same
+
+        Returns
+        -------
+        dXdt: np.ndarray
+            Must be same shape as y
         '''
         raise NotImplementedError()
     
-    @abstractmethod
-    def validateCompositions(self, minComposition):
-        '''
-        Checks that initial composition is between [0, 1]
-        '''
-        raise NotImplementedError()
+    def flattenResponse(self, y):
+        '''Converts y [internal shape] to yFlat [N, e]'''
+        return y
     
-    @abstractmethod
+    def flattenSpatial(self, z):
+        '''Converts z [internal shape] to zFlat [N, d]'''
+        return z
+    
+    def unflattenResponse(self, yFlat):
+        '''Converts yFlat [N, e] to y [internal shape]'''
+        return yFlat
+    
+    def unflattenSpatial(self, zFlat):
+        '''Converts zFlat [N, e] to z [internal shape]'''
+        return zFlat
+
+    def getResponseCoordinates(self, y):
+        '''Returns y as [N,e] and z as [N,D] arrays to compute response terms'''
+        return self.flattenResponse(y), self.flattenSpatial(self.z)
+    
     def getDiffusivityCoordinates(self, y):
         '''
         Returns y as [N,e] and z as [N,D] arrays to compute diffusivity terms
         We decouple this from the response coordinates to allow for different ways
         of computing D^(1/2)
-            - By computing D^0 and D^1 and averaging
-            - By computing D^(1/2) at (y^1/2, z^1/2)
+            a) By computing D^0 and D^1 and averaging
+            b) By computing D^(1/2) at (y^1/2, z^1/2)
+        By default, this will use option a since its an easier implementation, but the user can override this to use option b
         '''
-        raise NotImplementedError()
+        return self.getResponseCoordinates(y)
     
+    def _diffusiveFlux(self, D, rHigh, rLow, dz):
+        '''Flux = -D (r1 - r0) / dz'''
+        return -D * (rHigh - rLow) / dz
+    
+class FiniteVolumeGrid(AbstractMesh):
+    '''
+    Functions for the finite volume method on a rectangular grid
+    '''
+    def __init__(self, responses, zlims, Ns, dims):
+        super().__init__(responses)
+        self.dims = dims
+        self.zlim = zlims
+        self.N = Ns
+        self.Ntot = np.prod(Ns)
+        self.y = np.zeros((*self.N, self.numResponses))
+        self.defineZCoordinates()
+        
     @abstractmethod
-    def getResponseCoordinates(self, y):
-        '''
-        Returns y as [N,e] and z as [N,D] arrays to compute response terms
-        '''
+    def defineZCoordinates(self):
         raise NotImplementedError()
+
+    def validateCompositions(self, numElements, minComposition):
+        '''
+        Checks that initial composition is between [0, 1]
+        '''
+        ysum = np.sum(self.y, axis=self.dims)
+        if np.any(ysum > 1):
+            print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[ysum>1]), np.amax(self.z[ysum>1])))
+            raise Exception('Some compositions sum up to above 1')
+        self.y[self.y > minComposition] = self.y[self.y > minComposition] - numElements*minComposition
+        self.y[self.y < minComposition] = minComposition
     
-    @property
-    def dt(self):
-        '''
-        Returns a good time step for iteration
-        '''
-        return self._dt
+    def flattenResponse(self, y):
+        '''Converts y [internal shape] to yFlat [N, e]'''
+        return np.reshape(y, (self.Ntot, self.numResponses))
+    
+    def flattenSpatial(self, z):
+        '''Converts z [internal shape] to zFlat [N, d]'''
+        return np.reshape(z, (self.Ntot, self.dims))
+    
+    def unflattenResponse(self, yFlat):
+        '''Converts yFlat [N, e] to y [internal shape]'''
+        return np.reshape(yFlat, (*self.N, self.numResponses))
+    
+    def unflattenSpatial(self, zFlat):
+        '''Converts zFlat [N, e] to z [internal shape]'''
+        return np.reshape(zFlat, (*self.N, self.dims))
+
     
 
     

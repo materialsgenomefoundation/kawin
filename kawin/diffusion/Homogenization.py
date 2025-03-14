@@ -7,74 +7,18 @@ from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, c
 from kawin.diffusion.mesh.MeshBase import arithmeticMean, harmonicMean
 
 class HomogenizationModel(DiffusionModel): 
-    def __init__(self, zlim, N, elements, phases, 
+    def __init__(self, mesh, elements, phases, 
                  thermodynamics = None,
                  temperatureParameters = None, 
-                 boundaryConditions = None,
-                 compositionProfile = None,
                  constraints = None,
-                 mesh = None,
                  homogenizationParameters = None,
-                 record = True):
-        super().__init__(zlim=zlim, N=N, elements=elements, phases=phases, 
+                 record = False):
+        super().__init__(mesh=mesh, elements=elements, phases=phases, 
                          thermodynamics=thermodynamics,
-                         temperatureParameters=temperatureParameters, 
-                         boundaryConditions=boundaryConditions, 
-                         compositionProfile=compositionProfile, 
+                         temperatureParameters=temperatureParameters,  
                          constraints=constraints,
-                         mesh=mesh, 
                          record=record)
         self.homogenizationParameters = homogenizationParameters if homogenizationParameters is not None else HomogenizationParameters()
-
-    def setMobilityFunction(self, function):
-        '''
-        Sets averaging function to use for mobility
-
-        Default mobility value should be that a phase of unknown mobility will be ignored for average mobility calcs
-
-        Parameters
-        ----------
-        function : str
-            Options - 'upper wiener', 'lower wiener', 'upper hashin', 'lower hashin', 'lab'
-        '''
-        self.homogenizationParameters.setHomogenizationFunction(function)
-
-    def setLabyrinthFactor(self, n):
-        '''
-        Labyrinth factor
-
-        Parameters
-        ----------
-        n : int
-            Either 1 or 2
-            Note: n = 1 will the same as the weiner upper bounds
-        '''
-        self.homogenizationParameters.setLabyrinthFactor(n)
-
-    def setMobilityPostProcessFunction(self, function, functionArgs = None):
-        '''
-        Sets post process function by str or int
-
-        Parameters
-        ----------
-        functionName : Union[str, int]
-            Key for post process function ('none', 'predefined', 'majority', 'exclude')
-        functionArgs : Any
-            Additional function arguments
-            If functionName = 'predefined', functionArgs is str corresponding to predefined phase
-            If functionName = 'exclude', functionArgs is list[str] corresponding to phases to set mobility to 0
-        '''
-        self.homogenizationParameters.setPostProcessFunction(function, functionArgs)
-
-    def setIdealEps(self, eps):
-        '''
-        Factor for the ideal entropy contribution
-
-        Parameters
-        ----------
-        eps : float
-        '''
-        self.homogenizationParameters.eps = eps
     
     def _getFluxes(self, t, x_curr):
         '''

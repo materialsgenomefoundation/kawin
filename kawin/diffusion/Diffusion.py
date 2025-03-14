@@ -4,7 +4,7 @@ import csv
 from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
-from kawin.diffusion.mesh import MeshBase, Cartesian1D, FiniteVolume1D, PeriodicBoundary1D, MixedBoundary1D
+from kawin.diffusion.mesh import AbstractMesh, Cartesian1D, FiniteVolume1D, PeriodicBoundary1D, MixedBoundary1D
 import kawin.diffusion.Plot as diffPlot
 from kawin.diffusion.DiffusionParameters import TemperatureParameters, BoundaryConditions, CompositionProfile, DiffusionConstraints, HashTable
 
@@ -28,14 +28,11 @@ class DiffusionModel(GenericModel):
     FLUX = 0
     COMPOSITION = 1
 
-    def __init__(self, zlim, N, elements, phases, 
+    def __init__(self, mesh, elements, phases, 
                  thermodynamics = None,
                  temperatureParameters = None, 
-                 boundaryConditions = None,
-                 compositionProfile = None,
                  constraints = None,
-                 mesh: MeshBase = None,
-                 record = True):
+                 record = False):
         super().__init__()
         if isinstance(phases, str):
             phases = [phases]
@@ -43,16 +40,11 @@ class DiffusionModel(GenericModel):
         self.phases = phases
         self.therm = None
 
-        if mesh is None:
-           self.mesh = Cartesian1D(zlim, N, len(self.elements))
-        else:
-           self.mesh = mesh
-        if self.mesh.dims != len(self.elements):
+        self.mesh = mesh
+        if self.mesh.numResponses != len(self.elements):
             raise ValueError("Mesh dimensions must match independent elements")
 
         self.temperatureParameters = temperatureParameters if temperatureParameters is not None else TemperatureParameters()
-        self.boundaryConditions = boundaryConditions if boundaryConditions is not None else BoundaryConditions()
-        self.compositionProfile = compositionProfile if compositionProfile is not None else CompositionProfile()
         self.constraints = constraints if constraints is not None else DiffusionConstraints()
         self.setThermodynamics(thermodynamics)
 
@@ -261,149 +253,6 @@ class DiffusionModel(GenericModel):
             return 0
         else:
             return self.phases.index(phase)
-        
-    def _verify1DMesh(self, msg):
-        if not isinstance(self.mesh, FiniteVolume1D):
-            raise ValueError("Mesh must be Cartesian1D, Cylindrical1D or Spherical1D" + msg)
-        
-    def setBC(self, LBCtype = 'flux', LBCvalue = 0, RBCtype = 'flux', RBCvalue = 0, element = None):
-        self._verify1DMesh(f" to set boundary conditions through {self.__class__}")
-        if isinstance(self.mesh.boundaryConditions, PeriodicBoundary1D):
-            self.mesh.boundaryConditions = MixedBoundary1D(len(self.elements))
-
-        eIndex = self._getElementIndex(element)
-        if LBCtype == 'flux' or LBCtype == MixedBoundary1D.NEUMANN:
-            LBCtype = MixedBoundary1D.NEUMANN
-        elif LBCtype == 'composition' or LBCtype == MixedBoundary1D.DIRICHLET:
-            LBCtype = MixedBoundary1D.DIRICHLET
-        else:
-            raise ValueError("LBCtype must be 'flux' or 'composition'")
-
-        if RBCtype == 'flux' or RBCtype == MixedBoundary1D.NEUMANN:
-            RBCtype = MixedBoundary1D.NEUMANN
-        elif RBCtype == 'composition' or RBCtype == MixedBoundary1D.DIRICHLET:
-            RBCtype = MixedBoundary1D.DIRICHLET
-        else:
-            raise ValueError("RBCtype must be 'flux' or 'composition'")
-        
-        self.mesh.boundaryConditions.LBCtype[eIndex] = LBCtype
-        self.mesh.boundaryConditions.LBCvalue[eIndex] = LBCvalue
-        self.mesh.boundaryConditions.RBCtype[eIndex] = RBCtype
-        self.mesh.boundaryConditions.RBCvalue[eIndex] = RBCvalue
-
-    def setPeriodicBoundary(self):
-        self._verify1DMesh(f" to set boundary conditions through {self.__class__}")
-        self.mesh.boundaryConditions = MixedBoundary1D()
-        
-    def setCompositionLinear(self, Lvalue, Rvalue, element = None):
-        '''
-        Creates linear composition profile for element
-
-        Parameters
-        ----------
-        Lvalue : float
-            Composition of element on left
-        Rvalue : float
-            Composition of element on right
-        element : str
-            Element to apply linear profile. If None, will use first independent element
-        '''
-        self._verify1DMesh(f" to set composition profile through {self.__class__}")
-        element = self.elements[0] if element is None else element
-        self.compositionProfile.clearCompositionBuildSteps(element)
-        self.compositionProfile.addLinearCompositionStep(element, Lvalue, Rvalue)
-
-    def setCompositionStep(self, Lvalue, Rvalue, z, element = None):
-        '''
-        Creates step composition profile for element
-
-        Parameters
-        ----------
-        Lvalue : float
-            Composition of element on left
-        Rvalue : float
-            Composition of element on right
-        z : float
-            Z coordinate where composition switches from left to right value
-        element : str
-            Element to apply step profile. If None, will use first independent element
-        '''
-        self._verify1DMesh(f" to set composition profile through {self.__class__}")
-        element = self.elements[0] if element is None else element
-        self.compositionProfile.clearCompositionBuildSteps(element)
-        self.compositionProfile.addStepCompositionStep(element, Lvalue, Rvalue, z)
-
-    def setCompositionSingle(self, value, z, element = None):
-        '''
-        Creates composition of element at single node
-
-        Parameters
-        ----------
-        value : float
-            Composition of element at node
-        z : float
-            Z coordinate where the closest node will be used
-        element : str
-            Element to apply delta profile. If None, will use first independent element
-        '''
-        self._verify1DMesh(f" to set composition profile through {self.__class__}")
-        element = self.elements[0] if element is None else element
-        self.compositionProfile.clearCompositionBuildSteps(element)
-        self.compositionProfile.addSingleCompositionStep(element, value, z)
-
-    def setCompositionInBounds(self, value, Lbound, Rbound, element = None):
-        '''
-        Set nodes between boundaries to composition for an element
-
-        Parameters
-        ----------
-        value : float
-            Composition of element
-        Lbound : float
-            Left coordinate of nearest node
-        Rbound : float
-            Right coordinate of nearest node
-        element : str
-            Element to apply profile. If None, will use first independent element
-        '''
-        self._verify1DMesh(f" to set composition profile through {self.__class__}")
-        element = self.elements[0] if element is None else element
-        self.compositionProfile.clearCompositionBuildSteps(element)
-        self.compositionProfile.addBoundedCompositionStep(element, value, Lbound, Rbound)
-
-    def setCompositionFunction(self, func, element = None):
-        '''
-        Set composition of element according to function
-
-        Parameters
-        ----------
-        func : Callable
-            Function in form of f(z) = c where z is spatial coordinate and c is composition
-        element : str
-            Element to apply profile. If None, will use first independent element
-        '''
-        self._verify1DMesh(f" to set composition profile through {self.__class__}")
-        element = self.elements[0] if element is None else element
-        self.compositionProfile.clearCompositionBuildSteps(element)
-        self.compositionProfile.addFunctionCompositionStep(element, func)
-
-    def setCompositionProfile(self, z, x, element = None):
-        '''
-        Set composition of element as interpolation of input profile
-
-        Parameters
-        ----------
-        z : list[float]
-            Spatial coordinates of dataset
-        x : list[float]
-            Composition of dataset (corresponds to z)
-        element : str
-            Element to apply profile. If None, will use first independent element
-        '''
-        self._verify1DMesh(f" to set composition profile through {self.__class__}")
-        element = self.elements[0] if element is None else element
-        self.compositionProfile.clearCompositionBuildSteps(element)
-        self.compositionProfile.addProfileCompositionStep(element, x, z)
 
     def setup(self):
         '''
@@ -416,11 +265,6 @@ class DiffusionModel(GenericModel):
         if not self.isSetup:
             if self.therm is not None:
                 self.therm.clearCache()
-
-            #if isinstance(self.mesh, Cartesian1D):
-            #    self.compositionProfile.buildProfile(self.elements, self.mesh.y, self.mesh.z)
-            #    self.boundaryConditions.setupDefaults(self.elements)
-            #    self.boundaryConditions.applyBoundaryConditionsToInitialProfile(self.elements, self.mesh.y, self.mesh.z)
 
         self.mesh.validateCompositions(len(self.allElements), self.constraints.minComposition)
         self.isSetup = True

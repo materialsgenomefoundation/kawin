@@ -113,37 +113,40 @@ class MixedBoundary1D(BoundaryCondition):
 
 class StepProfile1D:
     def __init__(self, z, leftValue, rightValue):
-        self.lv = leftValue
-        self.rv = rightValue
+        self.lv = np.atleast_1d(leftValue)
+        self.rv = np.atleast_1d(rightValue)
         self.z = z
 
     def __call__(self, z):
         z = _formatSpatial(z)[:,0]
-        y = self.lv*np.ones(z.shape)
-        y[z >= self.z] = self.rv
+        y = self.lv[np.newaxis,:]*np.ones((z.shape[0], self.lv.shape[0]))
+        y[z >= self.z,:] = self.rv
         return np.squeeze(y)
     
 class LinearProfile1D:
     def __init__(self, leftZ, leftValue, rightZ, rightValue, lowerLeftValue = None, upperRightValue = None):
-        self.lv = leftValue
+        self.lv = np.atleast_1d(leftValue)
         self.lz = leftZ
-        self.rv = rightValue
+        self.rv = np.atleast_1d(rightValue)
         self.rz = rightZ
-        self.llv = leftValue if lowerLeftValue is None else lowerLeftValue
-        self.urv = rightValue if upperRightValue is None else upperRightValue
+        self.llv = self.lv if lowerLeftValue is None else np.atleast_1d(lowerLeftValue)
+        self.urv = self.rv if upperRightValue is None else np.atleast_1d(upperRightValue)
 
     def __call__(self, z):
         z = _formatSpatial(z)[:,0]
-        y = np.zeros(z.shape)
-        y[z <= self.lz] = self.llv
+        y = np.zeros((z.shape[0], self.lv.shape[0]))
+        y[z <= self.lz,:] = self.llv
         midIndices = (self.lz < z) & (z <= self.rz)
-        y[midIndices] = np.interp(z[midIndices], [self.lz, self.rz], [self.lv, self.rv])
-        y[self.rz < z] = self.urv
+        for i in range(self.lv.shape[0]):
+            y[midIndices,i] = np.interp(z[midIndices], [self.lz, self.rz], [self.lv[i], self.rv[i]])
+        y[self.rz < z,:] = self.urv
         return np.squeeze(y)
     
 class ExperimentalProfile1D:
     def __init__(self, z, values):
-        values = np.array(values)
+        values = np.atleast_2d(values)
+        if values.shape[0] == 1:
+            values = values.T
         z = np.array(z)
         sortIndices = np.argsort(z)
         self.values = values[sortIndices]
@@ -151,7 +154,10 @@ class ExperimentalProfile1D:
 
     def __call__(self, z):
         z = _formatSpatial(z)[:,0]
-        return np.squeeze(np.interp(z, self.z, self.values))
+        y = np.zeros((z.shape[0], self.values.shape[1]))
+        for i in range(self.values.shape[1]):
+            y[:,i] = np.interp(z, self.z, self.values[:,i])
+        return np.squeeze(y)
 
 class FiniteVolumeMidPointCalculator(ABC):
     '''

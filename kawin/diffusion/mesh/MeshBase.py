@@ -111,36 +111,34 @@ class BoundaryCondition(ABC):
     
 class ProfileBuilder:
     def __init__(self):
-        self.buildSteps = {}
+        self.buildSteps = []
 
     def addBuildStep(self, func, responseVar=0):
-        if responseVar not in self.buildSteps:
-            self.buildSteps[responseVar] = []
-        self.buildSteps[responseVar].append(func)
+        self.buildSteps.append((func, np.atleast_1d(responseVar)))
 
 class ConstantProfile:
     def __init__(self, value):
-        self.value = value
+        self.value = np.atleast_1d(value)
 
     def __call__(self, z):
-        return np.squeeze(self.value*np.ones(np.array(z).shape))
+        return np.squeeze(self.value[np.newaxis,:]*np.ones((_formatSpatial(z).shape[0], self.value.shape[0])))
     
 class DiracDeltaProfile:
     def __init__(self, z, value):
-        self.value = value
+        self.value = np.atleast_1d(value)
         self.z = np.atleast_1d(z)
 
     def __call__(self, z):
         z = _formatSpatial(z)
-        y = np.zeros(z.shape[0])
+        y = np.zeros((z.shape[0], self.value.shape[0]))
         r = np.sqrt(np.sum((z-self.z[np.newaxis,:])**2, axis=1))
         nearestIndex = np.argmin(r)
-        y[nearestIndex] = self.value
+        y[nearestIndex,:] = self.value
         return np.squeeze(y)
     
 class GaussianProfile:
     def __init__(self, z, sigma, maxValue):
-        self.maxValue = maxValue
+        self.maxValue = np.atleast_1d(maxValue)
         self.z = np.atleast_1d(z)
         
         if np.isscalar(sigma):
@@ -153,29 +151,32 @@ class GaussianProfile:
         r2 = (z-self.z[np.newaxis,:])**2
         y = np.exp(-np.sum(r2 / self.sigma[np.newaxis,:]**2, axis=1))
         # maximum value of y will be 1, so we can just multiply the max value
-        y *= self.maxValue
+        y = y[:,np.newaxis]*self.maxValue[np.newaxis,:]
         return np.squeeze(y)
     
 class BoundedRectangleProfile:
     def __init__(self, lowerZ, upperZ, innerValue, outerValue = 0):
-        self.iv = innerValue
-        self.ov = outerValue
+        self.iv = np.atleast_1d(innerValue)
+        if outerValue == 0:
+            self.ov = np.zeros(self.iv.shape)
+        else:
+            self.ov = np.atleast_1d(outerValue)
         self.lz = np.atleast_1d(lowerZ)
         self.uz = np.atleast_1d(upperZ)
 
     def __call__(self, z):
         z = _formatSpatial(z)
-        y = self.ov*np.ones(z.shape[0])
+        y = self.ov[np.newaxis,:]*np.ones((z.shape[0], self.ov.shape[0]))
         indices = (self.lz[0] < z[:,0]) & (z[:,0] <= self.uz[0])
         for i in range(1, len(self.lz)):
             indices &= (self.lz[i] < z[:,i]) & (z[:,i] <= self.uz[i])
-        y[indices] = self.iv
+        y[indices,:] = self.iv
         return np.squeeze(y)
     
 class BoundedEllipseProfile:
     def __init__(self, z, r, innerValue, outerValue = 0):
-        self.iv = innerValue
-        self.ov = outerValue
+        self.iv = np.atleast_1d(innerValue)
+        self.ov = np.atleast_1d(outerValue)
         self.z = np.atleast_1d(z)
         if np.isscalar(r):
             self.r = r*np.ones(len(self.z))
@@ -184,9 +185,9 @@ class BoundedEllipseProfile:
 
     def __call__(self, z):
         z = _formatSpatial(z)
-        y = self.ov*np.ones(z.shape[0])
+        y = self.ov[np.newaxis,:]*np.ones((z.shape[0], self.ov.shape[0]))
         r2 = np.sum((z-self.z[np.newaxis,:])**2 / self.r[np.newaxis,:]**2, axis=1)
-        y[r2 < 1] = self.iv
+        y[r2 < 1,:] = self.iv
         return y
 
 class AbstractMesh (ABC):
@@ -222,10 +223,16 @@ class AbstractMesh (ABC):
         Creates initial profile on mesh based off a series of build steps
         '''
         yFlat = np.zeros(self.flattenResponse(self.y).shape)
-        for responseVar, steps in profileBuilder.buildSteps.items():
-            flatZ = self.flattenSpatial(self.z)
-            index = _getResponseIndex(responseVar, self.responses)
-            yFlat[:,index] = np.sum([singleStep(flatZ) for singleStep in steps], axis=0)
+        flatZ = self.flattenSpatial(self.z)
+        for step, responseVars in profileBuilder.buildSteps:
+            yStep = np.atleast_2d(step(flatZ))
+            if yStep.shape[0] == 1:
+                yStep = yStep.T
+
+            for i, rv in enumerate(responseVars):
+                index = _getResponseIndex(rv, self.responses)
+                yFlat[:,index] += yStep[:,i]
+
         self.y = self.unflattenResponse(yFlat)
         if boundaryConditions is not None:
             boundaryConditions.setInitialResponse(self.y)
@@ -251,20 +258,74 @@ class AbstractMesh (ABC):
         '''
         raise NotImplementedError()
     
-    def flattenResponse(self, y):
-        '''Converts y [internal shape] to yFlat [N, e]'''
+    def flattenResponse(self, y, numResponses = None):
+        '''
+        Converts y [internal shape] to yFlat [N, e]
+
+        Parameters
+        ----------
+        y: np.ndarray
+            Input y response in internal mesh shape with 1 dimension corresponding to responses
+        numResponses: int (optional)
+            Number of responses in y, defaults to total number of responses in mesh
+
+        Returns
+        -------
+        yFlat: np.ndarray
+            Shape of [N, e] with N being the total number of nodes and e being the number of responses
+        '''
         return y
     
     def flattenSpatial(self, z):
-        '''Converts z [internal shape] to zFlat [N, d]'''
+        '''
+        Converts z [internal shape] to zFlat [N, d]
+
+        Parameters
+        ----------
+        z: np.ndarray
+            Input z response in internal mesh shape with 1 dimension 
+            corresponding to the number of spatial dimensions
+
+        Returns
+        -------
+        zFlat: np.ndarray
+            Shape of [N, d] with N being the total number of nodes and d being the number of spatial dimensions
+        '''
         return z
     
-    def unflattenResponse(self, yFlat):
-        '''Converts yFlat [N, e] to y [internal shape]'''
+    def unflattenResponse(self, yFlat, numResponses = None):
+        '''
+        Converts yFlat [N, e] to y [internal shape]
+
+        Parameters
+        ----------
+        yFlat: np.ndarray
+            Shape of [N, e] with N being the total number of nodes and e being the number of responses
+        numResponses: int (optional)
+            Number of responses in y, defaults to total number of responses in mesh
+
+        Returns
+        -------
+        y: np.ndarray
+            Input y response in internal mesh shape with 1 dimension corresponding to responses
+        '''
         return yFlat
     
     def unflattenSpatial(self, zFlat):
-        '''Converts zFlat [N, e] to z [internal shape]'''
+        '''
+        Converts zFlat [N, e] to z [internal shape]
+
+        Parameters
+        ----------
+        zFlat: np.ndarray
+            Shape of [N, d] with N being the total number of nodes and d being the number of spatial dimensions
+
+        Returns
+        -------
+        z: np.ndarray
+            Input z response in internal mesh shape with 1 dimension 
+            corresponding to the number of spatial dimensions
+        '''
         return zFlat
 
     def getResponseCoordinates(self, y):
@@ -314,20 +375,30 @@ class FiniteVolumeGrid(AbstractMesh):
         self.y[self.y > minComposition] = self.y[self.y > minComposition] - numElements*minComposition
         self.y[self.y < minComposition] = minComposition
     
-    def flattenResponse(self, y):
-        '''Converts y [internal shape] to yFlat [N, e]'''
-        return np.reshape(y, (self.Ntot, self.numResponses))
+    def flattenResponse(self, y, numResponses = None):
+        '''
+        Converts y [internal shape] to yFlat [N, e]
+        '''
+        numResponses = self.numResponses if numResponses is None else numResponses
+        return np.reshape(y, (self.Ntot, numResponses))
     
     def flattenSpatial(self, z):
-        '''Converts z [internal shape] to zFlat [N, d]'''
+        '''
+        Converts z [internal shape] to zFlat [N, d]
+        '''
         return np.reshape(z, (self.Ntot, self.dims))
     
-    def unflattenResponse(self, yFlat):
-        '''Converts yFlat [N, e] to y [internal shape]'''
-        return np.reshape(yFlat, (*self.N, self.numResponses))
+    def unflattenResponse(self, yFlat, numResponses = None):
+        '''
+        Converts yFlat [N, e] to y [internal shape]
+        '''
+        numResponses = self.numResponses if numResponses is None else numResponses
+        return np.reshape(yFlat, (*self.N, numResponses))
     
     def unflattenSpatial(self, zFlat):
-        '''Converts zFlat [N, e] to z [internal shape]'''
+        '''
+        Converts zFlat [N, e] to z [internal shape]
+        '''
         return np.reshape(zFlat, (*self.N, self.dims))
 
     

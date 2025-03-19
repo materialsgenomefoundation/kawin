@@ -5,7 +5,6 @@ from itertools import zip_longest
 from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
 from kawin.diffusion.mesh import AbstractMesh, Cartesian1D, FiniteVolume1D, PeriodicBoundary1D, MixedBoundary1D
-import kawin.diffusion.Plot as diffPlot
 from kawin.diffusion.DiffusionParameters import TemperatureParameters, BoundaryConditions, CompositionProfile, DiffusionConstraints, HashTable
 
 
@@ -343,55 +342,3 @@ class DiffusionModel(GenericModel):
         else:
             e = self._getElementIndex(element)
             return self.x[:,e]
-
-    def plot(self, ax = None, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
-        '''
-        Plots composition profile
-
-        Parameters
-        ----------
-        ax : matplotlib Axes object
-            Axis to plot on
-        plotReference : bool
-            Whether to plot reference element (composition = 1 - sum(composition of rest of elements))
-        plotElement : None or str
-            Plots single element if it is defined, otherwise, all elements are plotted
-        zScale : float
-            Scale factor for z-coordinates
-        '''
-        return diffPlot.plot(self, ax, plotReference, plotElement, zScale, *args, **kwargs)
-
-    def plotTwoAxis(self, Lelements, Relements, zScale = 1, axL = None, axR = None, *args, **kwargs):
-        '''
-        Plots composition profile with two y-axes
-
-        Parameters
-        ----------
-        axL : matplotlib Axes object
-            Left axis to plot on
-        Lelements : list of str
-            Elements to plot on left axis
-        Relements : list of str
-            Elements to plot on right axis
-        axR : matplotlib Axes object (optional)
-            Right axis to plot on
-            If None, then the right axis will be created
-        zScale : float
-            Scale factor for z-coordinates
-        '''
-        return diffPlot.plotTwoAxis(self, Lelements, Relements, zScale, axL, axR, *args, **kwargs)
-
-    def plotPhases(self, ax = None, plotPhase = None, zScale = 1, *args, **kwargs):
-        '''
-        Plots phase fractions over z
-
-        Parameters
-        ----------
-        ax : matplotlib Axes object
-            Axis to plot on
-        plotPhase : None or str
-            Plots single phase if it is defined, otherwise, all phases are plotted
-        zScale : float
-            Scale factor for z-coordinates
-        '''
-        return diffPlot.plotPhases(self, ax, plotPhase, zScale, *args, **kwargs)

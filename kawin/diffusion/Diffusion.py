@@ -1,11 +1,6 @@
 import numpy as np
-import time
-import csv
-from itertools import zip_longest
-from kawin.solver.Solver import DESolver, SolverType
 from kawin.GenericModel import GenericModel
-from kawin.diffusion.mesh import AbstractMesh, Cartesian1D, FiniteVolume1D, PeriodicBoundary1D, MixedBoundary1D
-from kawin.diffusion.DiffusionParameters import TemperatureParameters, BoundaryConditions, CompositionProfile, DiffusionConstraints, HashTable
+from kawin.diffusion.DiffusionParameters import TemperatureParameters, DiffusionConstraints, HashTable
 
 
 class DiffusionModel(GenericModel):
@@ -14,19 +9,14 @@ class DiffusionModel(GenericModel):
 
     Parameters
     ----------
-    zlim : tuple
-        Z-bounds of mesh (lower, upper)
-    N : int
-        Number of nodes
+    mesh: AbstractMesh
     elements : list of str
         Elements in system (first element will be assumed as the reference element)
     phases : list of str
         Number of phases in the system
+    thermodynamics: GeneralThermodynamics
+    constraints: DiffusionConstraints
     '''
-    #Boundary conditions
-    FLUX = 0
-    COMPOSITION = 1
-
     def __init__(self, mesh, elements, phases, 
                  thermodynamics = None,
                  temperatureParameters = None, 
@@ -45,8 +35,7 @@ class DiffusionModel(GenericModel):
 
         self.temperatureParameters = temperatureParameters if temperatureParameters is not None else TemperatureParameters()
         self.constraints = constraints if constraints is not None else DiffusionConstraints()
-        self.setThermodynamics(thermodynamics)
-
+        self.therm = thermodynamics
         self.hashTable = HashTable()
 
         self.reset()
@@ -71,54 +60,6 @@ class DiffusionModel(GenericModel):
             self.therm.clearCache()
         
         self.isSetup = False
-
-    def setThermodynamics(self, thermodynamics):
-        '''
-        Defines thermodynamics object for the diffusion model
-
-        Parameters
-        ----------
-        thermodynamics : Thermodynamics object
-            Requires the elements in the Thermodynamics and DiffusionModel objects to have the same order
-        '''
-        self.therm = thermodynamics
-
-    def setTemperature(self, T):
-        '''
-        Sets isothermal temperature
-
-        Parameters
-        ----------
-        T : float
-        '''
-        self.temperatureParameters.setIsothermalTemperature(T)
-
-    def setTemperatureArray(self, times, temperatures):
-        '''
-        Sets array of times/temperatures
-
-        Example:
-            time = [0, 1, 2]
-            temperature = [100, 200, 300]
-            This will set temperature to 100 at t = 0 hours, then at 1 hour, temperature = 200, then after 2 hours, temperature = 300
-
-        Parameters
-        ----------
-        times : list[float]
-        temperatures : list[float]
-        '''
-        self.temperatureParameters.setTemperatureArray(times, temperatures)
-
-    def setTemperatureFunction(self, func):
-        '''
-        Sets temperature function
-
-        Parameters
-        ----------
-        func : Callable
-            Function is in the form f(z,t) = T, where z is spatial coordinate and t is time
-        '''
-        self.temperatureParameters.setTemperatureFunction(func)
 
     def toDict(self):
         '''
@@ -269,13 +210,20 @@ class DiffusionModel(GenericModel):
         self.isSetup = True
         self.record(self.currentTime) #Record at t = 0
 
-    def _getFluxes(self):
+    def getFluxes(self, t, xCurr):
         '''
-        "Virtual" function to be implemented by child objects
+        Computes fluxes from mesh and diffusivity-response pairs
+        NOTE: this directly returns the mesh outputs, so format of fluxes will correspond to the mesh
+        '''
+        pairs = self._getPairs(t, xCurr)
+        return self.mesh.computeFluxes(pairs)
 
-        Should return (fluxes (list), dt (float))
+    def getdXdt(self, t, xCurr):
         '''
-        raise NotImplementedError()
+        Computes dXdt from mesh and diffusivity-respones pairs
+        '''
+        pairs = self._getPairs(t, xCurr)
+        return [self.mesh.computedXdt(pairs)]
     
     def printHeader(self):
         print('Iteration\tSim Time (h)\tRun time (s)')
@@ -286,17 +234,6 @@ class DiffusionModel(GenericModel):
 
     def getCurrentX(self):
         return [self.mesh.y]
-        #return [self.x]
-    
-    # def getdXdt(self, t, x):
-    #     '''
-    #     dXdt is defined as -dJ/dz
-    #     '''
-    #     fluxes = self._getFluxes(t, x)
-    #     return [-(fluxes[1:,:] - fluxes[:-1,:])/self.dz]
-    
-    def preProcess(self):
-        return
     
     def postProcess(self, time, x):
         '''
@@ -327,18 +264,3 @@ class DiffusionModel(GenericModel):
         Reshape X_flat to original shape
         '''
         return [np.reshape(X_flat, X_ref[0].shape)]
-
-    def getX(self, element):
-        '''
-        Gets composition profile of element
-        
-        Parameters
-        ----------
-        element : str
-            Element to get profile of
-        '''
-        if element in self.allElements and element not in self.elements:
-            return 1 - np.sum(self.x, axis=1)
-        else:
-            e = self._getElementIndex(element)
-            return self.x[:,e]

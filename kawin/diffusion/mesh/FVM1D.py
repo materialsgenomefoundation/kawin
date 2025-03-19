@@ -270,7 +270,7 @@ class FiniteVolume1D(FiniteVolumeGrid):
         '''Given fluxes, compute dx/dt. This depends on coordinate system'''
         raise NotImplementedError()
 
-    def _computeFluxes(self, pairs):
+    def computeFluxes(self, pairs):
         '''Compute fluxes from (diffusivity, response) pairs on a 1D FVM mesh'''
         fluxes = np.zeros((self.N[0]+1, self.numResponses))
         isPeriodic = isinstance(self.boundaryConditions, PeriodicBoundary1D)
@@ -291,7 +291,7 @@ class FiniteVolume1D(FiniteVolumeGrid):
     
     def computedXdt(self, pairs):
         '''Computes fluxes, correct fluxes for boundary conditions, compute dx/dt and correct dx/dt for boundary conditions'''
-        fluxes = self._computeFluxes(pairs)
+        fluxes = self.computeFluxes(pairs)
         self.boundaryConditions.adjustFluxes(fluxes)
         dXdt = self._fluxTodXdt(fluxes)
         self.boundaryConditions.adjustdXdt(dXdt)

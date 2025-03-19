@@ -108,7 +108,8 @@ class BoundaryCondition(ABC):
     def adjustdXdt(self, dXdt):
         raise NotImplementedError()
 
-    
+# TODO: consider removing this since it doesn't really do anything other than store
+#       a list that the user can create themselves
 class ProfileBuilder:
     def __init__(self):
         self.buildSteps = []
@@ -236,6 +237,10 @@ class AbstractMesh (ABC):
         self.y = self.unflattenResponse(yFlat)
         if boundaryConditions is not None:
             boundaryConditions.setInitialResponse(self.y)
+
+    @abstractmethod
+    def computeFluxes(self, pairs):
+        raise NotImplementedError()
     
     @abstractmethod
     def computedXdt(self, pairs):

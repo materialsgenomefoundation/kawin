@@ -39,7 +39,7 @@ class Cartesian2D(FiniteVolumeGrid):
         self.z = (self.zCorner[:-1,:-1] + self.zCorner[1:,:-1] + self.zCorner[:-1,1:] + self.zCorner[1:,1:]) / 4
         self.dz = [self.z[1,0,0]-self.z[0,0,0], self.z[0,1,1]-self.z[0,0,1]]
 
-    def _computeFluxes(self, pairs):
+    def computeFluxes(self, pairs):
         '''
         Compute fluxes from (diffusivity, response) pairs on a 2D FVM mesh
         '''
@@ -65,7 +65,7 @@ class Cartesian2D(FiniteVolumeGrid):
         '''
         dx/dt = -dJx/dz + -dJy/dz
         '''
-        fluxX, fluxY = self._computeFluxes(pairs)
+        fluxX, fluxY = self.computeFluxes(pairs)
         dXdt = -(fluxX[1:,:] - fluxX[:-1,:]) / self.dz[0] + -(fluxY[:,1:] - fluxY[:,:-1]) / self.dz[1]
         return dXdt
 

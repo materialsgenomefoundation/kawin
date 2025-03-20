@@ -111,11 +111,27 @@ class BoundaryCondition(ABC):
 # TODO: consider removing this since it doesn't really do anything other than store
 #       a list that the user can create themselves
 class ProfileBuilder:
-    def __init__(self):
+    '''
+    Stores build steps to construct a response profile in a mesh
+
+    TODO: consider removing this since it doesn't really do anything other
+          than store a list that the user can create themselves
+
+    Parameters
+    ----------
+    steps: list[tuple(callable, int|str | list[int|str])] (optional)
+        List of build steps to initialize
+    '''
+    def __init__(self, steps = []):
         self.buildSteps = []
+        for step in steps:
+            self.addBuildStep(step[0], step[1])
 
     def addBuildStep(self, func, responseVar=0):
         self.buildSteps.append((func, np.atleast_1d(responseVar)))
+
+    def clearBuildSteps(self):
+        self.buildSteps.clear()
 
 class ConstantProfile:
     def __init__(self, value):
@@ -368,17 +384,6 @@ class FiniteVolumeGrid(AbstractMesh):
     @abstractmethod
     def defineZCoordinates(self):
         raise NotImplementedError()
-
-    def validateCompositions(self, numElements, minComposition):
-        '''
-        Checks that initial composition is between [0, 1]
-        '''
-        ysum = np.sum(self.y, axis=self.dims)
-        if np.any(ysum > 1):
-            print('Compositions add up to above 1 between z = [{:.3e}, {:.3e}]'.format(np.amin(self.z[ysum>1]), np.amax(self.z[ysum>1])))
-            raise Exception('Some compositions sum up to above 1')
-        self.y[self.y > minComposition] = self.y[self.y > minComposition] - numElements*minComposition
-        self.y[self.y < minComposition] = minComposition
     
     def flattenResponse(self, y, numResponses = None):
         '''

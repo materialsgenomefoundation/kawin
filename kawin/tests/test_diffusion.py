@@ -2,23 +2,21 @@ import os
 
 import numpy as np
 from numpy.testing import assert_allclose
+import pytest
 
-from kawin.diffusion import SinglePhaseModel, HomogenizationModel
-from kawin.diffusion.DiffusionParameters import computeMobility, CompositionProfile, BoundaryConditions, TemperatureParameters
+from kawin.diffusion import SinglePhaseModel, HomogenizationModel, TemperatureParameters
+from kawin.diffusion.mesh import Cartesian1D, ProfileBuilder, StepProfile1D, LinearProfile1D
+from kawin.diffusion.DiffusionParameters import computeMobility, TemperatureParameters
 from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 from kawin.thermo import GeneralThermodynamics
 from kawin.tests.datasets import *
 
 N = 100
-singleModelBinary = SinglePhaseModel([-1e-3, 1e-3], N, ['NI', 'CR'], ['FCC_A1'])
-singleModelTernary = SinglePhaseModel([-1e-3, 1e-3], N, ['NI', 'CR', 'AL'], ['FCC_A1'])
-homogenizationBinary = HomogenizationModel([-1e-3, 1e-3], N, ['NI', 'CR'], ['FCC_A1', 'BCC_A2'])
-homogenizationTernary = HomogenizationModel([-1e-3, 1e-3], N, ['NI', 'CR', 'AL'], ['FCC_A1', 'BCC_A2'])
 NiCrTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR'], ['FCC_A1', 'BCC_A2'])
 NiCrAlTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'BCC_A2'])
 FeCrNiTherm = GeneralThermodynamics(FECRNI_DB, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
 
-def test_CompositionInput():
+def test_compositionInput():
     '''
     Tests that after setting up a model, all components are greater than 0
     
@@ -28,58 +26,44 @@ def test_CompositionInput():
     The composition and setup functions for both models inherit from the
     base diffusion model class, so any model can be used here
     '''
-    compositionProfile = CompositionProfile()
-    compositionProfile.addStepCompositionStep('CR', 0.2, 1, 0)
-    compositionProfile.addStepCompositionStep('AL', 0.8, 0, 0)
-    singleModelTernary.reset()
-    singleModelTernary.compositionProfile = compositionProfile
-    singleModelTernary.setTemperature(1200+273.15)
-    singleModelTernary.setThermodynamics(NiCrAlTherm)
+    profile = ProfileBuilder()
+    profile.addBuildStep(StepProfile1D(0, [0.2, 0.8], [1, 0]), ['CR', 'AL'])
+    
+    mesh = Cartesian1D(['CR', 'AL'], [-1e-3, 1e-3], N)
+    mesh.setResponseProfile(profile)
+    model = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, TemperatureParameters(1200+273.15))
+    model.setup()
 
-    singleModelTernary.setup()
+    assert(mesh.y[25,0] + mesh.y[25,1] < 1)
+    assert(mesh.y[75,0] + mesh.y[75,1] < 1)
+    assert(1 - (mesh.y[75,0] + mesh.y[75,1]) >= model.constraints.minComposition)
+    assert(1 - (mesh.y[25,0] + mesh.y[25,1]) >= model.constraints.minComposition)
+    assert(mesh.y[75,1] >= model.constraints.minComposition)
 
-    assert(singleModelTernary.x[0,25] + singleModelTernary.x[1,25] < 1)
-    assert(singleModelTernary.x[0,75] + singleModelTernary.x[1,75] < 1)
-    assert(1 - (singleModelTernary.x[0,75] + singleModelTernary.x[1,75]) >= singleModelTernary.constraints.minComposition)
-    assert(1 - (singleModelTernary.x[0,75] + singleModelTernary.x[1,75]) >= singleModelTernary.constraints.minComposition)
-    assert(singleModelTernary.x[1,75] >= singleModelTernary.constraints.minComposition)
-
-def test_SinglePhaseFluxes_shape():
+def test_singlePhaseFluxes_shape():
     '''
     Tests the dimensions of the single phase fluxes function
 
     Should be (E-1, N+1) where E is the number of elements and
     N is the number of points
     '''
-    compositionProfile = CompositionProfile()
-    compositionProfile.addStepCompositionStep('CR', 0.2, 0.8, 0)
-    singleModelBinary.reset()
-    singleModelBinary.compositionProfile = compositionProfile
-    singleModelBinary.setTemperature(1073)
-    singleModelBinary.setThermodynamics(NiCrTherm)
-    singleModelBinary.setup()
+    profile = ProfileBuilder([(StepProfile1D(0, 0.2, 0.8), 'CR')])
+    mesh = Cartesian1D(['CR'], [-1e-3, 1e-3], N)
+    mesh.setResponseProfile(profile)
+    model = SinglePhaseModel(mesh, ['NI', 'CR'], ['FCC_A1'], NiCrTherm, TemperatureParameters(1073))
+    model.setup()
+    f = model.getdXdt(model.currentTime, model.getCurrentX())
+    assert(f[0].shape == (N,1))
 
-    #fBinary, _ = singleModelBinary.getFluxes()
-    fBinary = singleModelBinary.getdXdt(singleModelBinary.currentTime, [singleModelBinary.x])
+    profile = ProfileBuilder([(StepProfile1D(0, 0.2, 0.4), 'CR'), (StepProfile1D(0, 0.4, 0.4), 'AL')])
+    mesh = Cartesian1D(['CR', 'AL'], [-1e-3, 1e-3], N)
+    mesh.setResponseProfile(profile)
+    model = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, TemperatureParameters(1073))
+    model.setup()
+    f = model.getdXdt(model.currentTime, model.getCurrentX())
+    assert(f[0].shape == (N,2))
 
-    compositionProfile = CompositionProfile()
-    compositionProfile.addStepCompositionStep('CR', 0.2, 0.4, 0)
-    compositionProfile.addStepCompositionStep('AL', 0.4, 0.4, 0)
-    singleModelTernary.reset()
-    singleModelTernary.compositionProfile = compositionProfile
-    singleModelTernary.setTemperature(1073)
-    singleModelTernary.setThermodynamics(NiCrAlTherm)
-    singleModelTernary.setup()
-
-    #fTernary, _ = singleModelTernary.getFluxes()
-    fTernary = singleModelTernary.getdXdt(singleModelTernary.currentTime, [singleModelTernary.x])
-
-    #assert(fBinary.shape == (1,N+1))
-    #assert(fTernary.shape == (2,N+1))
-    assert(fBinary[0].shape == (N,1))
-    assert(fTernary[0].shape == (N,2))
-
-def test_HomogenizationMobility():
+def test_homogenizationMobility():
     '''
     Tests the dimensions of the homogenization mobility function
 
@@ -217,31 +201,24 @@ def test_single_phase_dxdt():
     This uses the parameters from 06_Single_Phase_Diffusion example with the composition
     being linear rather then step functions
     '''
-    compositionProfile = CompositionProfile()
-    compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
-    compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
 
-    #Define mesh spanning between -1mm to 1mm with 50 volume elements
-    #Since we defined L12, the disordered phase as DIS_ attached to the front
-    m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'], 
-                         compositionProfile=compositionProfile)
-
-    m.setThermodynamics(NiCrAlTherm)
-    m.setTemperature(1200+273.15)
-
+    profile = ProfileBuilder()
+    profile.addBuildStep(LinearProfile1D(-1e-3, [0.077, 0.054], 1e-3, [0.359, 0.062]), ['CR', 'AL'])
+    mesh = Cartesian1D(['CR', 'AL'], [-1e-3, 1e-3], 20)
+    mesh.setResponseProfile(profile)
+    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, TemperatureParameters(1473.15))
     m.setup()
-    x = m.getCurrentX()
-    dxdt = m.getdXdt(m.currentTime, x)
+    dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
     dt = m.getDt(dxdt)
 
     #Index 5
-    ind5, vals5 = 5, np.array([1.640437e-9, 5.669268e-10])
+    ind5, vals5 = 5, np.array([1.63031418e-9, 5.87290513e-10])
 
     #Index 10
-    ind10, vals10 = 10, np.array([1.542640e-9, 1.091229e-9])
+    ind10, vals10 = 10, np.array([1.54252455e-9, 1.08801591e-9])
 
     #Index 15
-    ind15, vals15 = 15, np.array([1.596203e-9, 1.842238e-9])
+    ind15, vals15 = 15, np.array([1.59190900e-9, 1.79208543e-9])
     
     # assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
     # assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
@@ -251,7 +228,7 @@ def test_single_phase_dxdt():
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 28721.530474, rtol=1e-3)
+    assert_allclose(dt, 25902.839039, rtol=1e-3)
 
 def test_diffusion_x_shape():
     '''
@@ -265,19 +242,13 @@ def test_diffusion_x_shape():
         flattenX will return a 1D array of length 40 (2x20)
         unflattenX should take the output of flattenX and getCurrentX to bring the (40,) array to [(2,20)]
     '''
-    compositionProfile = CompositionProfile()
-    compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
-    compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
-
-    #Define mesh spanning between -1mm to 1mm with 50 volume elements
-    #Since we defined L12, the disordered phase as DIS_ attached to the front
-    m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'], 
-                         compositionProfile=compositionProfile)
-
-    m.setThermodynamics(NiCrAlTherm)
-    m.setTemperature(1200 + 273.15)
-
+    profile = ProfileBuilder()
+    profile.addBuildStep(LinearProfile1D(-1e-3, [0.077, 0.054], 1e-3, [0.359, 0.062]), ['CR', 'AL'])
+    mesh = Cartesian1D(['CR', 'AL'], [-1e-3, 1e-3], 20)
+    mesh.setResponseProfile(profile)
+    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, TemperatureParameters(1473.15))
     m.setup()
+
     x = m.getCurrentX()
     origShape = x[0].shape
     
@@ -308,57 +279,44 @@ def test_homogenization_dxdt():
         Old implementation - ends of the mesh is at the node centers
         New implementation - ends of the mesh is at the node edges (node width is 1/(N-1) times smaller)
     '''
-    compositionProfile = CompositionProfile()
-    compositionProfile.addLinearCompositionStep('CR', 0.257, 0.423)
-    compositionProfile.addLinearCompositionStep('NI', 0.065, 0.276)
-
+    profile = ProfileBuilder()
+    profile.addBuildStep(LinearProfile1D(-5e-4, [0.257, 0.065], 5e-4, [0.423, 0.276]), ['CR', 'NI'])
+    mesh = Cartesian1D(['CR', 'NI'], [-5e-4, 5e-4], 20)
+    mesh.setResponseProfile(profile)
     homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_LOWER, eps=0.01)
 
-    m = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
-                            compositionProfile=compositionProfile, 
+    m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
+                            thermodynamics=FeCrNiTherm, temperatureParameters=TemperatureParameters(1373.15),
                             homogenizationParameters=homogenizationParameters)
-    m.setTemperature(1100+273.15)
-    m.setThermodynamics(FeCrNiTherm)
     m.constraints.maxCompositionChange = 0.002
 
     m.setup()
-    x = m.getCurrentX()
-    dxdt = m.getdXdt(m.currentTime, x)
+    dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
     dt = m.getDt(dxdt)
     
     # #Index 5
-    # ind5, vals5 = 5, np.array([-1.581478e-9, 1.212876e-9])
-    ind5, vals5 = 5, np.array([-1.57314176e-09, 1.20479525e-09])
+    ind5, vals5 = 5, np.array([-1.42139140e-09, 1.23814781e-09])
 
     # #Index 10
-    # ind10, vals10 = 10, np.array([-9.722631e-10, 1.703447e-9])
-    ind10, vals10 = 10, np.array([-9.67564615e-10, 1.69169914e-09])
+    ind10, vals10 = 10, np.array([-9.42102782e-10, 1.66848272e-09])
 
     # #Index 15
-    # ind15, vals15 = 15, np.array([-4.720562e-10, 8.600518e-10])
-    ind15, vals15 = 15, np.array([-4.71003916e-10, 8.56063987e-10])
-    
-    # assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
-    # assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
-    # assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
-    # assert_allclose(dt, 62271.050081, rtol=1e-3)
+    ind15, vals15 = 15, np.array([-3.9239687e-10, 7.66269736e-10])
 
     print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 62657.353106631825, rtol=1e-3)
-    #assert_allclose(dt, 62271.050081, rtol=1e-3)
+    assert_allclose(dt, 62333.021201, rtol=1e-3)
 
 
-    m = HomogenizationModel([-5e-4 - 5e-4/19, 5e-4 + 5e-4/19], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
-    m.setCompositionLinear(0.257, 0.423, 'CR')
-    m.setCompositionLinear(0.065, 0.276, 'NI')
-    m.setTemperature(1100+273.15)
-    m.setThermodynamics(FeCrNiTherm)
-    m.eps = 0.01
-
-    m.setMobilityFunction('hashin upper')
+    mesh = Cartesian1D(['CR', 'NI'], [-5e-4, 5e-4], 20)
+    mesh.setResponseProfile(profile)
+    homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_UPPER, eps=0.01)
+    m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
+                            thermodynamics=FeCrNiTherm, temperatureParameters=TemperatureParameters(1373.15),
+                            homogenizationParameters=homogenizationParameters)
+    m.constraints.maxCompositionChange = 0.002
 
     m.setup()
     x = m.getCurrentX()
@@ -369,89 +327,45 @@ def test_homogenization_dxdt():
     # Before, the mobilities were multiplied by the overall composition rather than the phase composition
     
     #Index 5
-    ind5, vals5 = 5, np.array([-1.480029e-9, 1.193852e-9])
+    ind5, vals5 = 5, np.array([-2.86475448e-8, -4.63706532e-9])
 
     #Index 10
-    ind10, vals10 = 10, np.array([-9.453766e-10, 1.681638e-9])
+    ind10, vals10 = 10, np.array([-1.70044057e-8, -3.8592184e-9])
 
     #Index 15
-    ind15, vals15 = 15, np.array([-3.441800e-10, 6.905748e-10])
+    ind15, vals15 = 15, np.array([-1.62187495e-8, -6.99884393e-9])
     
-    assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
-    assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
-    assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 65415.110254, rtol=1e-3)
-
-def test_diffusionBackCompatibility():
-    '''
-    Tests that old API works for diffusion models
-    '''
-    compositionProfile = CompositionProfile()
-    compositionProfile.addLinearCompositionStep('CR', 0.257, 0.423)
-    compositionProfile.addLinearCompositionStep('NI', 0.065, 0.276)
-
-    boundaryConditions = BoundaryConditions()
-    boundaryConditions.setBoundaryCondition(BoundaryConditions.RIGHT, BoundaryConditions.FLUX_BC, 1, 'NI')
-    boundaryConditions.setBoundaryCondition(BoundaryConditions.LEFT, BoundaryConditions.COMPOSITION_BC, 0.5, 'CR')
-
-    temperature = TemperatureParameters(10)
-
-    homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_LOWER, eps=0.01)
-
-    m = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
-                            compositionProfile=compositionProfile, 
-                            boundaryConditions=boundaryConditions,
-                            temperatureParameters=temperature,
-                            homogenizationParameters=homogenizationParameters)
-    
-    m2 = HomogenizationModel([-5e-4, 5e-4], 20, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
-    m2.setCompositionLinear(0.257, 0.423, 'CR')
-    m2.setCompositionLinear(0.065, 0.276, 'NI')
-    m2.setBC(BoundaryConditions.COMPOSITION_BC, 0.5, BoundaryConditions.FLUX_BC, 0, element='CR')
-    m2.setBC(BoundaryConditions.FLUX_BC, 0, BoundaryConditions.FLUX_BC, 1, element='NI')
-    m2.setTemperature(10)
-    m2.setMobilityFunction(HomogenizationParameters.HASHIN_LOWER)
-
-    m.setup()
-    m2.setup()
-
-    assert_allclose(m.x, m2.x, rtol=1e-3)
-    assert_allclose(m.temperatureParameters(m.z, 0), m2.temperatureParameters(m.z, 0), rtol=1e-3)
-    assert m.boundaryConditions.leftBCtype == m2.boundaryConditions.leftBCtype
-    assert m.boundaryConditions.leftBC == m2.boundaryConditions.leftBC
-    assert m.boundaryConditions.rightBCtype == m2.boundaryConditions.rightBCtype
-    assert m.boundaryConditions.rightBC == m2.boundaryConditions.rightBC
-
-    assert m.homogenizationParameters.homogenizationFunction == m2.homogenizationParameters.homogenizationFunction
+    print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
+    assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
+    assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
+    assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
+    assert_allclose(dt, 3343.03841738, rtol=1e-3)
 
 def test_diffusionSavingLoading():
     '''
     Tests saving/loading behavior of diffusion model
     '''
-    compositionProfile = CompositionProfile()
-    compositionProfile.addLinearCompositionStep('CR', 0.077, 0.359)
-    compositionProfile.addLinearCompositionStep('AL', 0.054, 0.062)
+    profile = ProfileBuilder()
+    profile.addBuildStep(LinearProfile1D(-1e-3, [0.077, 0.054], 1e-3, [0.359, 0.062]), ['CR', 'AL'])
     temperature = TemperatureParameters(1200+273.15)
-    print([p for p in NiCrAlTherm.models])
+    mesh = Cartesian1D(['CR', 'AL'], [-1e-3, 1e-3], 20)
+    mesh.setResponseProfile(profile)
 
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
-    #Since we defined L12, the disordered phase as DIS_ attached to the front
-    m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'], 
+    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], 
                          thermodynamics=NiCrAlTherm,
-                         compositionProfile=compositionProfile,
-                         temperatureParameters=temperature)
+                         temperatureParameters=temperature, record=True)
 
     m.solve(10*3600, verbose=True, vIt=1)
     m.save('kawin/tests/diff.npz')
 
-    new_m = SinglePhaseModel([-1e-3, 1e-3], 20, ['NI', 'CR', 'AL'], ['FCC_A1'], 
+    new_m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], 
                          thermodynamics=NiCrAlTherm,
-                         compositionProfile=compositionProfile,
-                         temperatureParameters=temperature)
+                         temperatureParameters=temperature, record=True)
     new_m.load('kawin/tests/diff.npz')
     os.remove('kawin/tests/diff.npz')
 
-    assert_allclose(m.x, new_m.x)
-    assert_allclose(m.t, new_m.t)
+    assert_allclose(m.mesh.y, new_m.mesh.y)
+    assert_allclose(m.currentTime, new_m.currentTime)
 
 

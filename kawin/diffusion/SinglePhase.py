@@ -1,6 +1,6 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.diffusion.mesh.MeshBase import geometricMean, arithmeticMean, logMean
+from kawin.diffusion.mesh.MeshBase import arithmeticMean
 
 class SinglePhaseModel(DiffusionModel):
     def _getPairs(self, t, xCurr):

@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.diffusion.DiffusionParameters import computeMobility
+from kawin.diffusion.DiffusionParameters import computeMobility, HashTable
 from kawin.diffusion.mesh import FiniteVolumeGrid, FiniteVolume1D, Cartesian2D
 
 def _get_axis(ax = None):
@@ -188,7 +188,9 @@ def plot1DPhases(model: DiffusionModel, phases=None, zScale=1, zOffset=0, ax=Non
     
     # Compute phase fraction
     T = model.temperatureParameters(mesh.z, model.currentTime)
-    mob_data = computeMobility(model.therm, mesh.y, T, model.hashTable)
+    # Temporary hash table, since we don't want to interfere with the internal model hash
+    hashTable = HashTable()
+    mob_data = computeMobility(model.therm, mesh.y, T, hashTable)
     phases = model.phases if phases is None else phases
     if isinstance(phases, str):
         phases = [phases]

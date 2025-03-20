@@ -1,7 +1,8 @@
 import numpy as np
 from kawin.GenericModel import GenericModel
+from kawin.thermo import GeneralThermodynamics
+from kawin.diffusion.mesh import AbstractMesh
 from kawin.diffusion.DiffusionParameters import TemperatureParameters, DiffusionConstraints, HashTable
-
 
 class DiffusionModel(GenericModel):
     '''
@@ -17,10 +18,10 @@ class DiffusionModel(GenericModel):
     thermodynamics: GeneralThermodynamics
     constraints: DiffusionConstraints
     '''
-    def __init__(self, mesh, elements, phases, 
-                 thermodynamics = None,
-                 temperatureParameters = None, 
-                 constraints = None,
+    def __init__(self, mesh: AbstractMesh, elements: list[str], phases: list[str], 
+                 thermodynamics: GeneralThermodynamics,
+                 temperatureParameters: TemperatureParameters, 
+                 constraints: DiffusionConstraints = None,
                  record = False):
         super().__init__()
         if isinstance(phases, str):
@@ -39,9 +40,10 @@ class DiffusionModel(GenericModel):
         self.hashTable = HashTable()
 
         self.reset()
-
+        
+        self._recordBatch = 1000
         if record:
-            self.enableRecording()
+            self.enableRecording(record)
         else:
             self.disableRecording()
             self._recordedX = None
@@ -66,8 +68,10 @@ class DiffusionModel(GenericModel):
         Converts diffusion data to dictionary
         '''
         data = {
-            'finalTime': self.t,
-            'finalX': self.x,
+            'finalTime': self.currentTime,
+            'finalX': self.mesh.flattenResponse(self.mesh.y),
+            'recordInterval': self._record,
+            'recordIndex': self._recordIndex,
             'recordX': self._recordedX,
             'recordTime': self._recordedTime
         }
@@ -77,8 +81,10 @@ class DiffusionModel(GenericModel):
         '''
         Converts dictionary of data to diffusion data
         '''
-        self.t = data['finalTime']
-        self.x = data['finalX']
+        self.currentTime = data['finalTime']
+        self.mesh.y = self.mesh.unflattenResponse(data['finalX'])
+        self._record = data['recordInterval']
+        self._recordIndex = data['recordIndex']
         self._recordedX = data['recordX']
         self._recordedTime = data['recordTime']
     
@@ -113,50 +119,63 @@ class DiffusionModel(GenericModel):
         '''
         self.hashTable.clearCache()
 
-    def enableRecording(self):
+    def enableRecording(self, record = 1):
         '''
         Enables recording of composition and phase
         '''
-        self._record = True
-        self._recordedX = np.zeros((1, len(self.elements), self.N))
-        self._recordedTime = np.zeros(1)
+        if isinstance(record, bool):
+            record = 1
+        self._record = record
+        self.resetRecordedData()
 
     def disableRecording(self):
         '''
         Disables recording
         '''
-        self._record = False
+        self._record = -1
+        self.resetRecordedData()
 
-    def removeRecordedData(self):
+    def resetRecordedData(self):
         '''
-        Removes recorded data
+        Resets arrays storing response variables over time
         '''
-        self._recordedX = None
-        self._recordedTime = None
+        flatY = self.mesh.flattenResponse(self.mesh.y)
+        # Initial size will be (batch size, N, e)
+        self._recordedX = np.zeros((self._recordBatch, *flatY.shape))
+        self._recordedTime = np.zeros(self._recordBatch)
+        self._recordIndex = 0
 
     def record(self, time):
         '''
         Adds current mesh data to recorded arrays
         '''
-        if self._record:
-            if time > 0:
-                self._recordedX = np.pad(self._recordedX, ((0, 1), (0, 0), (0, 0)))
-                self._recordedTime = np.pad(self._recordedTime, (0, 1))
+        if self._record > 0:
+            # we record every N iterations (where N is self._record)
+            if self._recordIndex % self._record == 0:
+                row = int(self._recordIndex / self._record)
 
-            self._recordedX[-1] = self.x
-            self._recordedTime[-1] = time
+                # Pad a batch of empty rows to recordedX and recordedTime if we reached the last row
+                if row >= self._recordedTime.shape[0]:
+                    self._recordedX = np.pad(self._recordedX, ((0, self._recordBatch), (0, 0), (0, 0)))
+                    self._recordedTime = np.pad(self._recordedTime, (0, self._recordBatch))
+
+                # Add new data to current row
+                self._recordedX[row] = self.mesh.flattenResponse(self.mesh.y)
+                self._recordedTime[row] = time
+
+            self._recordIndex += 1
 
     def setMeshtoRecordedTime(self, time):
         '''
         From recorded values, interpolated at time to get composition and phase fraction
         '''
-        if self._record:
+        if self._record > 0:
             if time < self._recordedTime[0]:
-                print('Input time is lower than smallest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[0]))
-                self.x = self._recordedX[0]
+                print('Input time is lower than smallest recorded time, setting data to t = {:.3e}'.format(self._recordedTime[0]))
+                self.mesh.y = self.mesh.unflattenResponse(self._recordedX[0])
             elif time > self._recordedTime[-1]:
-                print('Input time is larger than longest recorded time, setting PSD to t = {:.3e}'.format(self._recordedTime[-1]))
-                self.x = self._recordedX[-1]
+                print('Input time is larger than longest recorded time, setting data to t = {:.3e}'.format(self._recordedTime[-1]))
+                self.mesh.y = self.mesh.unflattenResponse(self._recordedX[-1])
             else:
                 uind = np.argmax(self._recordedTime > time)
                 lind = uind - 1
@@ -164,7 +183,8 @@ class DiffusionModel(GenericModel):
                 ux, utime = self._recordedX[uind], self._recordedTime[uind]
                 lx, ltime = self._recordedX[lind], self._recordedTime[lind]
 
-                self.x = (ux - lx) * (time - ltime) / (utime - ltime) + lx
+                flatY = (ux - lx) * (time - ltime) / (utime - ltime) + lx
+                self.mesh.y = self.mesh.unflattenResponse(flatY)
 
     def _getElementIndex(self, element = None):
         '''
@@ -193,6 +213,22 @@ class DiffusionModel(GenericModel):
             return 0
         else:
             return self.phases.index(phase)
+        
+    def _validateMeshComposition(self):
+        '''
+        Checks that composition along mesh will be between min/max limits (set by DiffusionConstraints.minComposition)
+        Since the mesh can store y in an arbitrary shape, we use the flatten array and unflatten it to store back in the mesh
+        '''
+        yFlat = self.mesh.flattenResponse(self.mesh.y)
+        ySum = np.sum(yFlat, axis=1)
+        if np.any(ySum > 1) or np.any(ySum < 0):
+            raise Exception('Some compositions sum up to below 0 or above 1')
+        # We a scaled minimum composition to account for multicomponent system
+        # So for a 3 component system, if 2 components at at the min comp, then the third is as 1-2*minComp
+        scaledMinComp = len(self.allElements)*self.constraints.minComposition
+        yFlat[yFlat > scaledMinComp] = yFlat[yFlat > scaledMinComp] - scaledMinComp
+        yFlat[yFlat < scaledMinComp] = self.constraints.minComposition
+        self.mesh.y = self.mesh.unflattenResponse(yFlat)
 
     def setup(self):
         '''
@@ -206,9 +242,15 @@ class DiffusionModel(GenericModel):
             if self.therm is not None:
                 self.therm.clearCache()
 
-        self.mesh.validateCompositions(len(self.allElements), self.constraints.minComposition)
+        self._validateMeshComposition()
         self.isSetup = True
         self.record(self.currentTime) #Record at t = 0
+
+    def _getParis(self, t, xCurr):
+        '''
+        Returns diffusivity-response pairs for diffusive fluxes
+        '''
+        raise NotImplementedError()
 
     def getFluxes(self, t, xCurr):
         '''

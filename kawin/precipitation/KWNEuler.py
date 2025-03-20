@@ -653,43 +653,5 @@ class PrecipitateModel (PrecipitateBase):
             self.PBM[p].PSD[self.PBM[p].PSDsize < self.constraints.minRadius] = 0
             self.dissolutionIndex[p] = self.PBM[p].getDissolutionIndex(self.constraints.maxDissolution, self.RdrivingForceIndex[p])
 
-    def plot(self, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
-        '''
-        Plots model outputs
-        
-        Parameters
-        ----------
-        axes : Axis
-        variable : str
-            Specified variable to plot
-            Options are 'Volume Fraction', 'Total Volume Fraction', 'Critical Radius',
-                'Average Radius', 'Volume Average Radius', 'Total Average Radius', 
-                'Total Volume Average Radius', 'Aspect Ratio', 'Total Aspect Ratio'
-                'Driving Force', 'Nucleation Rate', 'Total Nucleation Rate',
-                'Precipitate Density', 'Total Precipitate Density', 
-                'Temperature', 'Composition',
-                'Size Distribution', 'Size Distribution Curve',
-                'Size Distribution KDE', 'Size Distribution Density
-                'Interfacial Composition Alpha', 'Interfacial Composition Beta'
-
-                Note: for multi-phase simulations, adding the word 'Total' will
-                    sum the variable for all phases. Without the word 'Total', the variable
-                    for each phase will be plotted separately
-
-                    Interfacial composition terms are more relavent for binary systems than
-                    for multicomponent systems
-                    
-        bounds : tuple (optional)
-            Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
-        radius : str (optional)
-            For non-spherical precipitates, plot the Average Radius by the -
-                Equivalent spherical radius ('spherical')
-                Short axis ('short')
-                Long axis ('long')
-            Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
-        *args, **kwargs - extra arguments for plotting
-        '''
-        plotEuler(self, axes, variable, bounds, timeUnits, radius, *args, **kwargs)
-
 
                 

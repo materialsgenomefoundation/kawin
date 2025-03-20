@@ -147,7 +147,8 @@ def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset
 
         # If the list of elements is small, we can add them to the y label
         if len(elements) <= 3:
-            elementLabel = f'[{', '.join(elements)}] '
+            elList = ', '.join(elements)
+            elementLabel = f'[{elList}] '
         else:
             elementLabel = ''
         ax.set_ylabel(f'Composition {elementLabel}(at.%)') 

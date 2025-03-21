@@ -20,7 +20,7 @@ class DiffusionModel(GenericModel):
     '''
     def __init__(self, mesh: AbstractMesh, elements: list[str], phases: list[str], 
                  thermodynamics: GeneralThermodynamics,
-                 temperatureParameters: TemperatureParameters, 
+                 temperature: TemperatureParameters, 
                  constraints: DiffusionConstraints = None,
                  record = False):
         super().__init__()
@@ -34,7 +34,7 @@ class DiffusionModel(GenericModel):
         if self.mesh.numResponses != len(self.elements):
             raise ValueError("Mesh dimensions must match independent elements")
 
-        self.temperatureParameters = temperatureParameters if temperatureParameters is not None else TemperatureParameters()
+        self.temperatureParameters = temperature if temperature is not None else TemperatureParameters()
         self.constraints = constraints if constraints is not None else DiffusionConstraints()
         self.therm = thermodynamics
         self.hashTable = HashTable()

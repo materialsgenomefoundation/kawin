@@ -1,7 +1,8 @@
-import numpy as np
-import scipy.stats as sts
-import matplotlib.pyplot as plt
 import copy
+import numpy as np
+import matplotlib.pyplot as plt
+
+from kawin.PlotUtils import _get_axis, _adjust_kwargs
 
 class PopulationBalanceModel:
     '''
@@ -300,7 +301,7 @@ class PopulationBalanceModel:
         self.maxBins = maxBins
         self.bins = bins
 
-    def LoadDistribution(self, data):
+    def loadDistribution(self, data):
         '''
         Creates a particle size distribution from a set of data
         
@@ -312,7 +313,7 @@ class PopulationBalanceModel:
         self.PSD, self.PSDbounds = np.histogram(data, self.PSDbounds)
         self.PSD = self.PSD.astype('float')
 
-    def LoadDistributionFunction(self, function):
+    def loadDistributionFunction(self, function):
         '''
         Creates a particle size distribution from a function
 
@@ -372,12 +373,12 @@ class PopulationBalanceModel:
         if resetPSD:
             self.reset()
         else:
-            oldV = self.ThirdMoment()
+            oldV = self.thirdMoment()
             distDen = self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1])
             rOld = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
             self.reset(False)
             self.PSD = np.interp(self.PSDsize, rOld, distDen) * (self.PSDbounds[1:] - self.PSDbounds[:-1])
-            newV = self.ThirdMoment()
+            newV = self.thirdMoment()
             if newV != 0:
                 self.PSD *= oldV / newV
             else:
@@ -443,14 +444,14 @@ class PopulationBalanceModel:
                     newIndices = None
         return change, newIndices
         
-    def Normalize(self):
+    def normalize(self):
         '''
         Normalizes the PSD to 1
         '''
-        total = self.WeightedMoment(0, self.PSDbounds[1:] - self.PSDbounds[:-1])
+        total = self.weightedMoment(0, self.PSDbounds[1:] - self.PSDbounds[:-1])
         self.PSD /= total
             
-    def NormalizeToMoment(self, order = 0):
+    def normalizeToMoment(self, order = 0):
         '''
         Normalizes the PSD with so that the moment of specified order will be 1
         
@@ -460,7 +461,7 @@ class PopulationBalanceModel:
             Order of moment that PSD will be normalized to (defaults to 0)
             Using zeroth order will normalize the PSD so the sum of PSD will be 1
         '''
-        total = self.Moment(order)
+        total = self.moment(order)
         self.PSD /= total
 
     def getDissolutionIndex(self, maxDissolution, minIndex = 0):
@@ -483,11 +484,11 @@ class PopulationBalanceModel:
         -------
         max of [dissolution index, minIndex]
         '''
-        dissFrac = maxDissolution * self.ThirdMoment()
-        dissIndex = np.argmax(self.CumulativeMoment(3) > dissFrac) - 1
+        dissFrac = maxDissolution * self.thirdMoment()
+        dissIndex = np.argmax(self.cumulativeMoment(3) > dissFrac) - 1
         if dissIndex < 0:
             dissIndex = 0
-        return np.amax([np.argmax(self.CumulativeMoment(3) > dissFrac), minIndex])
+        return np.amax([np.argmax(self.cumulativeMoment(3) > dissFrac), minIndex])
         
 
     def getDTEuler(self, currDT, growth, dissolutionIndex, maxBinRatio = 0.4):
@@ -619,7 +620,7 @@ class PopulationBalanceModel:
 
         return dXdt
     
-    def UpdatePBMEuler(self, time, newN):
+    def updatePBMEuler(self, time, newN):
         '''
         Updates PBM with new values
 
@@ -634,388 +635,166 @@ class PopulationBalanceModel:
         self.PSD[self.PSD < 1] = 0
         self.record(time)
 
-    def MomentFromN(self, N, order):
+    def moment(self, order, weights=None, N=None):
         '''
         Given arbtrary PSD, return moment
 
         Parameters
         ----------
-        N : numpy array
-            PSD / number density
-        order : float
+        order: float
             Moment order
+        weights: np.array (optional)
+            Weights for each bin (must have length (bins,))
+            If None, all bins are weighted equally
+        N: np.array (optional)
+            PSD / number density (must have length (bins,))
+            If None, then internal PSD will be used
         '''
-        return np.sum(N * self.PSDsize**order)
+        if N is None:
+            N = self.PSD
+        if weights is None:
+            return np.sum(N * self.PSDsize**order)
+        else:
+            return np.sum(weights * N * self.PSDsize**order)
     
-    def CumulativeMomentFromN(self, N, order):
+    def cumulativeMoment(self, order, N=None, weights=None):
         '''
         Given arbtrary PSD, return cumulative moment (from 0 to max)
 
         Parameters
         ----------
-        N : numpy array
-            PSD / number density
-        order : float
+        order: float
             Moment order
+        N: np.array (optional)
+            PSD / number density (must have length (bins,))
+            If None, then internal PSD will be used
+        weights: np.array (optional)
+            Weights for each bin (must have length (bins,))
+            If None, all bins are weighted equally
         '''
-        return np.cumsum(N * self.PSDsize**order)
+        if N is None:
+            N = self.PSD
+        if weights is None:
+            return np.cumsum(N * self.PSDsize**order)
+        else:
+            return np.cumsum(weights * N * self.PSDsize**order)
     
-    def WeightedMomentFromN(self, N, order, weights):
-        '''
-        Given arbtrary PSD, return weighted moment
-
-        Parameters
-        ----------
-        N : numpy array
-            PSD / number density
-        order : float
-            Moment order
-        weights : numpy array
-            Weights for each bin
-        '''
-        return np.sum(N * self.PSDsize**order * weights)
-    
-    def CumulativeWeightedMomentFromN(self, N, order, weights):
-        '''
-        Given arbtrary PSD, return cumulative weighted moment (from 0 to max)
-
-        Parameters
-        ----------
-        N : numpy array
-            PSD / number density
-        order : float
-            Moment order
-        weights : numpy array
-            Weights for each bin
-        '''
-        return np.cumsum(self.PSD * self.PSDsize**order * weights)
-    
-    def ZeroMomentFromN(self, N):
+    def zeroMoment(self, N=None, weights=None):
         '''
         Sum of N
         '''
-        return self.MomentFromN(N, 0)
+        return self.moment(0, N=N, weights=weights)
     
-    def FirstMomentFromN(self, N):
+    def firstMoment(self, N=None, weights=None):
         '''
         Length weighted moment of N
         '''
-        return self.MomentFromN(N, 1)
+        return self.moment(1, N=N, weights=weights)
         
-    def SecondMomentFromN(self, N):
+    def secondMoment(self, N=None, weights=None):
         '''
         Area weighted moment of N
         '''
-        return self.MomentFromN(N, 2)
+        return self.moment(2, N=N, weights=weights)
         
-    def ThirdMomentFromN(self, N):
+    def thirdMoment(self, N=None, weights=None):
         '''
         Volume weighted moment of N
         '''
-        return self.MomentFromN(N, 3)
+        return self.moment(3, N=N, weights=weights)
+
+def _set_xlim(pbm: PopulationBalanceModel, x, ax):
+    # If x[0] is very small compare to x[-1], then x bottom is 0
+    if 5e2*x[0] < x[-1]:
+        ax.set_xlim([0, x[-1]])
+    else:
+        ax.set_xlim([x[0], x[-1]])
         
-    def Moment(self, order):
-        '''
-        Moment of specified order
-
-        Parameters
-        ----------
-        order : int
-            Order of moment
-        '''
-        return self.MomentFromN(self.PSD, order)
-
-    def CumulativeMoment(self, order):
-        '''
-        Cumulative distribution using moment of specified order
-
-        Parameters
-        ----------
-        order : int
-            Order of moment
-        '''
-        return self.CumulativeMomentFromN(self.PSD, order)
-        
-    def WeightedMoment(self, order, weights):
-        '''
-        Weighted moment of specified order
-
-        Parameters
-        ----------
-        order : int
-            Order of moment
-        weights : array
-            Weights to apply to each size class
-            Array size of (bins)
-        '''
-        return self.WeightedMomentFromN(self.PSD, order, weights)
-
-    def CumulativeWeightedMoment(self, order, weights):
-        '''
-        Weighted moment of specified order
-
-        Parameters
-        ----------
-        order : int
-            Order of moment
-        weights : array
-            Weights to apply to each size class
-            Array size of (bins)
-        '''
-        return self.CumulativeWeightedMomentFromN(self.PSD, order, weights)
-
-    def ZeroMoment(self):
-        '''
-        Sum of the PSD
-        '''
-        return self.Moment(0)
+def plotPSD(pbm: PopulationBalanceModel, scale=1, fill=False, ax=None, *args, **kwargs):
+    '''
+    Plots the N for each bin as a curve
     
-    def FirstMoment(self):
-        '''
-        Length weighted moment
-        '''
-        return self.Moment(1)
-        
-    def SecondMoment(self):
-        '''
-        Area weighted moment
-        '''
-        return self.Moment(2)
-        
-    def ThirdMoment(self):
-        '''
-        Volume weighted moment
-        '''
-        return self.Moment(3)
-        
-    def PlotCurve(self, axes, fill = False, logX = False, logY = False, scale = 1, *args, **kwargs):
-        '''
-        Plots the PSD as a curve
-        
-        Parameters
-        ----------
-        axes : Axes
-            Axis to plot on
-        fill : bool (optional)
-            Will fill area between PSD curve and x-axis (defaults to False)
-        logX : bool (optional)
-            Whether to set x-axis on log scale (defaults to False)
-        logY : bool (optional)
-            Whether to set y-axis on log scale (defaults to False)
-        scale : float (optional)
-            Scale factor for x-axis (defaults to 1)
-            Note: this is for grain boundary nucleation where the
-                reported precipitate radius differs from the radius
-                determined by precipitate curvature
-        *args, **kwargs - extra arguments for plotting
-        '''
-        if hasattr(scale, '__len__'):
-            scale = np.interp(self.PSDsize, self.PSDbounds, scale)
-        else:
-            scale = scale * np.ones(len(self.PSDsize))
+    Parameters
+    ----------
+    pbm: PopulationBalanceModel
+    scale : float (optional)
+        Scale factor for x-axis (defaults to 1)
+        Note: this is for grain boundary nucleation where the
+            reported precipitate radius differs from the radius
+            determined by precipitate curvature
+    fill : bool (optional)
+        Will fill area between PSD curve and x-axis (defaults to False)
+    ax: matplotlib Axes (optional)
+    *args, **kwargs - extra arguments for plotting
+    '''
+    ax = _get_axis(ax)
+    x = scale*pbm.PSDsize
 
-        if fill:
-            axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
-        else:
-            axes.plot(self.PSDsize * scale, self.PSD, *args, **kwargs)
-        self.setAxes(axes, scale, logX, logY) 
+    if fill:
+        ax.fill_between(x, pbm.PSD, np.zeros(len(pbm.PSD)), *args, **kwargs)
+    else:
+        ax.plot(x, pbm.PSD, *args, **kwargs)
+    _set_xlim(pbm, x, ax)
+    ax.set_ylim(bottom=0)
+    ax.set_ylabel(r'Frequency (#$/m^3$)') 
 
-    def PlotDistributionDensity(self, axes, fill = False, logX = False, logY = False, scale = 1, *args, **kwargs):
-        '''
-        Plots the distribution density as a curve
-        Defined as N_i / (R_i+1/2 - R_i-1/2)
-        
-        Parameters
-        ----------
-        axes : Axes
-            Axis to plot on
-        fill : bool (optional)
-            Will fill area between PSD curve and x-axis (defaults to False)
-        logX : bool (optional)
-            Whether to set x-axis on log scale (defaults to False)
-        logY : bool (optional)
-            Whether to set y-axis on log scale (defaults to False)
-        scale : float (optional)
-            Scale factor for x-axis (defaults to 1)
-            Note: this is for grain boundary nucleation where the
-                reported precipitate radius differs from the radius
-                determined by precipitate curvature
-        *args, **kwargs - extra arguments for plotting
-        '''
-        if hasattr(scale, '__len__'):
-            scale = np.interp(self.PSDsize, self.PSDbounds, scale)
-        else:
-            scale = scale * np.ones(len(self.PSDsize))
+def plotPDF(pbm: PopulationBalanceModel, scale=1, fill=False, ax=None, *args, **kwargs):
+    '''
+    Plots the distribution density as a curve
+    Defined as f_i = N_i / (R_i+1/2 - R_i-1/2)
+        This is such that N = \int(f dR)
+    
+    Parameters
+    ----------
+    pbm: PopulationBalanceModel
+    scale : float (optional)
+        Scale factor for x-axis (defaults to 1)
+        Note: this is for grain boundary nucleation where the
+            reported precipitate radius differs from the radius
+            determined by precipitate curvature
+    fill : bool (optional)
+        Will fill area between PSD curve and x-axis (defaults to False)
+    ax: matplotlib Axes (optional)
+    *args, **kwargs - extra arguments for plotting
+    '''
+    ax = _get_axis(ax)
+    x = scale*pbm.PSDsize
+    y = pbm.PSD / (pbm.PSDbounds[1:] - pbm.PSDbounds[:-1])
 
-        if fill:
-            axes.fill_between(self.PSDsize * scale, self.PSD, np.zeros(len(self.PSD)), *args, **kwargs)
-        else:
-            axes.plot(self.PSDsize * scale, self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1]), *args, **kwargs)
-        
-        #Set x-limits
-        if logX:
-            if self.min == 0:
-                axes.set_xlim([self.PSDbounds[1]*scale[0], self.max*scale[-1]])
-            else:
-                axes.set_xlim([self.min*scale[0], self.max*scale[-1]])
-            axes.set_xscale('log')
-        else:
-            axes.set_xlim([self.min*scale[0], self.max*scale[-1]]) 
+    if fill:
+        ax.fill_between(x, y, np.zeros(len(y)), *args, **kwargs)
+    else:
+        ax.plot(x, y, *args, **kwargs)
 
-        #Set y-limits
-        if logY:
-            axes.set_ylim([1e-1, np.amax([1.1 * np.amax(self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1])), 1])])
-            axes.set_yscale('log')
-        else:
-            axes.set_ylim([0, np.amax([1.1 * np.amax(self.PSD / (self.PSDbounds[1:] - self.PSDbounds[:-1])), 1])])
+    _set_xlim(pbm, x, ax)
+    ax.set_ylim(bottom=0)
+    ax.set_ylabel(r'Distribution Density (#$/m^4$)') 
 
-    def PlotKDE(self, axes, bw_method = None, fill = False, logX = False, logY = False, scale = 1, *args, **kwargs):
-        '''
-        Plots the kernel density estimation (KDE)
-        
-        Parameters
-        ----------
-        axes : Axes
-            Axis to plot on
-        bw_method : str (optional)
-            Method to estimate bandwidth ('scott', 'silverman' or a scalar)
-            Defaults to scipy's default for KDE
-        fill : bool (optional)
-            Will fill area between PSD curve and x-axis (defaults to False)
-        logX : bool (optional)
-            Whether to set x-axis on log scale (defaults to False)
-        logY : bool (optional)
-            Whether to set y-axis on log scale (defaults to False)
-        scale : float (optional)
-            Scale factor for x-axis (defaults to 1)
-            Note: this is for grain boundary nucleation where the
-                reported precipitate radius differs from the radius
-                determined by precipitate curvature
-        *args, **kwargs - extra arguments for plotting
-        '''
-        x = np.linspace(self.min, self.max, 1000) 
-        if np.all(self.PSD == 0):
-            y = np.zeros(x.shape)
-        else:
-            kernel = sts.gaussian_kde(self.PSDsize, bw_method = bw_method, weights = self.PSD)  
-            y = kernel(x) * self.ZeroMoment() * (self.PSDbounds[1] - self.PSDbounds[0])
+def plotCDF(pbm: PopulationBalanceModel, scale=1, order=0, ax=None, *args, **kwargs):
+    '''
+    Plots cumulative size distribution density
+    
+    Parameters
+    ----------
+    axes : Axes
+        Axis to plot on
+    scale : float (optional)
+        Scale factor for x-axis (defaults to 1)
+        Note: this is for grain boundary nucleation where the
+            reported precipitate radius differs from the radius
+            determined by precipitate curvature
+    order : int (optional)
+        Moment of specified order
+    *args, **kwargs - extra arguments for plotting
+    '''
+    ax = _get_axis(ax)
+    x = scale*pbm.PSDsize
+    # Since we normalize to 1, dividing N_i by (R_i+1/2 - R_i-1/2) cancels out
+    ax.plot(x, pbm.cumulativeMoment(order) / pbm.moment(order), *args, **kwargs)
 
-        if hasattr(scale, '__len__'):
-            scale = np.interp(x, self.PSDbounds, scale)
-        else:
-            scale = scale * np.ones(len(x))
-        
-        if fill:
-            axes.fill_between(x * scale, y, np.zeros(len(y)), *args, **kwargs)
-        else:
-            axes.plot(x * scale, y, *args, **kwargs)
-        self.setAxes(axes, scale, logX, logY) 
-            
-    def PlotHistogram(self, axes, outline = 'outline bins', fill = True, logX = False, logY = False, scale = 1, *args, **kwargs):
-        '''
-        Plots the PSD as a histogram
-        
-        Parameters
-        ----------
-        axes : Axes
-            Axis to plot on
-        outline : str (optional)
-            How to outline the bins ('no outline', 'outline bins', 'outline top')
-            Defaults to 'outline bins'
-        fill : bool (optional)
-            Will fill area between PSD curve and x-axis (defaults to False)
-        logX : bool (optional)
-            Whether to set x-axis on log scale (defaults to False)
-        logY : bool (optional)
-            Whether to set y-axis on log scale (defaults to False)
-        scale : float (optional)
-            Scale factor for x-axis (defaults to 1)
-            Note: this is for grain boundary nucleation where the
-                reported precipitate radius differs from the radius
-                determined by precipitate curvature
-        *args, **kwargs - extra arguments for plotting
-        '''
-        if outline == 'outline bins':
-            xCoord, yCoord = np.zeros(1 + 3 * self.bins), np.zeros(1 + 3 * self.bins)
-            xCoord[0], xCoord[1::3], xCoord[2::3], xCoord[3::3] = self.PSDbounds[0], self.PSDbounds[:-1], self.PSDbounds[1:], self.PSDbounds[1:]
-            yCoord[1::3], yCoord[2::3] = self.PSD, self.PSD
-        else:
-            xCoord, yCoord = np.zeros(1 + 2 * self.bins), np.zeros(1 + 2 * self.bins)
-            xCoord[0], xCoord[1::2], xCoord[2::2] = self.PSDbounds[0], self.PSDbounds[:-1], self.PSDbounds[1:]
-            yCoord[1::2], yCoord[2::2] = self.PSD, self.PSD
-
-        if hasattr(scale, '__len__'):
-            scale = np.interp(xCoord, self.PSDbounds, scale)
-        else:
-            scale = scale * np.ones(len(xCoord))
-
-        if outline != 'no outline':
-            axes.plot(xCoord * scale, yCoord, *args, **kwargs)
-            if fill:
-                axes.fill_between(xCoord * scale, yCoord, np.zeros(len(yCoord)), alpha=0.3, *args, **kwargs)
-        else:
-            axes.fill_between(xCoord * scale, yCoord, np.zeros(len(yCoord)), *args, **kwargs)
-        self.setAxes(axes, scale, logX, logY)
-
-    def PlotCDF(self, axes, logX = False, scale = 1, order = 0, *args, **kwargs):
-        '''
-        Plots cumulative size distribution
-        
-        Parameters
-        ----------
-        axes : Axes
-            Axis to plot on
-        logX : bool (optional)
-            Whether to set x-axis on log scale (defaults to False)
-        scale : float (optional)
-            Scale factor for x-axis (defaults to 1)
-            Note: this is for grain boundary nucleation where the
-                reported precipitate radius differs from the radius
-                determined by precipitate curvature
-        order : int (optional)
-            Moment of specified order
-        *args, **kwargs - extra arguments for plotting
-        '''
-        if hasattr(scale, '__len__'):
-            scale = np.interp(self.PSDsize, self.PSDbounds, scale)
-        else:
-            scale = scale * np.ones(len(self.PSDsize))
-
-        axes.plot(self.PSDsize * scale, self.CumulativeMoment(order) / self.Moment(order), *args, **kwargs)
-        self.setAxes(axes, scale, logX, False) 
-        axes.set_ylim([0, 1])
-        
-    def setAxes(self, axes, scale = 1, logX = False, logY = False): 
-        '''
-        Sets x- and y-axis to linear or log scale
-        
-        Parameters
-        ----------
-        axes : Axis
-            Axis to plot on
-        logX : bool (optional)
-            Whether to set x-axis on log scale (defaults to False)
-        logY : bool (optional)
-            Whether to set y-axis on log scale (defaults to False)
-        '''    
-        if logX:
-            if self.min == 0:
-                axes.set_xlim([self.PSDbounds[1]*scale[0], self.max*scale[-1]])
-            else:
-                axes.set_xlim([self.min*scale[0], self.max*scale[-1]])
-            axes.set_xscale('log')
-        else:
-            axes.set_xlim([self.min*scale[0], self.max*scale[-1]])
-
-        #Don't set y limits if the PSD is empty
-        if any(self.PSD > 0): 
-            if logY:
-                axes.set_ylim([1e-1, np.amax([1.1 * np.amax(self.PSD), 1])])
-                axes.set_yscale('log')
-            else:
-                axes.set_ylim([0, np.amax([1.1 * np.amax(self.PSD), 1])])
-        
-        axes.set_ylabel('Frequency')
+    _set_xlim(pbm, x, ax)
+    ax.set_ylim([0,1])
+    ax.set_ylabel(r'Cumulative Frequency') 
             
                     
         

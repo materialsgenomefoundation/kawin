@@ -286,7 +286,7 @@ def test_homogenization_dxdt():
     homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_LOWER, eps=0.01)
 
     m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
-                            thermodynamics=FeCrNiTherm, temperatureParameters=TemperatureParameters(1373.15),
+                            thermodynamics=FeCrNiTherm, temperature=TemperatureParameters(1373.15),
                             homogenizationParameters=homogenizationParameters)
     m.constraints.maxCompositionChange = 0.002
 
@@ -314,7 +314,7 @@ def test_homogenization_dxdt():
     mesh.setResponseProfile(profile)
     homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_UPPER, eps=0.01)
     m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
-                            thermodynamics=FeCrNiTherm, temperatureParameters=TemperatureParameters(1373.15),
+                            thermodynamics=FeCrNiTherm, temperature=TemperatureParameters(1373.15),
                             homogenizationParameters=homogenizationParameters)
     m.constraints.maxCompositionChange = 0.002
 
@@ -354,14 +354,14 @@ def test_diffusionSavingLoading():
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
     m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], 
                          thermodynamics=NiCrAlTherm,
-                         temperatureParameters=temperature, record=True)
+                         temperature=temperature, record=True)
 
     m.solve(10*3600, verbose=True, vIt=1)
     m.save('kawin/tests/diff.npz')
 
     new_m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], 
                          thermodynamics=NiCrAlTherm,
-                         temperatureParameters=temperature, record=True)
+                         temperature=temperature, record=True)
     new_m.load('kawin/tests/diff.npz')
     os.remove('kawin/tests/diff.npz')
 

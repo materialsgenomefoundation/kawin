@@ -6,7 +6,8 @@ from kawin.precipitation import PrecipitateModel, MatrixParameters, PrecipitateP
 from kawin.diffusion import SinglePhaseModel, TemperatureParameters as DiffTemp
 from kawin.diffusion.mesh import Cartesian1D, StepProfile1D, ProfileBuilder
 
-from kawin.precipitation.Plot import plotEuler
+#from kawin.precipitation.Plot import plotEuler
+from kawin.precipitation.Plot import plotPrecipitateResults
 from kawin.diffusion.Plot import plot1D, plot1DFlux, plot1DPhases, plot1DTwoAxis
 
 from kawin.tests.datasets import NICRAL_TDB
@@ -37,52 +38,39 @@ def test_precipitate_plotting():
     ternary_multi = PrecipitateModel(ternary_matrix, [fcc_prec, c14_prec, c15_prec], ternPrecTherm, temperature)
 
     models = [
-        (binary_single, 1, 1),
-        (binary_multi, 1, 3),
-        (ternary_single, 2, 1),
-        (ternary_multi, 2, 3),
-    ]
-
-    varTypes = [
-        ('Volume Fraction', [2]),
-        ('Total Volume Fraction', None),
-        ('Critical Radius', [2]),
-        ('Average Radius', [2]),
-        ('Volume Average Radius', [2]),
-        ('Total Average Radius', None),
-        ('Total Volume Average Radius', None),
-        ('Aspect Ratio', [2]),
-        ('Total Aspect Ratio', None),
-        ('Driving Force', [2]),
-        ('Nucleation Rate', [2]),
-        ('Total Nucleation Rate', None),
-        ('Precipitate Density', [2]),
-        ('Total Precipitate Density', None),
-        ('Temperature', None),
-        ('Composition', [1]),
-        ('Eq Composition Alpha', [1,2]),
-        ('Eq Composition Beta', [1,2]),
-        ('Supersaturation', [2]),
-        ('Eq Volume Fraction', [2]),
-        ('Size Distribution', [2]),
-        ('Size Distribution Curve', [2]),
-        ('Size Distribution KDE', [2]),
-        ('Size Distribution Density', [2]),
+        binary_single,
+        binary_multi,
+        ternary_single,
+        ternary_multi,
     ]
 
     for m in models:
+        varTypes = [
+            ('volume fraction', {'phases': m.phases[0]}, 1),
+            ('critical radius', {'phases': None}, len(m.phases)),
+            ('average radius', {'phases': m.phases}, len(m.phases)),
+            ('volume average radius', {'phases': ['total'] + [p for p in m.phases]}, len(m.phases)+1),
+            ('aspect ratio', {'phases': None}, len(m.phases)),
+            ('driving force', {'phases': [m.phases[0]]}, 1),
+            ('nucleation rate', {'phases': ['total']}, 1),
+            ('precipitate density', {'phases': ['total', m.phases[0]]}, 2),
+            ('temperature', {}, 1),
+            ('composition', {'elements': m.elements[0]}, 1),
+            ('eq comp alpha', {'elements': None, 'phase': m.phases[0]}, len(m.elements)),
+            ('eq comp beta', {'elements': m.elements, 'phase': m.phases[-1]}, len(m.elements)),
+            ('supersaturation', {'phases': None}, len(m.phases)),
+            ('eq volume fraction', {'phases': m.phases[0]}, 1),
+            ('psd', {'phases': None}, len(m.phases)),
+            ('pdf', {'phases': m.phases[0]}, 1),
+            ('cdf', {'phases': m.phases}, len(m.phases)),
+        ]
         for v in varTypes:
+            print(v[0])
             fig, ax = plt.subplots(1,1)
-            plotEuler(m[0], ax, v[0])
+            plotPrecipitateResults(m, v[0], ax=ax, **v[1])
             numLines = len(ax.lines)
             plt.close(fig)
-
-            #Check that the number of lines on the plot correspond to the right amount
-            #   Number of lines should either be 1, elements, phases or elements*phases depending on variable
-            desiredNumber = 1
-            if v[1] is not None:
-                desiredNumber = np.prod([m[vi] for vi in v[1]], dtype=np.int32)
-            assert numLines == desiredNumber
+            assert numLines == v[2]
 
 def test_diffusion_plotting():
     #Single phase and Homogenizaton model goes through the same path for plotting

@@ -312,6 +312,10 @@ class NucleationBarrierParameters:
             self._validateGBk()
             self._areaRemoval = self.description.areaRemoval(self.GBk, setInvalidToNan=False)
         return self._areaRemoval
+    
+    @property
+    def isGrainBoundaryNucleation(self):
+        return self.description.isGrainBoundaryNucleation
 
     def Rcrit(self, dG):
         '''

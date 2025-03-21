@@ -9,13 +9,13 @@ from kawin.diffusion.mesh.MeshBase import arithmeticMean, harmonicMean
 class HomogenizationModel(DiffusionModel): 
     def __init__(self, mesh, elements, phases, 
                  thermodynamics = None,
-                 temperatureParameters = None, 
+                 temperature = None, 
                  constraints = None,
                  homogenizationParameters = None,
                  record = False):
         super().__init__(mesh=mesh, elements=elements, phases=phases, 
                          thermodynamics=thermodynamics,
-                         temperatureParameters=temperatureParameters,  
+                         temperature=temperature,  
                          constraints=constraints,
                          record=record)
         self.homogenizationParameters = homogenizationParameters if homogenizationParameters is not None else HomogenizationParameters()

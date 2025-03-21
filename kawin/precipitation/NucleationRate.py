@@ -41,7 +41,7 @@ def nucleationBarrier(volumeDrivingForce, precipitate : PrecipitateParameters, a
     Rcrit = np.zeros(volumeDrivingForce.shape)
     Gcrit = np.zeros(volumeDrivingForce.shape)
 
-    if not precipitate.nucleation.description.isGrainBoundaryNucleation:
+    if not precipitate.nucleation.isGrainBoundaryNucleation:
         RcritProposal = 2*precipitate.shapeFactor.description.thermoFactor(aspectRatio) * precipitate.gamma / volumeDrivingForce[indices]
         Rcrit[indices] = np.amax([RcritProposal, Rmin[indices]], axis=0)
         Gcrit[indices] = (4*np.pi/3) * precipitate.gamma * Rcrit[indices]**2

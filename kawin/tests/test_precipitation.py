@@ -222,22 +222,15 @@ def test_precipitationSavingLoading():
         params.volume.setVolume(1e-5, 'VM', 4)
         precipitates.append(params)
 
-    model = PrecipitateModel(thermodynamics=AlMgSitherm,
-                            matrixParameters=matrix,
-                            precipitateParameters=precipitates,
-                            temperatureParameters=temperature)
-    
+    model = PrecipitateModel(matrix=matrix, precipitates=precipitates, thermodynamics=AlMgSitherm, temperature=temperature)
     model.solve(0.1, verbose=True, vIt=1)
 
     model.save('kawin/tests/prec.npz')
 
-    new_model = PrecipitateModel(thermodynamics=AlMgSitherm,
-                            matrixParameters=matrix,
-                            precipitateParameters=precipitates,
-                            temperatureParameters=temperature)
+    new_model = PrecipitateModel(matrix=matrix, precipitates=precipitates, thermodynamics=AlMgSitherm, temperature=temperature)
     new_model.load('kawin/tests/prec.npz')
     os.remove('kawin/tests/prec.npz')
 
-    assert_allclose(model.pData.Ravg, new_model.pData.Ravg)
-    assert_allclose(model.pData.time, new_model.pData.time)
-    assert_allclose(model.pData.precipitateDensity, new_model.pData.precipitateDensity)
+    assert_allclose(model.data.Ravg, new_model.data.Ravg)
+    assert_allclose(model.data.time, new_model.data.time)
+    assert_allclose(model.data.precipitateDensity, new_model.data.precipitateDensity)

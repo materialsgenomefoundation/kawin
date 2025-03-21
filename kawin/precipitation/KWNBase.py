@@ -32,23 +32,25 @@ class PrecipitateBase(GenericModel):
         If binary system, then default is ['solute']
     '''
     def __init__(self, 
-                 matrixParameters: MatrixParameters,
-                 precipitateParameters: list[PrecipitateParameters], 
+                 matrix: MatrixParameters,
+                 precipitates: list[PrecipitateParameters], 
                  thermodynamics: GeneralThermodynamics,
-                 temperatureParameters: TemperatureParameters, 
+                 temperature: TemperatureParameters, 
                  constraints: Constraints = None):
         super().__init__()
 
         self.constraints = constraints if constraints is not None else Constraints()
-        self.temperatureParameters = temperatureParameters
+        self.temperatureParameters = temperature
         self.therm = thermodynamics
         self.removeCache = False
 
-        self.precipitateParameters = precipitateParameters
-        self.phases = np.array([p.phase for p in self.precipitateParameters])
+        if isinstance(precipitates, PrecipitateParameters):
+            precipitates = [precipitates]
+        self.precipitates = precipitates
+        self.phases = np.array([p.phase for p in self.precipitates])
 
-        self.matrixParameters = matrixParameters
-        self.elements = self.matrixParameters.solutes
+        self.matrix = matrix
+        self.elements = self.matrix.solutes
 
         self.numberOfElements = len(self.elements)
 
@@ -116,7 +118,7 @@ class PrecipitateBase(GenericModel):
             (iterations, phases)             Everything else
             This is intended for appending arrays to always be on the first axis
         '''
-        self.pData = PrecipitationData(self.phases, self.elements)
+        self.data = PrecipitationData(self.phases, self.elements)
 
         #Temporary storage variables
         self._precBetaTemp = [None for _ in range(len(self.phases))]    #Composition of nucleate (found from driving force)
@@ -125,14 +127,14 @@ class PrecipitateBase(GenericModel):
         '''
         Converts precipitation data to dictionary
         '''
-        data = self.pData.toDict()
+        data = self.data.toDict()
         return data
     
     def fromDict(self, data):
         '''
         Converts dictionary of data to precipitation data
         '''
-        self.pData.fromDict(data)
+        self.data.fromDict(data)
     
     def _appendArrays(self, newVals):
         '''
@@ -146,7 +148,7 @@ class PrecipitateBase(GenericModel):
                     The after solving, we could clean up the arrays, or just use self.n to state where the end of the simulation is
         I suppose we could make a list of str for each variable and call setattr
         '''
-        self.pData.appendToArrays(newVals)
+        self.data.appendToArrays(newVals)
 
     def setConstraints(self, **kwargs):
         '''
@@ -213,7 +215,7 @@ class PrecipitateBase(GenericModel):
             Phase to consider (defaults to first precipitate in list)
         '''
         index = self.phaseIndex(phase)
-        return self.precipitateParameters[index].computeGibbsThomsonContribution(radius)
+        return self.precipitates[index].computeGibbsThomsonContribution(radius)
 
     def addStoppingCondition(self, condition, mode = 'or'):
         '''
@@ -251,11 +253,11 @@ class PrecipitateBase(GenericModel):
             return
         
         for p in range(len(self.phases)):
-            self.precipitateParameters[p].nucleation.gbEnergy = self.matrixParameters.GBenergy
-            self.precipitateParameters[p].validate()
+            self.precipitates[p].nucleation.gbEnergy = self.matrix.GBenergy
+            self.precipitates[p].validate()
 
-        self.pData.composition[0] = self.matrixParameters.initComposition
-        self.pData.temperature[0] = self.temperatureParameters(self.pData.time[0])
+        self.data.composition[0] = self.matrix.initComposition
+        self.data.temperature[0] = self.temperatureParameters(self.data.time[0])
         self._isSetup = True
 
     def printHeader(self):
@@ -274,18 +276,18 @@ class PrecipitateBase(GenericModel):
             For each phase
                 Phase name, precipitate density, volume fraction, avg radius and driving force
         '''
-        i = self.pData.n
+        i = self.data.n
         #For single element, we just print the composition as matrix comp in terms of the solute
         if self.numberOfElements == 1:
             print('N\tTime (s)\tSim Time (s)\tTemperature (K)\tMatrix Comp')
-            print('{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t{:.4f}\n'.format(i, modelTime, simTimeElapsed, self.pData.temperature[i], 100*self.pData.composition[i,0]))
+            print('{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t{:.4f}\n'.format(i, modelTime, simTimeElapsed, self.data.temperature[i], 100*self.data.composition[i,0]))
         #For multicomponent systems, print each element
         else:
             compStr = 'N\tTime (s)\tSim Time (s)\tTemperature (K)\t'
-            compValStr = '{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t'.format(i, modelTime, simTimeElapsed, self.pData.temperature[i])
+            compValStr = '{:.0f}\t{:.1e}\t\t{:.1f}\t\t{:.0f}\t\t'.format(i, modelTime, simTimeElapsed, self.data.temperature[i])
             for a in range(self.numberOfElements):
                 compStr += self.elements[a] + '\t'
-                compValStr += '{:.4f}\t'.format(100*self.pData.composition[i,a])
+                compValStr += '{:.4f}\t'.format(100*self.data.composition[i,a])
             compValStr += '\n'
             print(compStr)
             print(compValStr)
@@ -293,7 +295,7 @@ class PrecipitateBase(GenericModel):
         #Print status of each phase
         print('\tPhase\tPrec Density (#/m3)\tVolume Frac\tAvg Radius (m)\tDriving Force (J/mol)')
         for p in range(len(self.phases)):
-            print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.pData.precipitateDensity[i,p], 100*self.pData.volFrac[i,p], self.pData.Ravg[i,p], self.pData.drivingForce[i,p]*self.precipitateParameters[p].volume.Vm))
+            print('\t{}\t{:.3e}\t\t{:.4f}\t\t{:.4e}\t{:.4e}'.format(self.phases[p], self.data.precipitateDensity[i,p], 100*self.data.volFrac[i,p], self.data.Ravg[i,p], self.data.drivingForce[i,p]*self.precipitates[p].volume.Vm))
         print('')
 
     def preProcess(self):
@@ -323,7 +325,7 @@ class PrecipitateBase(GenericModel):
         self._processX(x)
         if self._currY is None:
             #print('start iteration')
-            self._currY = self.pData.copySlice(self.pData.n)
+            self._currY = self.data.copySlice(self.data.n)
         else:
             self._currY.time = np.array([t])
             self._currY.temperature = np.array([self.temperatureParameters(t)])
@@ -409,12 +411,12 @@ class PrecipitateBase(GenericModel):
     def _calcNucleationRate(self, t, x, Y : PrecipitationData):
         xComp = np.squeeze(Y.composition[0])
         T = Y.temperature[0]
-        for p in range(len(self.precipitateParameters)):
-            precParams = self.precipitateParameters[p]
+        for p in range(len(self.precipitates)):
+            precParams = self.precipitates[p]
 
             # Compute driving force and precipitate composition (which helps with growth rate and impingement in multicomponent systems)
             # If driving force is negative, then we can skip the rest of the calculations (no nucleation barrier and no nucleation rate)
-            aspectRatio = precParams.shapeFactor.aspectRatio(self.pData.Rcrit[self.pData.n, p])
+            aspectRatio = precParams.shapeFactor.aspectRatio(self.data.Rcrit[self.data.n, p])
             _, volDG, self._precBetaTemp[p] = nucfuncs.volumetricDrivingForce(self.therm, xComp, T, precParams, aspectRatio, self.removeCache)
             Y.drivingForce[0,p] = volDG
             if volDG < 0:
@@ -426,11 +428,11 @@ class PrecipitateBase(GenericModel):
             # Impingement factor
             if self.therm.numElements == 2:
                 if self.betaFuncType == 1:
-                    beta = nucfuncs.betaBinary1(self.therm, xComp, T, Rcrit, self.matrixParameters, precParams, self.removeCache)
+                    beta = nucfuncs.betaBinary1(self.therm, xComp, T, Rcrit, self.matrix, precParams, self.removeCache)
                 else:
-                    beta = nucfuncs.betaBinary2(self.therm, xComp, T, Rcrit, self.matrixParameters, precParams, Y.xEqAlpha[0], Y.xEqBeta[0], self.removeCache)
+                    beta = nucfuncs.betaBinary2(self.therm, xComp, T, Rcrit, self.matrix, precParams, Y.xEqAlpha[0], Y.xEqBeta[0], self.removeCache)
             else:
-                beta = nucfuncs.betaMulti(self.therm, xComp, T, Rcrit, self.matrixParameters, precParams, self.removeCache, searchDir=self._precBetaTemp[p])
+                beta = nucfuncs.betaMulti(self.therm, xComp, T, Rcrit, self.matrix, precParams, self.removeCache, searchDir=self._precBetaTemp[p])
             
             # If impingement is 0, then skip rest of calculations (no nucleation rate)
             if beta == 0:
@@ -441,17 +443,17 @@ class PrecipitateBase(GenericModel):
 
             # Incubation time
             if self.temperatureParameters._isIsothermal:
-                tau = nucfuncs.incubationTime(beta, Z, self.matrixParameters)
+                tau = nucfuncs.incubationTime(beta, Z, self.matrix)
             else:
-                tau = nucfuncs.incubationTimeNonIsothermal(Z, beta, t, T, self.pData.impingement[:,p], self.pData.time, self.pData.temperature, self.matrixParameters)
+                tau = nucfuncs.incubationTimeNonIsothermal(Z, beta, t, T, self.data.impingement[:,p], self.data.time, self.data.temperature, self.matrix)
             
             # Nucleation rate
             nucRate = nucfuncs.nucleationRate(Z, beta, Gcrit, T, tau, time=t)
             nucRate *= self._calcNucleationSites(t, x, p)  # don't forget to add nucleation sites since we compare this to min nucleation rate
 
             # TODO: using 0.01 seems arbitrary here, is there a better way to do this?
-            dt = t if self.pData.n == 0 else self.pData.time[self.pData.n] - self.pData.time[self.pData.n-1]
-            if nucRate*dt >= self.constraints.minNucleateDensity and Rcrit >= self.precipitateParameters[p].Rmin:
+            dt = t if self.data.n == 0 else self.data.time[self.data.n] - self.data.time[self.data.n-1]
+            if nucRate*dt >= self.constraints.minNucleateDensity and Rcrit >= self.precipitates[p].Rmin:
                 Rnuc = nucfuncs.nucleationRadius(T, Rcrit, precParams)
             else:
                 Rnuc = 0

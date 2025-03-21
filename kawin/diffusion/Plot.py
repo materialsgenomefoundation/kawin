@@ -3,33 +3,10 @@ from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
 
+from kawin.PlotUtils import _get_axis, _adjust_kwargs
 from kawin.diffusion.Diffusion import DiffusionModel
 from kawin.diffusion.DiffusionParameters import computeMobility, HashTable
 from kawin.diffusion.mesh import FiniteVolumeGrid, FiniteVolume1D, Cartesian2D
-
-def _get_axis(ax = None):
-    if ax is None:
-        fig, ax = plt.subplots()
-        return ax
-    else:
-        return ax
-    
-def _adjust_kwargs(varName, defaultKwargs = {}, userKwargs = {}):
-    '''
-    Merges default kwargs with user input kwargs
-    '''
-    # Search through all user kwargs (this ensures any kwarg not in defaultKwargs will be added)
-    for p in userKwargs:
-        # If the kwarg is already defined in defaultKwargs, then override default with user
-        if p in defaultKwargs:
-            # If user specifies a dict for the kwarg (based off varName, then get the variable specific kwarg)
-            if isinstance(userKwargs[p], dict) and varName in userKwargs[p]:
-                defaultKwargs[p] = userKwargs[p][varName]
-            else:
-                defaultKwargs[p] = userKwargs[p]
-        else:
-            defaultKwargs[p] = userKwargs[p]
-    return defaultKwargs
 
 def _get_1D_mesh(model: DiffusionModel):
     mesh: FiniteVolume1D = model.mesh
@@ -93,7 +70,7 @@ def plot1D(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=None, *
     if len(elements) > 1:
         ax.legend()
     ax.set_ylim([0,1])
-    ax.set_ylabel(f'Composition (at.%)')
+    ax.set_ylabel(f'Composition (at.)')
     return ax
 
 def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset=0, axL=None, axR=None, *args, **kwargs):
@@ -151,7 +128,7 @@ def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset
             elementLabel = f'[{elList}] '
         else:
             elementLabel = ''
-        ax.set_ylabel(f'Composition {elementLabel}(at.%)') 
+        ax.set_ylabel(f'Composition {elementLabel}(at.)') 
         ax.set_ylim([0,1])
 
     _set_1D_xlim(ax, mesh, zScale, zOffset)

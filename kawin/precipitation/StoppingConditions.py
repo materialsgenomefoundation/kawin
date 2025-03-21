@@ -110,35 +110,35 @@ class VolumeFractionCondition (PrecipitationStoppingCondition):
         super().__init__(condition, value, phase = phase)
 
     def _getData(self, model):
-        return model.pData.volFrac
+        return model.data.volFrac
 
 class AverageRadiusCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
 
     def _getData(self, model):
-        return model.pData.Ravg
+        return model.data.Ravg
         
 class DrivingForceCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
 
     def _getData(self, model):
-        return model.pData.drivingForce
+        return model.data.drivingForce
 
 class NucleationRateCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
 
     def _getData(self, model):
-        return model.pData.nucRate
+        return model.data.nucRate
 
 class PrecipitateDensityCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, phase = None):
         super().__init__(condition, value, phase = phase)
 
     def _getData(self, model):
-        return model.pData.precipitateDensity
+        return model.data.precipitateDensity
 
 class CompositionCondition (PrecipitationStoppingCondition):
     def __init__(self, condition, value, element = None):
@@ -146,4 +146,4 @@ class CompositionCondition (PrecipitationStoppingCondition):
 
     def _poll(self, model, n):
         e = 0 if self._element is None else model.elements.index(self._element)
-        return model.pData.composition[n,e]
+        return model.data.composition[n,e]

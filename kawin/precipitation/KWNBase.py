@@ -40,7 +40,7 @@ class PrecipitateBase(GenericModel):
         super().__init__()
 
         self.constraints = constraints if constraints is not None else Constraints()
-        self.temperatureParameters = temperature
+        self.temperatureParameters = TemperatureParameters(temperature)
         self.therm = thermodynamics
         self.removeCache = False
 

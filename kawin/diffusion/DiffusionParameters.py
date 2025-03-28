@@ -102,7 +102,10 @@ class TemperatureParameters:
         if len(args) == 2:
             self.setTemperatureArray(*args)
         elif len(args) == 1:
-            if callable(args[0]):
+            if isinstance(args[0], TemperatureParameters):
+                self.Tparameters = args[0].Tparameters
+                self.Tfunction = args[0].Tfunction
+            elif callable(args[0]):
                 self.setTemperatureFunction(args[0])
             else:
                 self.setIsothermalTemperature(args[0])

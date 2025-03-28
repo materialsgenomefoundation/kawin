@@ -602,11 +602,6 @@ class PopulationBalanceModel:
         -------
         dXdt (bins) - corresponds to dn_i/dt corrected to avoid negative bins
         '''
-        #indBelow = self._netFlux[1:-1]*dt < -psd[1:]
-        #self._netFlux[1:-1][indBelow] = -psd[1:][indBelow] / dt
-        #indAbove = self._netFlux[1:-1]*dt > psd[:-1]
-        #self._netFlux[1:-1][indAbove] = psd[:-1][indAbove] / dt
-
         indBelow = self._netFlux[:-1]*dt < -psd
         self._netFlux[:-1][indBelow] = -psd[indBelow] / dt
         indAbove = self._netFlux[1:]*dt > psd

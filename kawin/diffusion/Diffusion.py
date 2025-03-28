@@ -34,7 +34,7 @@ class DiffusionModel(GenericModel):
         if self.mesh.numResponses != len(self.elements):
             raise ValueError("Mesh dimensions must match independent elements")
 
-        self.temperatureParameters = temperature if temperature is not None else TemperatureParameters()
+        self.temperatureParameters = TemperatureParameters(temperature)
         self.constraints = constraints if constraints is not None else DiffusionConstraints()
         self.therm = thermodynamics
         self.hashTable = HashTable()
@@ -246,7 +246,7 @@ class DiffusionModel(GenericModel):
         self.isSetup = True
         self.record(self.currentTime) #Record at t = 0
 
-    def _getParis(self, t, xCurr):
+    def _getPairs(self, t, xCurr):
         '''
         Returns diffusivity-response pairs for diffusive fluxes
         '''

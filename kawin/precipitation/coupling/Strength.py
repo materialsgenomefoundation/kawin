@@ -1,5 +1,259 @@
+from abc import ABC, abstractmethod
 import numpy as np
 from kawin.precipitation.Plot import _get_time_axis
+
+class DislocationParameters:
+    '''
+    Parameters for dislocation line tension, used for all precipitate strength models
+
+    Parameters
+    ----------
+    G : float
+        Shear modulus of matrix (Pa)
+    b : float
+        Burgers vector (meters)
+    nu : float
+        Poisson ratio
+    ri : float (optional)
+        Dislocation core radius (meters)
+        If None, ri will be set to Burgers vector
+    r0 : float (optional)
+        Closest distance between parallel dislocations
+        For shearable precipitates, r0 is average distance between particles on slip plane
+        For non-shearable precipitates, r0 is average particle diameter on slip plane
+        If None, r0 will be set such that ln(r0/ri) = 2*pi
+    theta : float (optional)
+        Dislocation characteristic, 90 for edge, 0 for screw (default is 90)
+    psi : float (optional)
+        Dislocation bending angle (default is 120)
+    '''
+    def __init__(self, G, b, nu = 1/3, ri = None, theta = 90, psi = 120):
+        self.G = G
+        self.b = b
+        self.nu = nu
+        self.ri = b if ri is None else ri
+        self.theta = theta * np.pi/180
+        self.psi = psi * np.pi/180
+
+    def tension(self, r0, theta = None):
+        theta = self.theta if theta is None else theta
+        return self.G*self.b**2 / (4*np.pi) * (1 + self.nu - 3*self.nu*np.sin(theta)**2) / (1 - self.nu) * np.log(r0 / self.ri)
+    
+def orowanStrengthening(r, Ls, dislocations: DislocationParameters):
+    G = dislocations.G
+    b = dislocations.b
+    nu = dislocations.nu
+    ri = dislocations.ri
+    return G*b / (2*np.pi*np.sqrt(1 - nu)*Ls) * np.log(2*r/ri)
+
+class StrengthContributionBase(ABC):
+    @abstractmethod
+    def computeWeak(self, r, Ls, r0, dislocations: DislocationParameters):
+        raise NotImplementedError()
+    
+    @abstractmethod
+    def computeStrong(self, r, Ls, r0, dislocations: DislocationParameters):
+        raise NotImplementedError()
+    
+class CoherencyConstribution(StrengthContributionBase):
+    '''
+    Parameters for coherency effect
+
+    Parameters
+    ----------
+    eps : float
+        Lattice misfit strain
+    '''
+    def __init__(self, eps):
+        self.eps = eps
+
+    @staticmethod
+    def latticeMisfit(delta, dislocations: DislocationParameters):
+        '''
+        Strain (eps) from lattice misfit (delta)
+        '''
+        nu = dislocations.nu
+        return (1/3)*(1+nu)/(1-nu)*delta
+
+    def computeWeak(self, r, Ls, r0, dislocations: DislocationParameters):
+        theta = dislocations.theta
+        G = dislocations.G
+        b = dislocations.b
+        tension = dislocations.tension(r0)
+        return (1.3416*np.cos(theta)**2 + 4.1127*np.sin(theta)**2)/Ls * np.sqrt(b*(G*self.eps*r)**3/tension)
+    
+    def computeStrong(self, r, Ls, r0, dislocations: DislocationParameters):
+        theta = dislocations.theta
+        G = dislocations.G
+        b = dislocations.b
+        tension = dislocations.tension(r0)
+        return (2*np.cos(theta)**2 + 2.1352*np.sin(theta)**2)/Ls * np.power(G*self.eps*r*(tension/b)**3, 1/4)
+
+class ModulusContribution(StrengthContributionBase):
+    '''
+    Parameters for modulus effect
+
+    Parameters
+    ----------
+    Gp : float
+        Shear modulus of precipitate
+    w1 : float (optional)
+        First factor for Nembach model taking value between 0.0175 and 0.0722
+        Default at 0.05
+    w2 : float (optional)
+        Second factor for Nembach model taking value of 0.81 +/- 0.09
+        Default at 0.85
+    '''
+    def __init__(self, Gp, w1=0.05, w2=0.85):
+        self.Gp = Gp
+        self.w1 = w1
+        self.w2 = w2
+
+    def f(self, r, G, b):
+        '''
+        Term for modulus effect
+        '''
+        return self.w1*np.abs(G-self.Gp)*np.power(r/b, self.w2)*b**2
+
+    def computeWeak(self, r, Ls, r0, dislocations: DislocationParameters):
+        '''
+        Modulus effect for mixed dislocation on weak and shearable particles
+        '''
+        G = dislocations.G
+        b = dislocations.b
+        tension = dislocations.tension(r0)
+        return 2*tension/(b*Ls) * np.power(self.f(r, G, b)/(2*tension), 3/2)
+
+    def computeStrong(self, r, Ls, r0, dislocations: DislocationParameters):
+        '''
+        Modulus effect for edge or screw dislocation on strong and shearable particles
+        '''
+        G = dislocations.G
+        b = dislocations.b
+        return self.f(r, G, b)/(b*Ls)
+    
+class AFBConstribution(StrengthContributionBase):
+    '''
+    Parameters for anti-phase boundary effect for ordered precipitates in a disordered matrix
+
+    Parameters
+    ----------
+    yAPB : float
+        Anti-phase boundary energy
+    s : int (optional)
+        Number of leading + trailing dislocations to repair anti-phase boundary
+        Default at 2
+    beta : float (optional)
+        Factor representating dislocation shape (between 0 and 1)
+        Default at 1
+    V : float (optional)
+        Correction factor accounting for extra dislocations and uncertainties
+        Default at 2.8
+    '''
+    def __init__(self, yAPB, s=2, beta=1, V=2.8):
+        self.yAPB = yAPB
+        self.s = s
+        self.beta = beta
+        self.V = V
+
+    def computeWeak(self, r, Ls, r0, dislocations: DislocationParameters):
+        b = dislocations.b
+        tension = dislocations.tension(r0)
+        return 2/(self.s*b*Ls) * (2*tension*np.power(r*self.yAPB/tension, 3/2) - 16*self.beta*self.yAPB*r**2/(3*np.pi*Ls))
+
+    def computeStrong(self, r, Ls, r0, dislocations: DislocationParameters):
+        b = dislocations.b
+        tension = dislocations.tension(r0)
+        return 0.69/(b*Ls) * np.sqrt(8*self.V*tension*r*self.yAPB/3)
+    
+class SFEContribution(StrengthContributionBase):
+    '''
+    Parameters for stacking fault energy effect
+
+    Parameters
+    ----------
+    ySFM : float
+        Stacking fault energy of matrix
+    ySFP : float
+        Stacking fault energy of precipitate
+    bp : float (optional)
+        Burgers vector in precipitate
+        If None, will be set to burgers vector in matrix
+    '''
+    def __init__(self, ySFM, ySFP, bp = None):
+        self.ySFM = ySFM
+        self.ySFP = ySFP
+        self.bp = bp
+
+    def K(self, dislocations: DislocationParameters):
+        G = dislocations.G
+        bp = dislocations.b if self.bp is None else self.bp
+        nu = dislocations.nu
+        theta = dislocations.theta
+        return G*bp**2 * (2 - nu - 2*nu*np.cos(2*theta))/(8*np.pi*(1 - nu))
+
+    def Weff(self, dislocations: DislocationParameters):
+        '''
+        Effective stacking fault width for mixed dislocations
+        '''
+        return 2*self.K(dislocations)/(self.ySFM + self.ySFP)
+
+    def f(self, r, dislocations: DislocationParameters):
+        '''
+        Stacking fault term
+        '''
+        return 2*(self.ySFM - self.ySFP)*np.sqrt(self.Weff(dislocations)*r - self.Weff(dislocations)**2/4)
+
+    def computeWeak(self, r, Ls, r0, dislocations: DislocationParameters):
+        b = dislocations.b
+        tension = dislocations.tension(r0)
+        return 2*tension/(b*Ls)*np.power(self.f(r, dislocations)/(2*tension), 3/2)
+
+    def computeStrong(self, r, Ls, r0, dislocations: DislocationParameters):
+        b = dislocations.b
+        return self.f(r, dislocations)/(b*Ls)
+
+class InterfacialContribution(StrengthContributionBase):
+    '''
+    Parameters for interfacial effect
+
+    Parameters
+    ----------
+    gamma : float
+        Interfacial energy of matrix/precipitate surface
+    '''
+    def __init__(self, gamma):
+        self.gamma = gamma
+
+    def computeWeak(self, r, Ls, r0, dislocations: DislocationParameters):
+        b = dislocations.b
+        tension = dislocations.tension(r0)
+        return 2*tension/(b*Ls)*np.power(self.gamma*b/tension, 3/2)
+
+    def computeStrong(self, r, Ls, r0, dislocations: DislocationParameters):
+        return 2*self.gamma/Ls
+    
+class SolidSolutionStrength:
+    '''
+    Model for solid solution strengthening
+
+    Parameters
+    ----------
+    weights : dictionary
+        Dictionary mapping element (str) to weight (float). Weights are in units of (Pa)
+    exp : float
+        Exponential factor for weights
+    '''
+    def __init__(self, weights, exp = 1):
+        self.weights = weights
+        self.exp = exp
+    
+    def compute(self, composition, elements):
+        val = 0
+        for e, val in zip(elements, composition):
+            if e in self.weights:
+                val += self.weights[e]*val**self.exp
+        return val
 
 class StrengthModel:
     '''

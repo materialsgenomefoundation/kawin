@@ -17,10 +17,11 @@ Changes to the number of nucleation sites is taken from 2024b TC-Prisma user gui
     To get total nucleation sites, we assume the n-d space is 1 atom thick, and multiply by
     the number of atoms / dimension (N_A / V_m)^(d/3)
 '''
+from abc import ABC, abstractmethod
 import numpy as np
 from kawin.Constants import AVOGADROS_NUMBER
 
-class NucleationDescriptionBase:
+class NucleationDescriptionBase (ABC):
     name = 'ABSTRACT NUCLEATION DESCRIPTION'
     maxRatio = np.inf
 
@@ -60,6 +61,7 @@ class NucleationDescriptionBase:
         values[indices] = self._gbRemoval(valid_gbk)
         return self._formatArray(values, indices, setInvalidToNan)
     
+    @abstractmethod
     def _gbRemoval(self, gbk):
         raise NotImplementedError()
     
@@ -68,6 +70,7 @@ class NucleationDescriptionBase:
         values[indices] = self._areaFactor(valid_gbk)
         return self._formatArray(values, indices, setInvalidToNan)
     
+    @abstractmethod
     def _areaFactor(self, gbk):
         raise NotImplementedError()
     
@@ -76,6 +79,7 @@ class NucleationDescriptionBase:
         values[indices] = self._volumeFactor(valid_gbk)
         return self._formatArray(values, indices, setInvalidToNan)
     
+    @abstractmethod
     def _volumeFactor(self, gbk):
         raise NotImplementedError()
     

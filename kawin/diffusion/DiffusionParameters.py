@@ -515,6 +515,8 @@ def _computeSingleMobility(therm: GeneralThermodynamics, x: np.array, T: np.arra
             wks = therm.getEq(x, T, 0, therm.phases)
             chemical_potentials = np.squeeze(wks.eq.MU)[unsortIndices]
             comp_sets = wks.get_composition_sets()
+            if len(comp_sets) == 0 or any(np.isnan(chemical_potentials)):
+                raise ValueError("Equilibrium did not converge")
         except Exception as e:
             print(f'Error at {x}, {T}')
             raise e

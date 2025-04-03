@@ -38,11 +38,22 @@ class MixedBoundary1D(BoundaryCondition):
         '''Sets boundary condition to given side (left or right)'''
         index = _getResponseIndex(responseVar, self.responses)
 
-        if bcType == MixedBoundary1D.NEUMANN or bcType.upper() == 'FLUX' or bcType == 'NEUMANN':
-            bcTypeArray[index] = MixedBoundary1D.NEUMANN
-        elif bcType == MixedBoundary1D.DIRICHLET or bcType.upper() == 'COMPOSITION' or bcType.upper() == 'DIRICHLET':
-            bcTypeArray[index] = MixedBoundary1D.DIRICHLET
+        setBC = True
+        if isinstance(bcType, str):
+            if bcType.upper() == 'FLUX' or bcType.upper() == 'NEUMANN':
+                bcTypeArray[index] = MixedBoundary1D.NEUMANN
+            elif bcType.upper() == 'COMPOSITION' or bcType.upper() == 'DIRICHLET':
+                bcTypeArray[index] = MixedBoundary1D.DIRICHLET
+            else:
+                setBC = False
         else:
+            if bcType == MixedBoundary1D.NEUMANN:
+                bcTypeArray[index] = MixedBoundary1D.NEUMANN
+            elif bcType == MixedBoundary1D.DIRICHLET:
+                bcTypeArray[index] = MixedBoundary1D.DIRICHLET
+            else:
+                setBC = False
+        if not setBC:
             raise ValueError(f"bcType must be one of the following [flux, neumann, composition, dirichlet, MixedBoundary1D.NEUMANN, MixedBoundary1D.DIRICHLET]")
         bcValueArray[index] = value
 

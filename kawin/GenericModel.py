@@ -1,7 +1,7 @@
-from kawin.solver.Solver import SolverType, DESolver
-import numpy as np
-from typing import List
 import copy
+from typing import List
+import numpy as np
+from kawin.solver import DESolver, rk4Iterator
 
 class GenericModel:
     '''
@@ -283,7 +283,7 @@ class GenericModel:
                 n += arrLen
         return X_new
 
-    def solve(self, simTime, solverType = SolverType.RK4, verbose=False, vIt=10, minDtFrac = 1e-8, maxDtFrac = 1):
+    def solve(self, simTime, iterator = rk4Iterator, verbose=False, vIt=10, minDtFrac = 1e-8, maxDtFrac = 1):
         '''
         Solves model using the DESolver
 
@@ -297,7 +297,7 @@ class GenericModel:
         ----------
         simTime : float
             Simulation time (as a delta from current time)
-        solverType : SolverType or Iterator (defaults to SolverType.RK4)
+        iterator : Iterator function (defaults to rk4Iterator)
             Defines what iteration scheme to use
         verbose : bool (defaults to False)
             Outputs status if true
@@ -310,7 +310,7 @@ class GenericModel:
         '''
         self.setup()
 
-        solver = DESolver(solverType, minDtFrac = minDtFrac, maxDtFrac = maxDtFrac)
+        solver = DESolver(iterator, minDtFrac = minDtFrac, maxDtFrac = maxDtFrac)
         solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printHeader=self.printHeader, printStatus=self.printStatus)
         solver.setdXdtFunctions(self.getdXdt, self.correctdXdt, self.getDt, self.flattenX, self.unflattenX)
         

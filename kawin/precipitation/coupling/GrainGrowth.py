@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from kawin.GenericModel import GenericModel
-from kawin.solver import SolverType
+from kawin.solver import rk4Iterator
 from kawin.precipitation import PrecipitateModel
 from kawin.precipitation import PopulationBalanceModel
 from kawin.PlotUtils import _get_axis
@@ -34,14 +34,14 @@ class GrainGrowthModel(GenericModel):
         Factor related to spatial distribution of precipitates
         Maps a phase name to the factor
         Default = 4/3 for all phases
-    solverType: SolverType (optional)
-        Solver function for model
-        Default is RK4
+    iterator: iterator function (optional)
+        Iterator function for model
+        Default is rk4Iterator
     pbmKwargs: dict[str, int | float] (optional)
         Arguments to define population balance model
         Default is {cMin = 1e-10, cMax = 1e-8}
     '''
-    def __init__(self, gbe=0.5, M=1e-14, alpha=1, m={}, K={}, solverType=SolverType.RK4, pbmKwargs={'cMin': 1e-10, 'cMax': 1e-8}):
+    def __init__(self, gbe=0.5, M=1e-14, alpha=1, m={}, K={}, iterator=rk4Iterator, pbmKwargs={'cMin': 1e-10, 'cMax': 1e-8}):
         super().__init__()
         self.pbm = PopulationBalanceModel(**pbmKwargs)
         self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
@@ -57,7 +57,7 @@ class GrainGrowthModel(GenericModel):
         self._mdefault = 1
         self._Kdefault = 4/3
 
-        self.solverType = solverType
+        self.iterator = iterator
 
         self.maxDissolution = 1e-6
 
@@ -290,7 +290,7 @@ class GrainGrowthModel(GenericModel):
         model : PrecpitateModel
         '''
         self.computeZenerRadius(model)
-        self.solve(model.data.time[model.data.n] - model.data.time[model.data.n-1], solverType=self.solverType)
+        self.solve(model.data.time[model.data.n] - model.data.time[model.data.n-1], iterator=self.iterator)
 
 def _plot_grain_growth_generic(model: GrainGrowthModel, func, ax=None, *args, **kwargs):
     ax = _get_axis(ax)

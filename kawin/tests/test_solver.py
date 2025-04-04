@@ -6,7 +6,7 @@ from kawin.diffusion import SinglePhaseModel, TemperatureParameters as DiffTemp
 from kawin.diffusion.mesh import ProfileBuilder, Cartesian1D, LinearProfile1D
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.GenericModel import GenericModel, Coupler
-from kawin.solver import SolverType
+from kawin.solver import explicitEulerIterator, rk4Iterator
 from kawin.tests.datasets import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
@@ -45,11 +45,11 @@ def test_iterators():
             return x, False
         
     m = TestModel()
-    m.solve(10, solverType=SolverType.EXPLICITEULER)
+    m.solve(10, iterator=explicitEulerIterator)
     eulerX = m.x[-1]
 
     m.reset()
-    m.solve(10, solverType=SolverType.RK4)
+    m.solve(10, iterator=rk4Iterator)
     rkX = m.x[-1]
 
     assert_allclose(eulerX, np.sin(10), rtol=1e-2)

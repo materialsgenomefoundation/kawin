@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kawin.precipitation import PopulationBalanceModel
-from kawin.solver import SolverType
 from kawin.GenericModel import GenericModel
+from kawin.solver import SolverType
+from kawin.precipitation import PrecipitateModel
+from kawin.precipitation import PopulationBalanceModel
 from kawin.PlotUtils import _get_axis
 from kawin.precipitation.PopulationBalance import plotPSD, plotPDF, plotCDF
 from kawin.precipitation.Plot import _get_time_axis
@@ -16,81 +17,51 @@ class GrainGrowthModel(GenericModel):
 
     Parameters
     ----------
-    cMin : float (optional)
-        Minimum grain size (default is 1e-10)
-    cMax : float (optional)
-        Maximum grain size (default is 1e-8)
-    bins : int (optional)
-        Initial bins (default is 150)
-    minBins : int (optional)
-        Minimum number of bins (default is 100)
-    maxBins : int (optional)
-        Maximum number of bins (default is 200)
+    gbe: float (optional)
+        Grain boundary energy
+        Default = 0.5
+    M: float (optional)
+        Grain boundary mobility
+        Default = 1e-14
+    alpha: float (optional)
+        Correction factor (for when fitting data to the model)
+        Default = 1
+    m: dict[str, float] (optional)
+        Factor related to spatial distribution of precipitates
+        Maps a phase name to the factor
+        Default = 1 for all phases
+    K: dict[str, float] (optional)
+        Factor related to spatial distribution of precipitates
+        Maps a phase name to the factor
+        Default = 4/3 for all phases
+    solverType: SolverType (optional)
+        Solver function for model
+        Default is RK4
+    pbmKwargs: dict[str, int | float] (optional)
+        Arguments to define population balance model
+        Default is {cMin = 1e-10, cMax = 1e-8}
     '''
-    def __init__(self, cMin = 1e-10, cMax = 1e-8, bins = 150, minBins = 100, maxBins = 200, solverType = SolverType.RK4):
+    def __init__(self, gbe=0.5, M=1e-14, alpha=1, m={}, K={}, solverType=SolverType.RK4, pbmKwargs={'cMin': 1e-10, 'cMax': 1e-8}):
         super().__init__()
-        self.pbm = PopulationBalanceModel(cMin, cMax, bins, minBins, maxBins)
+        self.pbm = PopulationBalanceModel(**pbmKwargs)
         self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
 
         #Model parameters - these are values taken from the paper as general default values
-        self.gbe = 0.5      #Grain boundary energy (J/m2)
-        self.M = 1e-14      #Grain boundary mobility (m4/J-s)
-        self.alpha = 1      #Correction factor (for when fitting data to the model)
-        self.m, self.K = {'all': 1}, {'all': 4/3}   #Factors related to spatial distribution of precipitates
+        self.gbe = gbe      #Grain boundary energy (J/m2)
+        self.M = M      #Grain boundary mobility (m4/J-s)
+        self.alpha = alpha      #Correction factor (for when fitting data to the model)
+
+        #Factors related to spatial distribution of precipitates
+        self.m = m
+        self.K = K   
+        self._mdefault = 1
+        self._Kdefault = 4/3
 
         self.solverType = solverType
 
         self.maxDissolution = 1e-6
 
         self.reset()
-
-    def setGrainBoundaryEnergy(self, gbe):
-        '''
-        Parameters
-        ----------
-        gbe : float
-            Grain boundary energy
-        '''
-        self.gbe = gbe
-
-    def setGrainBoundaryMobility(self, M):
-        '''
-        Parameters
-        ----------
-        M : float
-            Grain boundary mobility
-        '''
-        self.M = M
-
-    def setAlpha(self, alpha):
-        '''
-        Correction factor
-
-        Parameters
-        ----------
-        alpha : float
-        '''
-        self.alpha = alpha
-
-    def setZenerParameters(self, m, K, phase='all'):
-        '''
-        Parameters for defining zener radius
-
-        Zener radius is defined as
-        Rz = K * r / f^m
-
-        Parameters
-        ----------
-        m : float
-            Exponential factor for volume fraction
-        K : float
-            Scaling factor
-        phase : str (optional)
-            Precipitate phase to apply parameters to
-            Default is 'all'
-        '''
-        self.m[phase] = m
-        self.K[phase] = K
 
     def loadDistribution(self, data):
         '''
@@ -276,27 +247,7 @@ class GrainGrowthModel(GenericModel):
         '''
         print('{}\t\t{:.1e}\t\t{:.1f}\t\t{:.3e}'.format(iteration, modelTime, simTimeElapsed, self.avgR[-1]*1e6))
 
-    def computeZenerRadius(self, model):
-        '''
-        Gets zener radius/drag force from PrecipitateModel
-
-        Drag force is defined as z_j = f_j^m_j / (K_j * avgR_j)
-            Where f_j is volume fraction for phase j
-            And   avgR_j is average radius for phase j
-        The total drag force is the sum of z_j over all the phases
-
-        Parameters
-        ----------
-        model : PrecpitateModel
-        '''
-        z = np.zeros(len(model.phases))
-        for p in range(len(model.phases)):
-            phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
-            if model.data.Ravg[model.data.n,p] > 0:
-                z[p] += np.power(model.data.volFrac[model.data.n,p], self.m[phaseName]) / (self.K[phaseName] * model.data.Ravg[model.data.n,p])
-        self._z = np.sum(z)
-
-    def computeZenerRadiusByN(self, model, x):
+    def computeZenerRadius(self, model: PrecipitateModel, x=None):
         '''
         Gets zener radius/drag force from PrecipitateModel and PSD defined by x
 
@@ -311,17 +262,21 @@ class GrainGrowthModel(GenericModel):
         x : list[np.array]
             List of particle size distributions in model
         '''
+        if x is None:
+            x = model.getCurrentX()
+
         z = np.zeros(len(model.phases))
         for p in range(len(model.phases)):
             volRatio = model.matrix.volume.Vm / model.precipitates[p].volume.Vm
-            phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
+            m = self.m.get(model.phases[p], self._mdefault)
+            K = self.K.get(model.phases[p], self._Kdefault)
             Ntot = model.PBM[p].zeroMoment(N=x[p])
             RadSum = model.PBM[p].moment(order=1, N=x[p])
             fBeta = np.amin([volRatio * model.precipitates[p].nucleation.volumeFactor * model.PBM[p].thirdMoment(N=x[p]), 1])
             avgR = 0 if Ntot == 0 else RadSum / Ntot
 
             if avgR > 0:
-                z[p] += np.power(fBeta, self.m[phaseName]) / (self.K[phaseName] * avgR)
+                z[p] += np.power(fBeta, m) / (K * avgR)
             
         self._z = np.sum(z)
 

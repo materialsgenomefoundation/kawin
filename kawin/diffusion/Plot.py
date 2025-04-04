@@ -309,7 +309,9 @@ def plot2DPhases(model: DiffusionModel, phase, zScale=1, ax=None, *args, **kwarg
     flatZ = mesh.flattenSpatial(mesh.z)
     flatY = mesh.flattenResponse(mesh.y)
     T = model.temperatureParameters(flatZ, model.currentTime)
-    mob_data = computeMobility(model.therm, flatY, T, model.hashTable)
+    # Temporary hash table, since we don't want to interfere with the internal model hash
+    hashTable = HashTable()
+    mob_data = computeMobility(model.therm, flatY, T, hashTable)
     pf = []
     for p_labels, p_fracs in zip(mob_data.phases, mob_data.phase_fractions):
         pf.append(np.sum(p_fracs[p_labels==phase]))
@@ -317,7 +319,7 @@ def plot2DPhases(model: DiffusionModel, phase, zScale=1, ax=None, *args, **kwarg
     # Reshape phase fraction to mesh shape (this will be (Nx, Ny, 1) for Cartesian2D)
     pf = mesh.unflattenResponse(pf, 1)
     plot_kwargs = _adjust_kwargs(phase, {'vmin': 0, 'vmax': 1}, kwargs)
-    cm = ax.pcolormesh(mesh.z[...,0]/zScale[0], mesh.z[...,1]/zScale[1], pf, *args, **plot_kwargs)
+    cm = ax.pcolormesh(mesh.z[...,0]/zScale[0], mesh.z[...,1]/zScale[1], pf[...,0], *args, **plot_kwargs)
     ax.set_title(phase)
     ax.set_xlabel(f'Distance x*{zScale[0]:.0e} (m)')
     ax.set_ylabel(f'Distance y*{zScale[1]:.0e} (m)')

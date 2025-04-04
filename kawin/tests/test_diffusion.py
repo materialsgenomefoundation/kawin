@@ -5,7 +5,8 @@ from numpy.testing import assert_allclose
 import pytest
 
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel, TemperatureParameters
-from kawin.diffusion.mesh import Cartesian1D, ProfileBuilder, StepProfile1D, LinearProfile1D
+from kawin.diffusion.mesh import Cartesian1D, Cylindrical1D, Spherical1D, Cartesian2D, MixedBoundary1D, PeriodicBoundary1D
+from kawin.diffusion.mesh import ProfileBuilder, StepProfile1D, LinearProfile1D, DiracDeltaProfile, ConstantProfile, GaussianProfile, ExperimentalProfile1D, BoundedEllipseProfile, BoundedRectangleProfile
 from kawin.diffusion.DiffusionParameters import computeMobility, TemperatureParameters
 from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 from kawin.thermo import GeneralThermodynamics
@@ -201,34 +202,47 @@ def test_single_phase_dxdt():
     This uses the parameters from 06_Single_Phase_Diffusion example with the composition
     being linear rather then step functions
     '''
-
     profile = ProfileBuilder()
-    profile.addBuildStep(LinearProfile1D(-1e-3, [0.077, 0.054], 1e-3, [0.359, 0.062]), ['CR', 'AL'])
-    mesh = Cartesian1D(['CR', 'AL'], [-1e-3, 1e-3], 20)
-    mesh.setResponseProfile(profile)
-    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, TemperatureParameters(1473.15))
-    m.setup()
-    dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
-    dt = m.getDt(dxdt)
+    profile.addBuildStep(LinearProfile1D(0, [0.077, 0.054], 2e-3, [0.359, 0.062]), ['CR', 'AL'])
+    meshes = [
+        Cartesian1D(['CR', 'AL'], [0, 2e-3], 20),
+        Cylindrical1D(['CR', 'AL'], [0, 2e-3], 20),
+        Spherical1D(['CR', 'AL'], [0, 2e-3], 20)
+    ]
 
-    #Index 5
-    ind5, vals5 = 5, np.array([1.63031418e-9, 5.87290513e-10])
-
-    #Index 10
-    ind10, vals10 = 10, np.array([1.54252455e-9, 1.08801591e-9])
-
-    #Index 15
-    ind15, vals15 = 15, np.array([1.59190900e-9, 1.79208543e-9])
-    
-    # assert_allclose(dxdt[0][:,ind5], vals5, atol=0, rtol=1e-3)
-    # assert_allclose(dxdt[0][:,ind10], vals10, atol=0, rtol=1e-3)
-    # assert_allclose(dxdt[0][:,ind15], vals15, atol=0, rtol=1e-3)
-    # assert_allclose(dt, 28721.530474, rtol=1e-3)
-    print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
-    assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
-    assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
-    assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 25902.839039, rtol=1e-3)
+    vals5 = [
+        np.array([1.63031418e-9, 5.87290513e-10]),
+        np.array([1.34386193e-8, 8.02074750e-9]),
+        np.array([2.52603986e-8, 1.54590585e-8]),
+    ]
+    vals10 = [
+        np.array([1.54252455e-9, 1.08801591e-9]),
+        np.array([8.47547223e-9, 5.37498213e-9]),
+        np.array([1.54119182e-8, 9.66441601e-9]),
+    ]
+    vals15 = [
+        np.array([1.59190900e-9, 1.79208543e-9]),
+        np.array([6.79212648e-9, 5.15379480e-9]),
+        np.array([1.19940010e-8, 8.51736977e-9]),
+    ]
+    # dt should be the same for all three meshes for single phase model since it only depends on D
+    dts = [
+        25902.839039,
+        25902.839039,
+        25902.839039,
+    ]
+    for i, mesh in enumerate(meshes):
+        mesh.setResponseProfile(profile)
+        m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, 1473.15)
+        m.setup()
+        dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
+        dt = m.getDt(dxdt)
+        
+        print(dxdt[0][5], dxdt[0][10], dxdt[0][15], dt)
+        assert_allclose(dxdt[0][5], vals5[i], rtol=1e-3)
+        assert_allclose(dxdt[0][10], vals10[i], rtol=1e-3)
+        assert_allclose(dxdt[0][15], vals15[i], rtol=1e-3)
+        assert_allclose(dt, dts[i], rtol=1e-3)
 
 def test_diffusion_x_shape():
     '''
@@ -368,4 +382,124 @@ def test_diffusionSavingLoading():
     assert_allclose(m.mesh.y, new_m.mesh.y)
     assert_allclose(m.currentTime, new_m.currentTime)
 
+def test_single_phase_2d():
+    '''
+    Test Cartesion2D mesh in a single phase model
+    '''
+    profile = ProfileBuilder([
+        (BoundedRectangleProfile([1e-3, 1e-3], [2e-3, 2e-3], [0.077, 0.054], [0.359, 0.062]), ['CR', 'AL'])
+    ])
+    mesh = Cartesian2D(['CR', 'AL'], [0, 2e-3], 20, [0, 2e-3], 20)
+    mesh.setResponseProfile(profile)
+
+    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, 1473.15)
+    m.setup()
+    dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
+    dt = m.getDt(dxdt)
+
+    print(dxdt[0][10,10])
+    print(dt)
+    assert_allclose(dxdt[0][10,10], [2.85828916e-6, 2.01865282e-6], rtol=1e-3)
+    assert_allclose(dt, 12630.562798, rtol=1e-3)
+
+def test_diffusion_profile():
+    '''
+    Test output of different profile build steps
+    Constant, Gaussian, Dirac, Rectangle and Ellipse should support more than 1 dimension and response
+    '''
+    linear = LinearProfile1D(leftZ=0.25, leftValue=0.1, rightZ=0.75, rightValue=0.9, lowerLeftValue=0.2, upperRightValue=0.7)
+    step = StepProfile1D(z=0.4, leftValue=0.2, rightValue=0.7)
+    dirac = DiracDeltaProfile(z=0.61, value=0.8)
+    constant = ConstantProfile(value=0.3)
+    gaussian = GaussianProfile(z=0.6, sigma=0.2, maxValue=0.5)
+    exp = ExperimentalProfile1D(z=[0, 0.1, 0.6, 1], values=[0, 0.5, 0.1, 0.3])
+    rect = BoundedRectangleProfile(lowerZ=0.25, upperZ=0.75, innerValue=0.3, outerValue=0.6)
+
+    indices = [5, 30, 60, 95]
+    profiles = [
+        (linear, [0.2, 0.188, 0.668, 0.7]),
+        (step, [0.2, 0.2, 0.7, 0.7]),
+        (dirac, [0, 0, 0.8, 0]),
+        (constant, [0.3, 0.3, 0.3, 0.3]),
+        (gaussian, [2.97894e-4, 5.67686e-2, 4.99688e-1, 2.14127e-2]),
+        (exp, [0.275, 0.336, 0.1025, 0.2775]),
+        (rect, [0.6, 0.3, 0.3, 0.6])
+    ]
+    for p in profiles:
+        mesh = Cartesian1D(1, [0, 1], 100)
+        profile = ProfileBuilder()
+        profile.addBuildStep(p[0])
+        mesh.setResponseProfile(profile)
+        assert_allclose(mesh.y[indices,0], p[1], rtol=1e-3)
+
+    constant = ConstantProfile([0.3, 0.5])
+    gaussian = GaussianProfile(z=[0.3,0.4], sigma=[0.2,0.5], maxValue=[0.2,0.3])
+    dirac = DiracDeltaProfile(z=[0.51, 0.51], value=[0.2, 0.1])
+    rect = BoundedRectangleProfile(lowerZ=[0.5,0.5], upperZ=[0.6, 0.7], innerValue=[0.5, 0.1], outerValue=[0.2, 0.3])
+    ell = BoundedEllipseProfile(z=[0.65, 0.65], r=[0.1, 0.1], innerValue=[0.5, 0.1], outerValue=[0.2, 0.3])
+
+    indices = [[20,20], [50,50], [70,70]]
+    profiles = [
+        (constant, [[0.3, 0.5], [0.3, 0.5], [0.3, 0.5]]),
+        (gaussian, [[1.37084e-1, 2.05626e-1], [6.69263e-2, 1.00389e-1], [2.28323e-3, 3.42485e-3]]),
+        (dirac, [[0,0], [0.2,0.1], [0,0]]),
+        (rect, [[0.2, 0.3], [0.5, 0.1], [0.2, 0.3]]),
+        (ell, [[0.2, 0.3], [0.2, 0.3], [0.5, 0.1]]),
+    ]
+    for p in profiles:
+        mesh = Cartesian2D(2, [0,1], 100, [0,1], 100)
+        profile = ProfileBuilder()
+        profile.addBuildStep(p[0], [0,1])
+        mesh.setResponseProfile(profile)
+        for i, ind in enumerate(indices):
+            assert_allclose(mesh.y[ind[0], ind[1]], p[1][i], rtol=1e-3)
+
+def test_diffusion_boundary_conditions():
+    profile = ProfileBuilder()
+    profile.addBuildStep(LinearProfile1D(0, [0.077, 0.054], 2e-3, [0.359, 0.062]), ['CR', 'AL'])
+
+    bc = MixedBoundary1D(['CR', 'AL'])
+    # We test the different input types (name and int)
+    bc.setLBC('CR', 'dirichlet', 0.7)
+    bc.setLBC('AL', MixedBoundary1D.DIRICHLET, 0.2)
+    bc.setLBC('AL', 'composition', 0.2)
+    bc.setRBC('CR', 'flux', 0)
+    bc.setRBC('CR', 'neumann', 0)
+    bc.setRBC('CR', MixedBoundary1D.NEUMANN, 1e-5)
+    # Assert that a value error is raised for
+    #  a. incorrect response variable
+    #  b. incorrect int for boundary type
+    #  c. incorrect str for boundary type
+    with pytest.raises(ValueError):
+        bc.setLBC('a', 'dirichlet', 0)
+    with pytest.raises(ValueError):
+        bc.setLBC('CR', 3, 0)
+    with pytest.raises(ValueError):
+        bc.setLBC('CR', 'comp', 0)
+
+    mesh = Cartesian1D(['CR', 'AL'], [0, 2e-3], 20, computeMidpoint=True)
+    mesh.setResponseProfile(profile, bc)
+    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, 1473.15)
+    m.setup()
+    dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
+    dt = m.getDt(dxdt)
+    print(dt)
+    print(dxdt)
+
+    assert_allclose(dt, 5031.54489, rtol=1e-3)
+    assert_allclose(dxdt[0][0], [0, 0], atol=1e-3)
+    assert_allclose(dxdt[0][-1], [-1e-1, -5.94812538e-8], rtol=1e-3)
+
+    periodic = PeriodicBoundary1D()
+    mesh = Cartesian1D(['CR', 'AL'], [0, 2e-3], 20, computeMidpoint=True)
+    mesh.setResponseProfile(profile, periodic)
+    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, 1473.15)
+    m.setup()
+    fluxes = m.getFluxes(m.currentTime, m.getCurrentX())
+    dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
+    dt = m.getDt(dxdt)
+
+    # First and last flux should be equal
+    assert_allclose(dt, 26548.48400, rtol=1e-3)
+    assert_allclose(fluxes[0], fluxes[-1], rtol=1e-3)
 

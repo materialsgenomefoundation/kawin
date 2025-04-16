@@ -73,7 +73,6 @@ class PrecipitationData:
 class TemperatureParameters:
     def __init__(self, *args):
         if len(args) == 2:
-            print(args)
             self.setTemperatureArray(*args)
         elif len(args) == 1:
             if isinstance(args[0], TemperatureParameters):

@@ -116,7 +116,6 @@ def get_mob_data(dbf: Database, comps: Sequence[str], phases: Sequence[str], dat
 
 def calc_mob_differences(data : NonEquilibriumMobilityData, parameters : np.ndarray):
     diffs, wts = [], []
-    print(data.parameter_keys, parameters)
     paramDict = {data.parameter_keys[i] : parameters[i] for i in range(len(data.parameter_keys))}
         
     #Update phase record parameters

@@ -80,7 +80,6 @@ def setup_mobility_fitting_description(diffusing_species, fit_to_tracer = False)
             to those values instead
     '''
     steps = []
-    print(diffusing_species)
     for e in diffusing_species:
         if fit_to_tracer:
             Dstar = type(f'Tracer_{e}', (StepTracerDiffusivity,), {'parameter_name': f'MQ_{e}', 'data_types_read': f'TRACER_DIFF_{e}'})

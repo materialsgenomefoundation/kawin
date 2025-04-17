@@ -12,6 +12,9 @@ from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.precipitation.coupling import GrainGrowthModel, StrengthModel, CoherencyContribution, DislocationParameters, SolidSolutionStrength
 from kawin.precipitation.coupling import plotGrainCDF, plotGrainPDF, plotGrainPSD, plotRadiusvsTime, plotPrecipitateStrengthOverTime, plotContributionOverTime, plotAlloyStrength
 
+from kawin.precipitation.StoppingConditions import Inequality, VolumeFractionCondition, AverageRadiusCondition, DrivingForceCondition, NucleationRateCondition, PrecipitateDensityCondition, CompositionCondition
+from kawin.precipitation.TimeTemperaturePrecipitation import TTPCalculator, plotTTP
+
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
 D0 = 0.0768         #Diffusivity pre-factor (m2/s)
 Q = 242000          #Activation energy (J/mol)
@@ -52,7 +55,7 @@ def test_binary_precipitation_dxdt():
 
     #Create model
     model = PrecipitateModel(matrix, precipitate, AlZrTherm, T)
-    model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=75, minBins=50, maxBins=100)
+    model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=75, minBins=50, maxBins=100, phase='AL3ZR')
 
     #This roughly follows the steps in model.solve so we can get dxdt
     model.setup()
@@ -296,5 +299,118 @@ def test_precipitationCoupling():
     plotAlloyStrength(model, strengthModel, plotContributions=True, ax=ax)
     assert len(ax.lines) == 4
     plt.close(fig)
+
+def test_precipitationStopping():
+    '''
+    Test stopping conditions
+
+    For each condition, we test whether it returns the correct satisfaction value (True if condition was satisfied)
+    If condition is satisfied, we also test the interpolate time
+
+    Also test usage in precipitate model with 'or'or 'and' conditions
+    '''
+    phases = ['FCC_A1', 'MGSI_B_P', 'MG5SI6_B_DP', 'B_PRIME_L', 'U1_PHASE', 'U2_PHASE']
+    precParams = []
+    gamma = {
+        'MGSI_B_P': 0.18,
+        'MG5SI6_B_DP': 0.084,
+        'B_PRIME_L': 0.18,
+        'U1_PHASE': 0.18,
+        'U2_PHASE': 0.18
+            }
+
+    for p in phases[1:]:
+        prec = PrecipitateParameters(p)
+        prec.gamma = gamma[p]
+        prec.volume.setVolume(1e-5, VolumeParameter.MOLAR_VOLUME, 4)
+        precParams.append(prec)
+
+    matrix = MatrixParameters(['MG', 'SI'])
+    matrix.initComposition = [0.0072, 0.0057]
+    matrix.volume.setVolume(1e-5, VolumeParameter.MOLAR_VOLUME, 4)
+
+    temperature = 175+273.15
+    model = PrecipitateModel(matrix, precParams, AlMgSitherm, temperature)
+    model.setup()
+
+    # Create artificial data for precipitate model
+    N = 10
+    model.data.reset(N)
+    model.data.time = np.linspace(0, 1, N)
+    model.data.volFrac[:,0] = np.linspace(0, 0.1, N)                # MGSI_B_P
+    model.data.Ravg[:,1] = np.linspace(0, 1e-7, N)                  # MG5SI6_B_DP
+    model.data.drivingForce[:,2] = np.linspace(1000, 0, N)          # B_PRIME_L
+    model.data.nucRate[:,3] = np.linspace(0, 1e10, N)               # U1_PHASE
+    model.data.precipitateDensity[:,4] = np.linspace(0, 1e10, N)    # U2_PHASE
+    model.data.composition[:,0] = 0.0072*np.ones(N)                 # MG
+    model.data.composition[:,1] = np.linspace(0.006, 0.005, N)      # SI
+
+    volCond = VolumeFractionCondition(Inequality.GREATER_THAN, 0.05, phase='MGSI_B_P')
+    rCond = AverageRadiusCondition(Inequality.GREATER_THAN, 1e-6, phase='MG5SI6_B_DP')
+    dgCond = DrivingForceCondition(Inequality.LESSER_THAN, 500, phase='B_PRIME_L')
+    nucCond = NucleationRateCondition(Inequality.LESSER_THAN, 0.5e10, phase='U1_PHASE')
+    precCond = PrecipitateDensityCondition(Inequality.GREATER_THAN, 0.5e10, phase='U2_PHASE')
+    compCond = CompositionCondition(Inequality.LESSER_THAN, 0.0055, element='SI')
+
+    volCond.testCondition(model)
+    rCond.testCondition(model)
+    dgCond.testCondition(model)
+    nucCond.testCondition(model)
+    precCond.testCondition(model)
+    compCond.testCondition(model)
+
+    assert volCond.isSatisfied()
+    assert_allclose(volCond.satisfiedTime(), 0.5, rtol=1e-3)
+    assert not rCond.isSatisfied()
+    assert_allclose(rCond.satisfiedTime(), -1, rtol=1e-3)
+    assert dgCond.isSatisfied()
+    assert not nucCond.isSatisfied()
+    assert precCond.isSatisfied()
+    assert compCond.isSatisfied()
+    assert_allclose(compCond.satisfiedTime(), 0.5, rtol=1e-3)
+
+    # 'or' only needs 1 condition to be true to stop
+    model.reset()
+    volCond_0 = VolumeFractionCondition(Inequality.GREATER_THAN, 0.1, phase='MGSI_B_P')
+    compCond_0 = CompositionCondition(Inequality.LESSER_THAN, 0.0075, element='MG')
+    model.addStoppingCondition(volCond_0, 'or')
+    model.addStoppingCondition(compCond_0, 'or')
+    model.setup()
+    _, stop = model.postProcess(0.1, [p.PSD for p in model.PBM])
+    assert stop
+    
+    # 'and' needs all conditions to be true to stop
+    model.reset()
+    model.clearStoppingConditions()
+    model.addStoppingCondition(volCond_0, 'and')
+    model.addStoppingCondition(compCond_0, 'and')
+    model.setup()
+    _, stop = model.postProcess(0.1, [p.PSD for p in model.PBM])
+    assert not stop
+
+def test_ttp():
+    T = 450 + 273.15    #Temperature (K)
+    a = 0.405e-9        #Lattice parameter
+    Va = a**3           #Atomic volume of FCC-Al
+    Vb = a**3           #Assume Al3Zr has same unit volume as FCC-Al
+
+    matrix = MatrixParameters(['ZR'])
+    matrix.initComposition = 4e-3       # initial composition
+    matrix.volume.setVolume(Va, VolumeParameter.ATOMIC_VOLUME, 4)
+    matrix.nucleationSites.setNucleationDensity(grainSize=1, dislocationDensity=1e15)
+    precipitate = PrecipitateParameters('AL3ZR')
+    precipitate.gamma = 0.1
+    precipitate.volume.setVolume(Vb, VolumeParameter.ATOMIC_VOLUME, 4)
+    precipitate.nucleation.setNucleationType('dislocations')
+
+    #Create model
+    model = PrecipitateModel(matrix, precipitate, AlZrTherm, T)
+    model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=75, minBins=50, maxBins=100)
+    volCond = VolumeFractionCondition(Inequality.GREATER_THAN, -1)
+    
+    # Tests that the TTP can be ran and plotted
+    ttp = TTPCalculator(model, volCond)
+    ttp.calculateTTP(500, 600, 3, 10)
+    plotTTP(ttp)
 
 

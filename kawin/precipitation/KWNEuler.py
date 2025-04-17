@@ -117,7 +117,7 @@ class PrecipitateModel (PrecipitateBase):
             index = self.phaseIndex(phase)
             self.PBM[index].setRecording(record)
 
-    def saveRecordedPSD(self, filename, compressed = True, phase = 'all'):
+    def saveRecordedPSD(self, filename, phase = 'all'):
         '''
         Saves recorded PSD in npz format
 
@@ -136,10 +136,10 @@ class PrecipitateModel (PrecipitateBase):
         if phase is None or phase == 'all':
             for p in self.phases:
                 index = self.phaseIndex(p)
-                self.PBM[index].saveRecordedPSD(filename + '_' + p, compressed)
+                self.PBM[index].saveRecordedPSD(filename + '_' + p)
         else:
             index = self.phaseIndex(phase)
-            self.PBM[index].saveRecordedPSD(filename, compressed)
+            self.PBM[index].saveRecordedPSD(filename)
 
     def loadParticleSizeDistribution(self, data, phase = None):
         '''

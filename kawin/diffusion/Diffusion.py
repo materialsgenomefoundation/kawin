@@ -72,8 +72,8 @@ class DiffusionModel(GenericModel):
             'finalX': self.mesh.flattenResponse(self.mesh.y),
             'recordInterval': self._record,
             'recordIndex': self._recordIndex,
-            'recordX': self._recordedX,
-            'recordTime': self._recordedTime
+            'recordX': self._recordedX[:self._recordIndex],
+            'recordTime': self._recordedTime[:self._recordIndex]
         }
         return data
 
@@ -170,6 +170,7 @@ class DiffusionModel(GenericModel):
         From recorded values, interpolated at time to get composition and phase fraction
         '''
         if self._record > 0:
+            print(time, self._recordedTime)
             if time < self._recordedTime[0]:
                 print('Input time is lower than smallest recorded time, setting data to t = {:.3e}'.format(self._recordedTime[0]))
                 self.mesh.y = self.mesh.unflattenResponse(self._recordedX[0])
@@ -283,12 +284,9 @@ class DiffusionModel(GenericModel):
         Records new values if recording is enabled
         '''
         super().postProcess(time, x)
-        #self.t = time
-        #self.x = x[0]
-        #self.x = np.clip(self.x, self.constraints.minComposition, 1-self.constraints.minComposition)
-        #self.record(self.t)
         self.mesh.y = x[0]
         self.updateCoupledModels()
+        self.record(time)
         return self.getCurrentX(), False
     
     def flattenX(self, X):

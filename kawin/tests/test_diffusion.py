@@ -382,6 +382,15 @@ def test_diffusionSavingLoading():
     assert_allclose(m.mesh.y, new_m.mesh.y)
     assert_allclose(m.currentTime, new_m.currentTime)
 
+    new_m.setMeshtoRecordedTime(-1)
+    assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[0], rtol=1e-3)
+    new_m.setMeshtoRecordedTime(11*3600)
+    assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[-1], rtol=1e-3)
+
+    # Interpolate, if we set to 0, then the interpolation should result in the first recorded entry
+    new_m.setMeshtoRecordedTime(0)
+    assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[0], rtol=1e-3)
+
 def test_single_phase_2d():
     '''
     Test Cartesion2D mesh in a single phase model

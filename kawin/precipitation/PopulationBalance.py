@@ -51,7 +51,7 @@ class PopulationBalanceModel:
     PSDbounds : array
         Radius at the bounds of each size class - length of array is len(PSD)+1
     '''
-    def __init__(self, cMin = 1e-10, cMax = 1e-9, bins = 150, minBins = 100, maxBins = 200):
+    def __init__(self, cMin = 1e-10, cMax = 1e-9, bins = 150, minBins = 100, maxBins = 200, record=False):
         self.originalMin = cMin
         self.originalMax = np.amax([10*self.originalMin, cMax])
         self.min = self.originalMin
@@ -64,10 +64,8 @@ class PopulationBalanceModel:
 
         self._adaptiveBinSize = True
         
-        self._record = False
-        self._recordedBins = None
-        self._recordedPSD = None
-        self._recordedTime = None
+        self._record = record
+        self.resetRecordedData()
 
     def reset(self, resetBounds = True):
         '''
@@ -103,9 +101,7 @@ class PopulationBalanceModel:
             max bins is the maximum number of bins, if the current number is smaller, the rest of the array will be 0
         '''
         self._record = True
-        self._recordedBins = np.zeros((1, self.maxBins + 1))
-        self._recordedPSD = np.zeros((1, self.maxBins))
-        self._recordedTime = np.zeros(1)
+        self.resetRecordedData()
 
     def resetRecordedData(self):
         '''
@@ -114,6 +110,7 @@ class PopulationBalanceModel:
         '''
         if self._record:
             self._recordedBins = np.zeros((1, self.maxBins + 1))
+            self._recordedBins[0,:len(self.PSDbounds)] = self.PSDbounds
             self._recordedPSD = np.zeros((1, self.maxBins))
             self._recordedTime = np.zeros(1)
         else:
@@ -161,7 +158,7 @@ class PopulationBalanceModel:
             self._recordedPSD[-1][:self.PSD.shape[0]] = self.PSD
             self._recordedTime[-1] = time
 
-    def saveRecordedPSD(self, filename, compressed = True):
+    def saveRecordedPSD(self, filename):
         '''
         Saves recorded data into npz format
 
@@ -172,14 +169,9 @@ class PopulationBalanceModel:
         ----------
         filename : str
             File name to save to
-        compressed : bool (optional)
-            Whether to save as in compressed format (defaults to True)
         '''
         if self._record:
-            if compressed:
-                np.savez_compressed(filename, time = self._recordedTime, bins = self._recordedBins, PSD = self._recordedPSD)
-            else:
-                np.savez(filename, time = self._recordedTime, bins = self._recordedBins, PSD = self._recordedPSD)
+            np.savez_compressed(filename, time = self._recordedTime, bins = self._recordedBins, PSD = self._recordedPSD)
 
     def loadRecordedPSD(self, filename):
         '''
@@ -213,6 +205,19 @@ class PopulationBalanceModel:
         minBound, maxBound = np.amin(PSDbounds), np.amax(PSDbounds)
         return PSDbounds, PSD, PSDsize, bins, minBound, maxBound
 
+    def _interpolatePSD(self, psd, psdSize, psdBounds, psdBoundsOut, psdSizeOut):
+        #Resize PSD to desired min, max, bins
+        oldV = np.sum(psd * psdSize**3)
+        distDen = psd / (psdBounds[1:] - psdBounds[:-1])
+        rOld = 0.5 * (psdBounds[1:] + psdBounds[:-1])
+        psdOut = np.interp(psdSizeOut, rOld, distDen, left=0, right=0) * (psdBoundsOut[1:] - psdBoundsOut[:-1])
+        newV = np.sum(psdOut * psdSizeOut**3)
+        if newV != 0:
+            psdOut *= oldV / newV
+        else:
+            psdOut = np.zeros(len(psdOut))
+        return psdOut
+
     def setPSDtoRecordedTime(self, time):
         '''
         Sets particle size distribution to specific time if recorded
@@ -242,39 +247,18 @@ class PopulationBalanceModel:
                 uPSDbounds, uPSD, uPSDsize, ubins, umin, umax = self._grabPSDfromIndex(uind)
                 lPSDbounds, lPSD, lPSDsize, lbins, lmin, lmax = self._grabPSDfromIndex(lind)
 
-                #Interpolate from lower PSD to upper PSD using bounds of larger PSD
-                #This will account for all possible cases if the PSD size classes change
-                #This is done by pretending we're calling changeSizeClasses
-                #    Where we resize the PSD with the smaller number of bins to have the same bins as the larger PSD
-                #    And correct for the possible change in number density
-                if ubins >= lbins:
-                    #Resize lower PSD to upper PSD
-                    oldV = np.sum(lPSD * lPSDsize**3)
-                    distDen = lPSD / (lPSDbounds[1:] - lPSDbounds[:-1])
-                    rOld = 0.5 * (lPSDbounds[1:] + lPSDbounds[:-1])
-                    lPSD = np.interp(uPSDsize, rOld, distDen, left=0, right=0) * (uPSDbounds[1:] - uPSDbounds[:-1])
-                    newV = np.sum(lPSD * uPSDsize**3)
-                    if newV != 0:
-                        lPSD *= oldV / newV
-                    else:
-                        lPSD = np.zeros(ubins)
-                    
-                else:
-                    #Resize upper PSD to lower PSD
-                    oldV = np.sum(uPSD * uPSDsize**3)
-                    distDen = uPSD / (uPSDbounds[1:] - uPSDbounds[:-1])
-                    rOld = 0.5 * (uPSDbounds[1:] + uPSDbounds[:-1])
-                    uPSD = np.interp(lPSDsize, rOld, distDen, left=0, right=0) * (lPSDbounds[1:] - lPSDbounds[:-1])
-                    uPSDbounds = lPSDbounds
-                    newV = np.sum(uPSD * lPSDsize**3)
-                    if newV != 0:
-                        uPSD *= oldV / newV
-                    else:
-                        uPSD = np.zeros(lbins)
+                #Interpolate both PSD from lowest bin to largest bin using the larger number of bins
+                minOut = np.amin([lmin, umin])
+                maxOut = np.amax([lmax, umax])
+                binsOut = np.amax([lbins, ubins])
+                psdBoundsOut = np.linspace(minOut, maxOut, binsOut+1)
+                psdSizeOut = 0.5*(psdBoundsOut[1:] + psdBoundsOut[:-1])
+                uPSD = self._interpolatePSD(uPSD, uPSDsize, uPSDbounds, psdBoundsOut, psdSizeOut)
+                lPSD = self._interpolatePSD(lPSD, lPSDsize, lPSDbounds, psdBoundsOut, psdSizeOut)
 
                 #Now that the bin sizes are the same, we can just interpolate the PSD
-                self.PSDbounds = uPSDbounds
-                self.PSDsize = 0.5 * (self.PSDbounds[1:] + self.PSDbounds[:-1])
+                self.PSDbounds = psdBoundsOut
+                self.PSDsize = psdSizeOut
                 self.PSD = (uPSD - lPSD) * (time - ltime) / (utime - ltime) + lPSD
                 self.bins = len(self.PSDsize)
                 self.min, self.max = np.amin(self.PSDbounds), np.amax(self.PSDbounds)

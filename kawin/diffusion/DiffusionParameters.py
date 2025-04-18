@@ -200,7 +200,7 @@ def _computeSingleMobility(therm: GeneralThermodynamics, x: np.array, T: np.arra
                 mob[p,:] *= x_to_u_frac(np.array(cs.X, dtype=np.float64)[unsortIndices], therm.elements[:-1], interstitials)
 
         mobility_data = MobilityData(mobility = mob, phases = phases, phase_fractions = phase_fracs, chemical_potentials=chemical_potentials)
-        
+
         if hashTable is not None:
             hashTable.addToHashTable(x, T, mobility_data)
 

@@ -3,7 +3,7 @@ from pycalphad.core.composition_set import CompositionSet
 from pycalphad import calculate, variables as v
 import numpy as np
 
-def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composition_sets=None):
+def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composition_sets=None, pDens=10):
     '''
     Local equilibrium calculation
 
@@ -13,13 +13,19 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
 
     Parameters
     ----------
-    dbf : Database
-    comps : list
+    dbf: Database
+    comps: list[str]
         List of elements to consider
-    phases : list
+    phases: list[str]
         List of phases to consider
-    conds : dict
+    conds: dict[v.StateVariable, float]
         Dictionary of conditions (v.N needs to be included)
+    models: dict[str, Model]
+    phase_records : PhaseRecordFactory
+    composition_sets: list[CompositionSet] (optional)
+        If None, then composition sets will be determined through sampling
+    pDens: int (optional)
+        Sampling density when composition sets are not supplied
 
     Returns
     -------
@@ -42,7 +48,7 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
         if len(phases) == 1:
             local_phase_conds = {v.X(phases[0], var.species): conds[var] for var in conds if isinstance(var, v.X)}
             calc_p = calculate(dbf, comps, phases[0], T=cur_conds[v.T], P=cur_conds[v.P], N=cur_conds[v.N], GE=cur_conds[v.GE],
-                               pdens=10, model=models, phase_records=phase_records, conditions=local_phase_conds)
+                               pdens=pDens, model=models, phase_records=phase_records, conditions=local_phase_conds)
             idx_p = np.argmin(calc_p.GM.values.squeeze())
             compset = CompositionSet(phase_records[phases[0]])
             site_fractions = np.array(calc_p.Y.isel(points=idx_p).values.squeeze())
@@ -57,7 +63,7 @@ def local_equilibrium(dbf, comps, phases, conds, models, phase_records, composit
                 # arbitrary guess
                 phase_amt = 1./len(phases)
                 calc_p = calculate(dbf, comps, phase, T=cur_conds[v.T], P=cur_conds[v.P], N=cur_conds[v.N], GE=cur_conds[v.GE],
-                                pdens=10, model=models, phase_records=phase_records)
+                                pdens=pDens, model=models, phase_records=phase_records)
                 idx_p = np.argmin(calc_p.GM.values.squeeze())
                 compset = CompositionSet(phase_records[phase])
                 site_fractions = np.array(calc_p.Y.isel(points=idx_p).values.squeeze())

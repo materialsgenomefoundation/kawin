@@ -93,6 +93,7 @@ class GeneralThermodynamics:
 
         self.sampling_pDens = 2000      # Sampling density for driving force sampling method
         self.pDens = 500                # Sampling density for equilibrium
+        self.local_pDens = 10           # Sampling density for local equilibrium
 
         self.setDrivingForceMethod(drivingForceMethod)
         self._buildMobilityModels()
@@ -107,7 +108,6 @@ class GeneralThermodynamics:
         self._compset_cache_df = {}
         self._matrix_cs = None
         self._points_cache = {}          #Stored samples for precipitate phases at defined temperature
-
         self._diffusivity_cache = {}
 
     def _buildThermoModels(self):
@@ -462,7 +462,7 @@ class GeneralThermodynamics:
         cond = self._getConditions(x, T, gExtra)
         phases, sub_models = self._setupSubModels(precPhase)
         return local_equilibrium(self.db, self.elements, phases, cond, 
-                                 sub_models, self.phase_records, composition_sets=composition_sets)
+                                 sub_models, self.phase_records, composition_sets=composition_sets, pDens=self.local_pDens)
 
     def getInterdiffusivity(self, x, T, removeCache = True, phase = None):
         '''
@@ -881,7 +881,7 @@ class GeneralThermodynamics:
         phases, sub_models = self._setupSubModels([precPhase])
         prec_eq_results, prec_cs = local_equilibrium(self.db, self.elements, phases, cond,
                                                      sub_models, self.phase_records, 
-                                                     composition_sets=self._compset_cache_df[precPhase])
+                                                     composition_sets=self._compset_cache_df[precPhase], pDens=self.local_pDens)
         if any(np.isnan(prec_eq_results.chemical_potentials)):
             return None, None
         
@@ -987,7 +987,7 @@ class GeneralThermodynamics:
             phases, sub_models = self._setupSubModels([self.phases[0], precPhase])
             result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
                                                          sub_models, self.phase_records,
-                                                         composition_sets=composition_sets)
+                                                         composition_sets=composition_sets, pDens=self.local_pDens)
             cs_matrix, cs_precip, miscibility_gap = _process_composition_sets(composition_sets)
             return result.chemical_potentials, cs_matrix, cs_precip, miscibility_gap
         

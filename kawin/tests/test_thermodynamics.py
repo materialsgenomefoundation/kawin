@@ -13,6 +13,7 @@ NiCrAlThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'CR', 'AL
 NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
 NiAlCrThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
 AlCrNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'CR', 'NI'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
+AlNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'NI'], ['BCC_A2', 'BCC_B2'])
 
 #Set constant sampling densities for each Thermodynamics object
 #pycalphad equilibrium results may change based off sampling density, so this is to make sure
@@ -449,3 +450,24 @@ def test_Diff_tracer_ternary_output():
     assert_allclose(tdarray, np.array([[8.03946597e-18, 5.46554241e-18, 1.52099350e-17],
                                        [9.33087557e-18, 6.51277012e-18, 1.78317544e-17]], dtype=np.float64), atol=0, rtol=1e-3)
 
+def test_Diff_order_disorder():
+    '''
+    Checks diffusivity on order/disorder models
+    This uses the BCC_A2/B2 in Al-Ni from Campbell, Acta Mat. 56 (2008) 4277.
+    '''
+    xNi = 0.55
+    T = 1273
+
+    wks = AlNiTherm.getEq(xNi, T, precPhase=['DIS_BCC_A2'])
+    AlNiTherm._diffusivity_cache['DIS_BCC_A2'] = wks.get_composition_sets()
+    tracer = AlNiTherm.getTracerDiffusivity(xNi, T, False, phase='DIS_BCC_A2')
+    inter = AlNiTherm.getInterdiffusivity(xNi, T, False, phase='DIS_BCC_A2')
+    assert_allclose(tracer, [2.060151e-10, 1.620472e-10], rtol=1e-3)
+    assert_allclose(inter, 1.552184e-9, rtol=1e-3)
+
+    wks = AlNiTherm.getEq(xNi, T, precPhase=['BCC_B2'])
+    AlNiTherm._diffusivity_cache['BCC_B2'] = wks.get_composition_sets()
+    tracer = AlNiTherm.getTracerDiffusivity(xNi, T, False, phase='BCC_B2')
+    inter = AlNiTherm.getInterdiffusivity(xNi, T, False, phase='BCC_B2')
+    assert_allclose(tracer, [3.935858e-16, 8.248783e-16], rtol=1e-3)
+    assert_allclose(inter, 5.275807e-15, rtol=1e-3)

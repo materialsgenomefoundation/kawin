@@ -7,15 +7,15 @@ import pytest
 from kawin.diffusion import SinglePhaseModel, HomogenizationModel, TemperatureParameters
 from kawin.diffusion.mesh import Cartesian1D, Cylindrical1D, Spherical1D, Cartesian2D, MixedBoundary1D, PeriodicBoundary1D
 from kawin.diffusion.mesh import ProfileBuilder, StepProfile1D, LinearProfile1D, DiracDeltaProfile, ConstantProfile, GaussianProfile, ExperimentalProfile1D, BoundedEllipseProfile, BoundedRectangleProfile
-from kawin.diffusion.DiffusionParameters import computeMobility, TemperatureParameters
+from kawin.diffusion.DiffusionParameters import computeMobility, _computeSingleMobility, TemperatureParameters, HashTable
 from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 from kawin.thermo import GeneralThermodynamics
 from kawin.tests.datasets import *
 
-N = 100
 NiCrTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR'], ['FCC_A1', 'BCC_A2'])
 NiCrAlTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'BCC_A2'])
 FeCrNiTherm = GeneralThermodynamics(FECRNI_DB, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
+FeCrNiTherm_sigma = GeneralThermodynamics(FECRNI_DB, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2', 'SIGMA'])
 
 def test_compositionInput():
     '''
@@ -27,6 +27,7 @@ def test_compositionInput():
     The composition and setup functions for both models inherit from the
     base diffusion model class, so any model can be used here
     '''
+    N = 100
     profile = ProfileBuilder()
     profile.addBuildStep(StepProfile1D(0, [0.2, 0.8], [1, 0]), ['CR', 'AL'])
     
@@ -48,6 +49,7 @@ def test_singlePhaseFluxes_shape():
     Should be (E-1, N+1) where E is the number of elements and
     N is the number of points
     '''
+    N = 100
     profile = ProfileBuilder([(StepProfile1D(0, 0.2, 0.8), 'CR')])
     mesh = Cartesian1D(['CR'], [-1e-3, 1e-3], N)
     mesh.setResponseProfile(profile)
@@ -111,6 +113,7 @@ def test_homogenizationSinglePhaseMobility():
 def test_homogenization_wiener_upper():
     '''
     Tests output of wiener upper bounds in single and two-phase regions
+    Note: slight change in two-phase mobility test since BCC mobility was added to the NiCrAl dataset
     '''
     x1 = [0.05, 0.05]
     x2 = [0.7, 0.05]
@@ -123,7 +126,7 @@ def test_homogenization_wiener_upper():
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, homogenizationParameters)
-    assert_allclose(mob, [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
+    assert_allclose(mob, [5.422636e-22, 1.416680e-22, 3.058155e-22], atol=0, rtol=1e-3)
 
 def test_homogenization_wiener_lower():
     '''
@@ -140,7 +143,7 @@ def test_homogenization_wiener_lower():
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, homogenizationParameters)
-    assert_allclose(mob, [4.090531e-21, 1.068474e-21, 1.756032e-21], atol=0, rtol=1e-3)
+    assert_allclose(mob, [5.769441e-27, 6.446271e-26, 1.637520e-22], atol=0, rtol=1e-3)
 
 def test_homogenization_hashin_upper():
     '''
@@ -157,7 +160,7 @@ def test_homogenization_hashin_upper():
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, homogenizationParameters)
-    assert_allclose(mob, [4.114414e-22, 1.074712e-22, 1.766285e-22], atol=0, rtol=1e-3)
+    assert_allclose(mob, [4.114451e-22, 1.075049e-22, 2.689335e-22], atol=0, rtol=1e-3)
 
 def test_homogenization_hashin_lower():
     '''
@@ -174,7 +177,7 @@ def test_homogenization_hashin_lower():
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, homogenizationParameters)
-    assert_allclose(mob, [9.292913e-21, 2.427370e-21, 3.989373e-21], atol=0, rtol=1e-3)
+    assert_allclose(mob, [9.970624e-27, 1.113755e-25, 2.118727e-22], atol=0, rtol=1e-3)
 
 def test_homogenization_lab():
     '''
@@ -186,12 +189,56 @@ def test_homogenization_lab():
 
     homogenizationParameters = HomogenizationParameters()
     homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.LABYRINTH)
+    # Labyrinth factor is clipped to [1,2]
+    homogenizationParameters.setLabyrinthFactor(2.3)
+    assert homogenizationParameters.labyrinthFactor == 2
     
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, homogenizationParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x2, T, homogenizationParameters)
-    assert_allclose(mob, [5.422604e-22, 1.416420e-22, 2.327880e-22], atol=0, rtol=1e-3)
+    assert_allclose(mob, [1.974358e-22, 5.158761e-23, 1.311953e-22], atol=0, rtol=1e-3)
+
+def test_homogenization_post_process():
+    '''
+    Test different post process functions for homogenization parameters
+        NO_POST - no preprocessing
+        PREDEFINED - phases with no mobility will take on mobility of predefined phase
+        MAJORITY - phases with no mobility will take on mobility of most present phase
+        EXCLUDE - excluded phases will have mobility of 0
+    '''
+    x = [0.5, 0.18]
+    T = 1073
+    
+    homogenizationParameters = HomogenizationParameters()
+    hashTable = HashTable()
+
+    sortIndices = np.argsort(FeCrNiTherm_sigma.elements[:-1])
+    unsortIndices = np.argsort(sortIndices)
+
+    post_process = [
+        # No post - SIGMA should be -1 since no mobility parameters
+        (HomogenizationParameters.NO_POST, [], {'FCC_A1': [6.645151e-23, 1.500813e-22, 2.097277e-22], 'SIGMA': [-1, -1, -1]}),
+        # predefined, SIGMA should have BCC_A2 values
+        (HomogenizationParameters.PREDEFINED, ['BCC_A2'], {'FCC_A1': [6.645151e-23, 1.500813e-22, 2.097277e-22], 'SIGMA': [7.731696e-24, 5.867129e-23, 6.654329e-25]}),
+        # majority, SIGMA should have FCC_A1 values
+        (HomogenizationParameters.MAJORITY, [], {'FCC_A1': [6.645151e-23, 1.500813e-22, 2.097277e-22], 'SIGMA': [6.645151e-23, 1.500813e-22, 2.097277e-22]}),
+        # exlude, FCC_A1 should be 0
+        (HomogenizationParameters.EXCLUDE, [['FCC_A1']], {'FCC_A1': [0, 0, 0], 'SIGMA': [-1, -1, -1]}),
+    ]
+
+    for p in post_process:
+        homogenizationParameters.setPostProcessFunction(p[0], *p[1])
+        mob = _computeSingleMobility(FeCrNiTherm_sigma, x, T, unsortIndices, hashTable)
+        fcc_index = np.squeeze(np.where(mob.phases == 'FCC_A1')[0])
+        sigma_index = np.squeeze(np.where(mob.phases == 'SIGMA')[0])
+        mob, phase_fracs = homogenizationParameters.postProcessFunction(mob, *homogenizationParameters.postProcessParameters)
+        
+        assert_allclose(mob[fcc_index], p[2]['FCC_A1'], rtol=1e-3)
+        assert_allclose(mob[sigma_index], p[2]['SIGMA'], rtol=1e-3)
+
+        # Make sure function output works with compute homogenization function
+        computeHomogenizationFunction(FeCrNiTherm_sigma, x, T, homogenizationParameters, hashTable)
 
 def test_single_phase_dxdt():
     '''

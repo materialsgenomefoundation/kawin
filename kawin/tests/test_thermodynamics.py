@@ -458,10 +458,10 @@ def test_Diff_order_disorder():
     xNi = 0.55
     T = 1273
 
-    wks = AlNiTherm.getEq(xNi, T, precPhase=['DIS_BCC_A2'])
-    AlNiTherm._diffusivity_cache['DIS_BCC_A2'] = wks.get_composition_sets()
-    tracer = AlNiTherm.getTracerDiffusivity(xNi, T, False, phase='DIS_BCC_A2')
-    inter = AlNiTherm.getInterdiffusivity(xNi, T, False, phase='DIS_BCC_A2')
+    wks = AlNiTherm.getEq(xNi, T, precPhase=['BCC_A2'])
+    AlNiTherm._diffusivity_cache['BCC_A2'] = wks.get_composition_sets()
+    tracer = AlNiTherm.getTracerDiffusivity(xNi, T, False, phase='BCC_A2')
+    inter = AlNiTherm.getInterdiffusivity(xNi, T, False, phase='BCC_A2')
     assert_allclose(tracer, [2.060151e-10, 1.620472e-10], rtol=1e-3)
     assert_allclose(inter, 1.552184e-9, rtol=1e-3)
 

@@ -213,13 +213,20 @@ class GeneralThermodynamics:
 
         For the Gibbs-Thomson effect to be applied, the ordered and disordered parts of the model will need to be kept separate
         As a fix, a new phase is added to the database that uses only the disordered part of the model
+        We keep the original name of the disordered phase, but the disorder contribution will be the DIS_<phase name> phase
         '''
         newPhase = 'DIS_' + phase
-        self.phases[0] = newPhase
         self.db.phases[newPhase] = copy.deepcopy(self.db.phases[phase])
         self.db.phases[newPhase].name = newPhase
-        del self.db.phases[newPhase].model_hints['ordered_phase']
-        del self.db.phases[newPhase].model_hints['disordered_phase']
+        
+        # Remove order/disorder model hints on original name
+        del self.db.phases[phase].model_hints['ordered_phase']
+        del self.db.phases[phase].model_hints['disordered_phase']
+
+        # Rename disordered phase contribution to new phase
+        self.db.phases[newPhase].model_hints['disordered_phase'] = newPhase
+        ordered_phase = self.db.phases[newPhase].model_hints['ordered_phase']
+        self.db.phases[ordered_phase].model_hints['disordered_phase'] = newPhase
 
         #Copy database parameters with new name
         param_query = where('phase_name') == phase

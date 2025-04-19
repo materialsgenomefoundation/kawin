@@ -92,12 +92,11 @@ def test_coupler_shape():
     p_model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=bins, minBins=minBins, maxBins=maxBins)
 
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
-    #Since we defined L12, the disordered phase as DIS_ attached to the front
     N = 20
     profile = ProfileBuilder([(LinearProfile1D(-1e-3, [0.077, 0.054], 1e-3, [0.359, 0.062]), ['CR', 'AL'])])
     mesh = Cartesian1D(['AL', 'CR'], [-1e-3, 1e-3], N)
     mesh.setResponseProfile(profile)
-    d_model = SinglePhaseModel(mesh, ['NI', 'AL', 'CR'], ['DIS_FCC_A1'], NiAlCrTherm, DiffTemp(1200+273.15))
+    d_model = SinglePhaseModel(mesh, ['NI', 'AL', 'CR'], ['FCC_A1'], NiAlCrTherm, DiffTemp(1200+273.15))
 
     coupled_model = Coupler([p_model, d_model])
     coupled_model.setup()

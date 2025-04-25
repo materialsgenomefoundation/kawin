@@ -154,7 +154,7 @@ class LinearProfile1D:
         return np.squeeze(y)
     
 class ExperimentalProfile1D:
-    def __init__(self, z, values):
+    def __init__(self, z, values, left=None, right=None):
         values = np.atleast_2d(values)
         if values.shape[0] == 1:
             values = values.T
@@ -162,12 +162,14 @@ class ExperimentalProfile1D:
         sortIndices = np.argsort(z)
         self.values = values[sortIndices]
         self.z = z[sortIndices]
+        self.left = left if left is None else np.atleast_1d(left)
+        self.right = right if right is None else np.atleast_1d(right)
 
     def __call__(self, z):
         z = _formatSpatial(z)[:,0]
         y = np.zeros((z.shape[0], self.values.shape[1]))
         for i in range(self.values.shape[1]):
-            y[:,i] = np.interp(z, self.z, self.values[:,i])
+            y[:,i] = np.interp(z, self.z, self.values[:,i], left=self.left, right=self.right)
         return np.squeeze(y)
 
 class FiniteVolumeMidPointCalculator(ABC):
@@ -221,7 +223,7 @@ class FVM1DEdge(FiniteVolumeMidPointCalculator):
     def getDMid(D, isPeriodic = False, avgFunc = arithmeticMean, *args, **kwargs):
         '''For periodic conditions, we average the first and last D'''
         D = avgFunc([D[:-1], D[1:]])
-        Dend = avgFunc([D[0], D[1]]) if isPeriodic else None
+        Dend = avgFunc([D[0], D[-1]]) if isPeriodic else None
         return D, Dend
 
 class FiniteVolume1D(FiniteVolumeGrid):

@@ -3,7 +3,14 @@ import numpy as np
 
 from kawin.diffusion.DiffusionParameters import computeMobility
 
-def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale = 1, *args, **kwargs):
+def _fill_kwargs(default_kwargs, **original_kwargs):
+    new_kwargs = {**original_kwargs}
+    for key, value in default_kwargs.items():
+        if key not in new_kwargs:
+            new_kwargs[key] = value
+    return new_kwargs
+
+def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale = 1, zOffset = 0, *args, **kwargs):
     '''
     Plots composition profile
 
@@ -30,15 +37,17 @@ def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale 
         else:
             e = diffModel._getElementIndex(plotElement)
             x = diffModel.x[e]
-        ax.plot(diffModel.z/zScale, x, *args, **kwargs)
+        ax.plot((diffModel.z+zOffset)/zScale, x, *args, **kwargs)
     else:
         if plotReference:
             refE = 1 - np.sum(diffModel.x, axis=0)
-            ax.plot(diffModel.z/zScale, refE, label=diffModel.allElements[0], *args, **kwargs)
+            new_kwargs = _fill_kwargs({'label': diffModel.allElements[0]}, **kwargs)
+            ax.plot((diffModel.z+zOffset)/zScale, refE, *args, **new_kwargs)
         for e in range(len(diffModel.elements)):
-            ax.plot(diffModel.z/zScale, diffModel.x[e], label=diffModel.elements[e], *args, **kwargs)
+            new_kwargs = _fill_kwargs({'label': diffModel.elements[e]}, **kwargs)
+            ax.plot((diffModel.z+zOffset)/zScale, diffModel.x[e], *args, **new_kwargs)
         
-    ax.set_xlim([diffModel.zlim[0]/zScale, diffModel.zlim[1]/zScale])
+    ax.set_xlim([(diffModel.zlim[0]+zOffset)/zScale, (diffModel.zlim[1]+zOffset)/zScale])
     if plotElement is None:
         ax.legend()
     ax.set_xlabel('Distance (m)')
@@ -46,7 +55,7 @@ def plot(diffModel, ax = None, plotReference = True, plotElement = None, zScale 
 
     return ax
 
-def plotTwoAxis(diffModel, Lelements, Relements, zScale = 1, axL = None, axR = None, *args, **kwargs):
+def plotTwoAxis(diffModel, Lelements, Relements, zScale = 1, zOffset = 0, axL = None, axR = None, *args, **kwargs):
     '''
     Plots composition profile with two y-axes
 
@@ -82,22 +91,26 @@ def plotTwoAxis(diffModel, Lelements, Relements, zScale = 1, axL = None, axR = N
     for e in range(len(Lelements)):
         if Lelements[e] in diffModel.elements:
             eIndex = diffModel._getElementIndex(Lelements[e])
-            axL.plot(diffModel.z/zScale, diffModel.x[eIndex], label=diffModel.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
+            new_kwargs = _fill_kwargs({'label': diffModel.elements[eIndex], 'color': 'C' + str(ci)})
+            axL.plot((diffModel.z+zOffset)/zScale, diffModel.x[eIndex], *args, **new_kwargs)
             ci = ci+1 if ci <= 9 else 0
         elif Lelements[e] in diffModel.allElements:
-            axL.plot(diffModel.z/zScale, refE, label=diffModel.allElements[0], color = 'C' + str(ci), *args, **kwargs)
+            new_kwargs = _fill_kwargs({'label': diffModel.allElements[0], 'color': 'C' + str(ci)})
+            axL.plot((diffModel.z+zOffset)/zScale, refE, *args, **new_kwargs)
             ci = ci+1 if ci <= 9 else 0
     for e in range(len(Relements)):
         if Relements[e] in diffModel.elements:
             eIndex = diffModel._getElementIndex(Relements[e])
-            axR.plot(diffModel.z/zScale, diffModel.x[eIndex], label=diffModel.elements[eIndex], color = 'C' + str(ci), *args, **kwargs)
+            new_kwargs = _fill_kwargs({'label': diffModel.elements[eIndex], 'color': 'C' + str(ci)})
+            axR.plot((diffModel.z+zOffset)/zScale, diffModel.x[eIndex], *args, **new_kwargs)
             ci = ci+1 if ci <= 9 else 0
         elif Relements[e] in diffModel.allElements:
-            axR.plot(diffModel.z/zScale, refE, label=diffModel.allElements[0], color = 'C' + str(ci), *args, **kwargs)
+            new_kwargs = _fill_kwargs({'label': diffModel.allElements[0], 'color': 'C' + str(ci)})
+            axR.plot((diffModel.z+zOffset)/zScale, refE, *args, **new_kwargs)
             ci = ci+1 if ci <= 9 else 0
 
     
-    axL.set_xlim([diffModel.zlim[0]/zScale, diffModel.zlim[1]/zScale])
+    axL.set_xlim([(diffModel.zlim[0]+zOffset)/zScale, (diffModel.zlim[1]+zOffset)/zScale])
     axL.set_xlabel('Distance (m)')
     axL.set_ylabel('Composition (at.%) ' + str(Lelements))
     axR.set_ylabel('Composition (at.%) ' + str(Relements))
@@ -108,7 +121,7 @@ def plotTwoAxis(diffModel, Lelements, Relements, zScale = 1, axL = None, axR = N
 
     return axL, axR
 
-def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, *args, **kwargs):
+def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, zOffset = 0, *args, **kwargs):
     '''
     Plots phase fractions over z
 
@@ -134,14 +147,15 @@ def plotPhases(diffModel, ax = None, plotPhase = None, zScale = 1, *args, **kwar
         pf = []
         for p_labels, p_fracs in zip(mob_data.phases, mob_data.phase_fractions):
             pf.append(np.sum(p_fracs[p_labels==plotPhase]))
-        ax.plot(diffModel.z/zScale, pf, *args, **kwargs)
+        ax.plot((diffModel.z+zOffset)/zScale, pf, *args, **kwargs)
     else:
         for p in range(len(diffModel.phases)):
             pf = []
             for p_labels, p_fracs in zip(mob_data.phases, mob_data.phase_fractions):
                 pf.append(np.sum(p_fracs[p_labels==diffModel.phases[p]]))
-            ax.plot(diffModel.z/zScale, pf, label=diffModel.phases[p], *args, **kwargs)
-    ax.set_xlim([diffModel.zlim[0]/zScale, diffModel.zlim[1]/zScale])
+            new_kwargs = _fill_kwargs({'label': diffModel.phases[p]}, **kwargs)
+            ax.plot((diffModel.z+zOffset)/zScale, pf, *args, **new_kwargs)
+    ax.set_xlim([(diffModel.zlim[0]+zOffset)/zScale, (diffModel.zlim[1]+zOffset)/zScale])
     ax.set_ylim([0, 1])
     ax.set_xlabel('Distance (m)')
     ax.set_ylabel('Phase Fraction')

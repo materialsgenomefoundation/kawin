@@ -1,0 +1,17 @@
+{
+	"components": ["NI", "VA"], 
+	"phases": ["FCC_A1"], 
+	"conditions": {
+		"P": 101325, 
+		"T": 1273
+    }, 
+	"solver": {
+		"mode": "manual", 
+		"sublattice_site_ratios": [1, 3], 
+		"sublattice_configurations": [["NI", "VA"]], 
+		"sublattice_occupancies": [[1, 1]]
+    }, 
+	"output": "TRACER_Q_CU", 
+	"values": [[[255224]]], 
+	"reference": "Anand1965"
+}

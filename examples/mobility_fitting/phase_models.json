@@ -1,0 +1,13 @@
+{
+    "components": ["CU", "NI", "VA"],
+    "phases": {
+        "FCC_A1": {
+            "sublattice_model": [["CU", "NI"], ["VA"]],
+            "sublattice_site_ratios": [1, 1]
+        },
+        "LIQUID": {
+            "sublattice_model": [["CU", "NI"]],
+            "sublattice_site_ratios": [1]
+        }
+    }
+}

@@ -11,7 +11,7 @@ setup(
     author='Nicholas Ury',
     author_email='nury12n@gmail.com',
     description='Tool for simulating precipitation using the KWN model coupled with Calphad.',
-    packages=['kawin', 'kawin.tests', 'kawin.diffusion', 'kawin.precipitation', 'kawin.precipitation.coupling', 'kawin.precipitation.parameters', 'kawin.solver', 'kawin.thermo'],
+    packages=['kawin', 'kawin.tests', 'kawin.diffusion', 'kawin.precipitation', 'kawin.precipitation.coupling', 'kawin.precipitation.parameters', 'kawin.solver', 'kawin.thermo', 'kawin.mobility_fitting', 'kawin.mobility_fitting.error_functions'],
     license='MIT',
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
@@ -21,6 +21,7 @@ setup(
         'matplotlib>=3.3',
         'numpy>=2.0',
         'pycalphad>=0.11',
+        'espei',
         'scipy',
         'setuptools_scm[toml]>=6.0',
     ],
@@ -41,10 +42,10 @@ setup(
 
         # Supported Python versions
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
     ],
 
 )

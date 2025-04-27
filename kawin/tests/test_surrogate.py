@@ -5,7 +5,7 @@ from numpy.testing import assert_allclose
 import pytest
 
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics, BinarySurrogate, MulticomponentSurrogate
-from kawin.tests.datasets import *
+from kawin.tests.databases import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='approximate')
 NiCrAlTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='approximate')

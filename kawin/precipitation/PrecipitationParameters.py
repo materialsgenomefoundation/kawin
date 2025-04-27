@@ -77,7 +77,6 @@ class TemperatureParameters:
 
     def setTemperatureParameters(self, *args):
         if len(args) == 2:
-            print(args)
             self.setTemperatureArray(*args)
         elif len(args) == 1:
             if callable(args[0]):

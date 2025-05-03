@@ -1,5 +1,5 @@
-from .MeshBase import AbstractMesh, FiniteVolumeGrid, harmonicMean
-from .MeshBase import arithmeticMean, geometricMean, logMean
+from .MeshBase import AbstractMesh, FiniteVolumeGrid, DiffusionPair
+from .MeshBase import arithmeticMean, geometricMean, logMean, harmonicMean, noChangeAtNode
 from .MeshBase import ProfileBuilder, ConstantProfile, DiracDeltaProfile, GaussianProfile, BoundedEllipseProfile, BoundedRectangleProfile
 from .FVM1D import MixedBoundary1D, PeriodicBoundary1D
 from .FVM1D import FiniteVolume1D, Cartesian1D, Cylindrical1D, Spherical1D

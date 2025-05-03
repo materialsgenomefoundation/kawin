@@ -356,19 +356,19 @@ def test_homogenization_dxdt():
     dt = m.getDt(dxdt)
     
     # #Index 5
-    ind5, vals5 = 5, np.array([-1.42139140e-09, 1.23814781e-09])
+    ind5, vals5 = 5, np.array([-1.41988464e-09, 1.23824350e-09])
 
     # #Index 10
-    ind10, vals10 = 10, np.array([-9.42102782e-10, 1.66848272e-09])
+    ind10, vals10 = 10, np.array([-9.44367556e-10, 1.67684869e-09])
 
     # #Index 15
-    ind15, vals15 = 15, np.array([-3.9239687e-10, 7.66269736e-10])
+    ind15, vals15 = 15, np.array([-3.95085380e-10, 7.72928846e-10])
 
     print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 62333.021201, rtol=1e-3)
+    assert_allclose(dt, 62107.08445, rtol=1e-3)
 
 
     mesh = Cartesian1D(['CR', 'NI'], [-5e-4, 5e-4], 20)
@@ -388,19 +388,19 @@ def test_homogenization_dxdt():
     # Before, the mobilities were multiplied by the overall composition rather than the phase composition
     
     #Index 5
-    ind5, vals5 = 5, np.array([-2.86475448e-8, -4.63706532e-9])
+    ind5, vals5 = 5, np.array([-2.8577719e-8, -4.66806883e-9])
 
     #Index 10
-    ind10, vals10 = 10, np.array([-1.70044057e-8, -3.8592184e-9])
+    ind10, vals10 = 10, np.array([-1.70397119e-8, -3.88722368e-9])
 
     #Index 15
-    ind15, vals15 = 15, np.array([-1.62187495e-8, -6.99884393e-9])
+    ind15, vals15 = 15, np.array([-1.62720361e-8, -7.03752829e-9])
     
     print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
-    assert_allclose(dt, 3343.03841738, rtol=1e-3)
+    assert_allclose(dt, 3348.705601, rtol=1e-3)
 
 def test_diffusionSavingLoading():
     '''

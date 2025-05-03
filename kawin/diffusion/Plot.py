@@ -317,7 +317,7 @@ def plot2DPhases(model: DiffusionModel, phase, zScale=1, ax=None, *args, **kwarg
         pf.append(np.sum(p_fracs[p_labels==phase]))
 
     # Reshape phase fraction to mesh shape (this will be (Nx, Ny, 1) for Cartesian2D)
-    pf = mesh.unflattenResponse(pf, 1)
+    pf = mesh.unflattenResponse(np.array(pf), 1)
     plot_kwargs = _adjust_kwargs(phase, {'vmin': 0, 'vmax': 1}, kwargs)
     cm = ax.pcolormesh(mesh.z[...,0]/zScale[0], mesh.z[...,1]/zScale[1], pf[...,0], *args, **plot_kwargs)
     ax.set_title(phase)

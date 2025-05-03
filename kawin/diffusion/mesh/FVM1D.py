@@ -1,7 +1,7 @@
 from typing import Union
 from abc import ABC, abstractmethod
 import numpy as np
-from kawin.diffusion.mesh.MeshBase import FiniteVolumeGrid, BoundaryCondition, arithmeticMean, _getResponseVariables, _getResponseIndex, _formatSpatial
+from kawin.diffusion.mesh.MeshBase import FiniteVolumeGrid, BoundaryCondition, DiffusionPair, noChangeAtNode, arithmeticMean, _getResponseVariables, _getResponseIndex, _formatSpatial
 
 class PeriodicBoundary1D(BoundaryCondition):
     '''
@@ -206,8 +206,9 @@ class FVM1DMidpoint(FiniteVolumeMidPointCalculator):
             return ymid, zEdge[1:-1]
         
     @staticmethod
-    def getDMid(D, isPeriodic = False, *args, **kwargs):
+    def getDMid(D, isPeriodic = False, atNodeFunc = noChangeAtNode, *args, **kwargs):
         '''For periodic conditions, the last D will correspond to between the first and last node'''
+        D = atNodeFunc(D)
         if isPeriodic:
             return D[:-1], D[-1]
         else:
@@ -222,9 +223,9 @@ class FVM1DEdge(FiniteVolumeMidPointCalculator):
     @staticmethod
     def getDMid(D, isPeriodic = False, avgFunc = arithmeticMean, *args, **kwargs):
         '''For periodic conditions, we average the first and last D'''
-        D = avgFunc([D[:-1], D[1:]])
+        Davg = avgFunc([D[:-1], D[1:]])
         Dend = avgFunc([D[0], D[-1]]) if isPeriodic else None
-        return D, Dend
+        return Davg, Dend
 
 class FiniteVolume1D(FiniteVolumeGrid):
     '''
@@ -283,15 +284,16 @@ class FiniteVolume1D(FiniteVolumeGrid):
         '''Given fluxes, compute dx/dt. This depends on coordinate system'''
         raise NotImplementedError()
 
-    def computeFluxes(self, pairs):
+    def computeFluxes(self, pairs: list[DiffusionPair]):
         '''Compute fluxes from (diffusivity, response) pairs on a 1D FVM mesh'''
         fluxes = np.zeros((self.N[0]+1, self.numResponses))
         isPeriodic = isinstance(self.boundaryConditions, PeriodicBoundary1D)
         for p in pairs:
             # compute fluxes for all but first and last edge (these are handled by boundary condition)
-            D, r = p[0], p[1]
-            avgFunc = p[2] if len(p) == 3 else arithmeticMean
-            Dmid, Dend = self.midPointCalculator.getDMid(D, isPeriodic=isPeriodic, avgFunc=avgFunc)
+            D, r = p.diffusivity, p.response
+            avgFunc = arithmeticMean if p.averageFunction is None else p.averageFunction
+            atNodeFunc = noChangeAtNode if p.atNodeFunction is None else p.atNodeFunction
+            Dmid, Dend = self.midPointCalculator.getDMid(D, isPeriodic=isPeriodic, avgFunc=avgFunc, atNodeFunc=atNodeFunc)
             fluxes[1:-1] += self._diffusiveFlux(Dmid, r[1:], r[:-1], self.dz[0])
 
             # if periodic, then wrap first cell to the end, and first/last flux will be the same
@@ -302,7 +304,7 @@ class FiniteVolume1D(FiniteVolumeGrid):
 
         return fluxes
     
-    def computedXdt(self, pairs):
+    def computedXdt(self, pairs: list[DiffusionPair]):
         '''Computes fluxes, correct fluxes for boundary conditions, compute dx/dt and correct dx/dt for boundary conditions'''
         fluxes = self.computeFluxes(pairs)
         self.boundaryConditions.adjustFluxes(fluxes)

@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kawin.diffusion.mesh.MeshBase import FiniteVolumeGrid, arithmeticMean
+from kawin.diffusion.mesh.MeshBase import FiniteVolumeGrid, DiffusionPair, noChangeAtNode, arithmeticMean
 
 class Cartesian2D(FiniteVolumeGrid):
     '''
@@ -39,17 +39,16 @@ class Cartesian2D(FiniteVolumeGrid):
         self.z = (self.zCorner[:-1,:-1] + self.zCorner[1:,:-1] + self.zCorner[:-1,1:] + self.zCorner[1:,1:]) / 4
         self.dz = [self.z[1,0,0]-self.z[0,0,0], self.z[0,1,1]-self.z[0,0,1]]
 
-    def computeFluxes(self, pairs):
+    def computeFluxes(self, pairs: list[DiffusionPair]):
         '''
         Compute fluxes from (diffusivity, response) pairs on a 2D FVM mesh
         '''
         fluxX = np.zeros((self.N[0]+1, self.N[1], self.numResponses))
         fluxY = np.zeros((self.N[0], self.N[1]+1, self.numResponses))
         for p in pairs:
-            D, r = p[0], p[1]
-            D = self.unflattenResponse(D)
-            r = self.unflattenResponse(r)
-            avgFunc = p[2] if len(p) == 3 else arithmeticMean
+            D = self.unflattenResponse(p.diffusivity)
+            r = self.unflattenResponse(p.response)
+            avgFunc = arithmeticMean if p.averageFunction is None else p.averageFunction
 
             # flux along x (neighboring cells to compute D and flux are along x direction, 1st index)
             DmidX = avgFunc([D[:-1,:], D[1:,:]])
@@ -61,7 +60,7 @@ class Cartesian2D(FiniteVolumeGrid):
 
         return fluxX, fluxY
 
-    def computedXdt(self, pairs):
+    def computedXdt(self, pairs: list[DiffusionPair]):
         '''
         dx/dt = -dJx/dz + -dJy/dz
         '''

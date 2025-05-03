@@ -422,7 +422,6 @@ class GeneralThermodynamics:
         Workspace object
         '''
         cond = self._getConditions(x, T, gExtra+self.gOffset)
-        
         phases, sub_models = self._setupSubModels(precPhase)
         wks = Workspace(self.db, self.elements, phases, cond, 
                         models=sub_models, phase_record_factory=self.phase_records, 

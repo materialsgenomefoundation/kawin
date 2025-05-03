@@ -1,6 +1,6 @@
 import numpy as np
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.diffusion.mesh.MeshBase import arithmeticMean
+from kawin.diffusion.mesh.MeshBase import DiffusionPair, arithmeticMean
 
 class SinglePhaseModel(DiffusionModel):
     def _getPairs(self, t, xCurr):
@@ -31,11 +31,19 @@ class SinglePhaseModel(DiffusionModel):
         pairs = []
         # For binary systems, we only have 1 independent component
         if numElements == 1:
-            pairs.append((d[:,np.newaxis], yR, arithmeticMean))
+            pairs.append(DiffusionPair(
+                diffusivity=d[:,np.newaxis], 
+                response=yR, 
+                averageFunction=arithmeticMean))
         else:
             # For 2+ independent component, we want to tile x_j from (1,N) -> (e,N) -> (N,e)
             for i in range(len(self.elements)):
-                pairs.append((d[:,:,i], np.tile([yR[:,i]], (numElements, 1)).T, arithmeticMean))
+                pairs.append(DiffusionPair(
+                    diffusivity=d[:,:,i], 
+                    response=np.tile([yR[:,i]], (numElements, 1)).T, 
+                    averageFunction=arithmeticMean
+                    ))
+                #pairs.append((d[:,:,i], np.tile([yR[:,i]], (numElements, 1)).T, arithmeticMean))
         self._currdt = 0.4 * np.amin(self.mesh.dz)**2 / np.amax(d) / self.mesh.dims
         return pairs
     

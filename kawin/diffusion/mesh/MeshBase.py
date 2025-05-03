@@ -29,29 +29,67 @@ Basic idea:
     TODO: I want an averaging function that can account for both log scale and negative numbers, which are two not so friendly terms
 '''
 from abc import ABC, abstractmethod
+from collections import namedtuple
 from typing import Union
 import numpy as np
+
+DiffusionPair = namedtuple('DiffusionPair', ['diffusivity', 'response', 'averageFunction', 'atNodeFunction'], defaults=[None, None, None, None])
+
+def noChangeAtNode(Ds):
+    '''
+    Default function for at node diffusivity
+    '''
+    return Ds
 
 def arithmeticMean(Ds):
     '''
     Arithmetic mean - D_avg = 1/2*(D_i + D_j)
+    Ds should be in the shape of (m x N x y)
+        m - number of items to average over
+        N - number of nodes
+        y - number of responses
+        Average is taken along m
     '''
     return np.average(Ds, axis=0)
 
 def geometricMean(Ds):
     '''
     Geometric mean - D_avg = sqrt(D_i * D_j)
+    Ds should be in the shape of (m x N x y)
+        m - number of items to average over
+        N - number of nodes
+        y - number of responses
+        Average is taken along m
+    Note: this is only valid when D_i and D_j are the same sign
     '''
     return np.power(np.prod(Ds, axis=0), 1/len(Ds))
 
 def logMean(Ds):
+    '''
+    Log mean - D_avg = exp(1/2*(log(D_i)+log(D_j)))
+    Ds should be in the shape of (m x N x y)
+        m - number of items to average over
+        N - number of nodes
+        y - number of responses
+        Average is taken along m
+    Note: this is only valid for positive D
+    '''
     return np.exp(np.average(np.log(Ds), axis=0))
 
 def harmonicMean(Ds):
     '''
     Harmonic mean - D_avg = (1/2 * (D_i^-1 + D_j^-1))^-1
+    Ds should be in the shape of (m x N x y)
+        m - number of items to average over
+        N - number of nodes
+        y - number of responses
+        Average is taken along m
+    Note: in the limit of D_i or D_j -> 0, the mean is 0. In practice, this is undefined, so we 
+          convert all inf/nan to 0
     '''
-    return np.power(np.sum(np.power(Ds, -1), axis=0), -1)
+    Davg = np.power(np.sum(np.power(Ds, -1), axis=0), -1)
+    Davg[~np.isfinite(Davg)] = 0
+    return Davg
 
 def _getResponseVariables(responses: Union[int, list[str]]) -> tuple[int, list[str]]:
     '''
@@ -259,14 +297,14 @@ class AbstractMesh (ABC):
         raise NotImplementedError()
     
     @abstractmethod
-    def computedXdt(self, pairs):
+    def computedXdt(self, pairs: list[DiffusionPair]):
         '''
         Given list of diffusivity and response pairs, compute dX/dt from diffusion fluxes
 
         Parameters
         ----------
-        Pairs is a list of tuples
-            Tuple will contain (diffusivity, response, averaging function)
+        pairs: list[DiffusionPair]
+            Tuple will contain (diffusivity, response, averaging function, at node function)
             Note that the diffusivity and response will be in the form of [N,e] (corresponding
             to getDiffusivityCoordinates and getResponseCoordinates), which may not be the 
             shape of self.y. This function is responsible for accounting for this difference
@@ -281,7 +319,7 @@ class AbstractMesh (ABC):
     
     def flattenResponse(self, y, numResponses = None):
         '''
-        Converts y [internal shape] to yFlat [N, e]
+        Converts y [internal shape, ...] to yFlat [N, e, ...]
 
         Parameters
         ----------
@@ -299,7 +337,7 @@ class AbstractMesh (ABC):
     
     def flattenSpatial(self, z):
         '''
-        Converts z [internal shape] to zFlat [N, d]
+        Converts z [internal shape, ...] to zFlat [N, d, ...]
 
         Parameters
         ----------
@@ -316,7 +354,7 @@ class AbstractMesh (ABC):
     
     def unflattenResponse(self, yFlat, numResponses = None):
         '''
-        Converts yFlat [N, e] to y [internal shape]
+        Converts yFlat [N, e, ...] to y [internal shape, ...]
 
         Parameters
         ----------
@@ -334,7 +372,7 @@ class AbstractMesh (ABC):
     
     def unflattenSpatial(self, zFlat):
         '''
-        Converts zFlat [N, e] to z [internal shape]
+        Converts zFlat [N, d, ...] to z [internal shape, ...]
 
         Parameters
         ----------
@@ -387,29 +425,33 @@ class FiniteVolumeGrid(AbstractMesh):
     
     def flattenResponse(self, y, numResponses = None):
         '''
-        Converts y [internal shape] to yFlat [N, e]
+        Converts y [n x m x ..., e, ...] to yFlat [N, e, ...]
         '''
         numResponses = self.numResponses if numResponses is None else numResponses
-        return np.reshape(y, (self.Ntot, numResponses))
+        shape = y.shape     # shape is (n,m,...,e,...)
+        return np.reshape(y, (self.Ntot, numResponses, *shape[len(self.N)+1:]))
     
     def flattenSpatial(self, z):
         '''
-        Converts z [internal shape] to zFlat [N, d]
+        Converts z [n x m x ..., d, ...] to zFlat [N, d, ...]
         '''
-        return np.reshape(z, (self.Ntot, self.dims))
+        shape = z.shape     # shape is (n,m,...,e,...)
+        return np.reshape(z, (self.Ntot, self.dims, *shape[len(self.N)+1:]))
     
     def unflattenResponse(self, yFlat, numResponses = None):
         '''
-        Converts yFlat [N, e] to y [internal shape]
+        Converts yFlat [N, e, ...] to y [n x m x ..., e, ...]
         '''
         numResponses = self.numResponses if numResponses is None else numResponses
-        return np.reshape(yFlat, (*self.N, numResponses))
+        shape = yFlat.shape     # shape is (N,e,...)
+        return np.reshape(yFlat, (*self.N, numResponses, *shape[2:]))
     
     def unflattenSpatial(self, zFlat):
         '''
-        Converts zFlat [N, e] to z [internal shape]
+        Converts zFlat [N, e, ...] to z [n x m x ..., e, ...]
         '''
-        return np.reshape(zFlat, (*self.N, self.dims))
+        shape = zFlat.shape     # shape is (N,e,...)
+        return np.reshape(zFlat, (*self.N, self.dims, *shape[2:]))
 
     
 

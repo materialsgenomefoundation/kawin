@@ -284,6 +284,7 @@ class DiffusionModel(GenericModel):
         Records new values if recording is enabled
         '''
         super().postProcess(time, x)
+        x[0] = np.clip(x[0], self.constraints.minComposition, 1-self.constraints.minComposition)
         self.mesh.y = x[0]
         self.updateCoupledModels()
         self.record(time)

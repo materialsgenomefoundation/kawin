@@ -383,14 +383,15 @@ class PrecipitateModel (PrecipitateBase):
 
         #If parent phases exists, then calculate the number of potential nucleation sites on the parent phase
         # #This is the number of lattice sites on the total surface area of the parent precipitate
-        nucleationSites = np.sum([4*np.pi*self.PBM[p2].secondMoment(N=x[p2]) * (AVOGADROS_NUMBER/VmBetas[p2])**(2/3) for p2 in parentPhases[p]])
-        if isinstance(nucParams[p].description, BulkDescription):
-            bulkPrec = np.sum([self.PBM[p2].zeroMoment(N=x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, BulkDescription)])
-            nucleationSites += self.matrix.nucleationSites.bulkN0 - bulkPrec
-
-        elif isinstance(nucParams[p].description, DislocationDescription):
+        nucleationSites = np.sum([4*np.pi*self.PBM[p2].SecondMomentFromN(x[p2]) * (AVOGADROS_NUMBER/VmBetas[p2])**(2/3) for p2 in parentPhases[p]])
+        # DislocationDescription is a subclass of BulkDescription, so we test this first
+        if isinstance(nucParams[p].description, DislocationDescription):
             bulkPrec = np.sum([self.PBM[p2].firstMoment(N=x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, DislocationDescription)])
             nucleationSites += self.matrix.nucleationSites.dislocationN0 - bulkPrec * (AVOGADROS_NUMBER / self.matrix.volume.Vm)**(1/3)
+
+        elif isinstance(nucParams[p].description, BulkDescription):
+            bulkPrec = np.sum([self.PBM[p2].zeroMoment(N=x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, BulkDescription)])
+            nucleationSites += self.matrix.nucleationSites.bulkN0 - bulkPrec
 
         elif isinstance(nucParams[p].description, GrainBoundaryDescription):
             boundPrec = np.sum([nucParams[p2].gbRemoval * self.PBM[p2].secondMoment(N=x[p2]) for p2 in range(len(self.phases)) if isinstance(nucParams[p2].description, GrainBoundaryDescription)])

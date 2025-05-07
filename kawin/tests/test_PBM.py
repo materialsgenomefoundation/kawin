@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from numpy.testing import assert_allclose
 from kawin.precipitation import PopulationBalanceModel
@@ -86,3 +88,61 @@ def test_DT():
     dissIndex = pbm.getDissolutionIndex(1e-3, 0)
     calcDT = pbm.getDTEuler(5, growth, dissIndex, maxBinRatio=ratio)
     assert_allclose(trueDT, calcDT, rtol=1e-6)
+
+def test_PBMrecording():
+    pbm = PopulationBalanceModel(cMin=1e-10, cMax=1e-8, bins=100, minBins=50, maxBins=150, record=True)
+
+    pbm.PSD[10:20] = 2
+    pbm.record(1)
+
+    psd = np.array(pbm.PSD)
+    psd[-1] = 2
+    pbm.updatePBMEuler(2, psd)
+    # This should add bins since last bin has 2 particles
+    pbm.adjustSizeClassesEuler(True)
+    print(pbm.bins, pbm.PSDbounds[-1])
+
+    psd = np.array(pbm.PSD)
+    psd[-1] = 2
+    pbm.updatePBMEuler(3, psd)
+    pbm.adjustSizeClassesEuler(True)
+    print(pbm.bins, pbm.PSDbounds[-1])
+
+    psd = np.array(pbm.PSD)
+    psd[-1] = 2
+    pbm.updatePBMEuler(4, psd)
+    # This should remove bins and increase bin size since number of bins > 150
+    pbm.adjustSizeClassesEuler(True)
+    print(pbm.bins, pbm.PSDbounds[-1])
+
+    psd = np.array(pbm.PSD)
+    psd[-2] = 2
+    pbm.updatePBMEuler(5, psd)
+    # This should decrease bin size and set number of bins to 150 since less than half of bins are filled
+    pbm.adjustSizeClassesEuler(True)
+    print(pbm.bins, pbm.PSDbounds[-1])
+
+    psd = np.array(pbm.PSD)
+    psd[20:] = 0
+    pbm.updatePBMEuler(6, psd)
+    # This should decrease bin size and set number of bins to 150 since less than half of bins are filled
+    pbm.adjustSizeClassesEuler(True)
+    print(pbm.bins, pbm.PSDbounds[-1])
+
+    pbm.record(7)
+
+    pbm.saveRecordedPSD('kawin/tests/pbm.npz')
+
+    new_pbm = PopulationBalanceModel(cMin=1e-10, cMax=1e-8, bins=100, minBins=50, maxBins=150, record=True)
+    new_pbm.loadRecordedPSD('kawin/tests/pbm.npz')
+    os.remove('kawin/tests/pbm.npz')
+
+    # Interpolate between time when we first add bins, so last bin should be ~1.25 of original
+    pbm.setPSDtoRecordedTime(2.5)
+    assert_allclose(pbm.PSDbounds[-1], 1.2475e-8, rtol=1e-3)
+    # Interpolate between time when we increase bin size, last bin should be at the largest bin size (~1.75 of original)
+    pbm.setPSDtoRecordedTime(4.5)
+    assert_allclose(pbm.PSDbounds[-1], 1.7425e-8, rtol=1e-3)
+    # Interpolate between time we decerase bin size to dissolution, last bin should be at previous large bin size (~1.75 of original)
+    pbm.setPSDtoRecordedTime(6.5)
+    assert_allclose(pbm.PSDbounds[-1], 1.7425e-8, rtol=1e-3)

@@ -1,9 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kawin.precipitation import PopulationBalanceModel
-from kawin.solver import SolverType
 from kawin.GenericModel import GenericModel
-from kawin.precipitation.Plot import getTimeAxis
+from kawin.solver import rk4Iterator
+from kawin.precipitation import PrecipitateModel
+from kawin.precipitation import PopulationBalanceModel
+from kawin.PlotUtils import _get_axis
+from kawin.precipitation.PopulationBalance import plotPSD, plotPDF, plotCDF
+from kawin.precipitation.Plot import _get_time_axis
 
 class GrainGrowthModel(GenericModel):
     '''
@@ -14,83 +17,53 @@ class GrainGrowthModel(GenericModel):
 
     Parameters
     ----------
-    cMin : float (optional)
-        Minimum grain size (default is 1e-10)
-    cMax : float (optional)
-        Maximum grain size (default is 1e-8)
-    bins : int (optional)
-        Initial bins (default is 150)
-    minBins : int (optional)
-        Minimum number of bins (default is 100)
-    maxBins : int (optional)
-        Maximum number of bins (default is 200)
+    gbe: float (optional)
+        Grain boundary energy
+        Default = 0.5
+    M: float (optional)
+        Grain boundary mobility
+        Default = 1e-14
+    alpha: float (optional)
+        Correction factor (for when fitting data to the model)
+        Default = 1
+    m: dict[str, float] (optional)
+        Factor related to spatial distribution of precipitates
+        Maps a phase name to the factor
+        Default = 1 for all phases
+    K: dict[str, float] (optional)
+        Factor related to spatial distribution of precipitates
+        Maps a phase name to the factor
+        Default = 4/3 for all phases
+    iterator: iterator function (optional)
+        Iterator function for model
+        Default is rk4Iterator
+    pbmKwargs: dict[str, int | float] (optional)
+        Arguments to define population balance model
+        Default is {cMin = 1e-10, cMax = 1e-8}
     '''
-    def __init__(self, cMin = 1e-10, cMax = 1e-8, bins = 150, minBins = 100, maxBins = 200, solverType = SolverType.RK4):
+    def __init__(self, gbe=0.5, M=1e-14, alpha=1, m={}, K={}, iterator=rk4Iterator, pbmKwargs={'cMin': 1e-10, 'cMax': 1e-8}):
         super().__init__()
-        self.pbm = PopulationBalanceModel(cMin, cMax, bins, minBins, maxBins)
+        self.pbm = PopulationBalanceModel(**pbmKwargs)
         self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
 
         #Model parameters - these are values taken from the paper as general default values
-        self.gbe = 0.5      #Grain boundary energy (J/m2)
-        self.M = 1e-14      #Grain boundary mobility (m4/J-s)
-        self.alpha = 1      #Correction factor (for when fitting data to the model)
-        self.m, self.K = {'all': 1}, {'all': 4/3}   #Factors related to spatial distribution of precipitates
+        self.gbe = gbe      #Grain boundary energy (J/m2)
+        self.M = M      #Grain boundary mobility (m4/J-s)
+        self.alpha = alpha      #Correction factor (for when fitting data to the model)
 
-        self.solverType = solverType
+        #Factors related to spatial distribution of precipitates
+        self.m = m
+        self.K = K   
+        self._mdefault = 1
+        self._Kdefault = 4/3
+
+        self.iterator = iterator
 
         self.maxDissolution = 1e-6
 
         self.reset()
 
-    def setGrainBoundaryEnergy(self, gbe):
-        '''
-        Parameters
-        ----------
-        gbe : float
-            Grain boundary energy
-        '''
-        self.gbe = gbe
-
-    def setGrainBoundaryMobility(self, M):
-        '''
-        Parameters
-        ----------
-        M : float
-            Grain boundary mobility
-        '''
-        self.M = M
-
-    def setAlpha(self, alpha):
-        '''
-        Correction factor
-
-        Parameters
-        ----------
-        alpha : float
-        '''
-        self.alpha = alpha
-
-    def setZenerParameters(self, m, K, phase='all'):
-        '''
-        Parameters for defining zener radius
-
-        Zener radius is defined as
-        Rz = K * r / f^m
-
-        Parameters
-        ----------
-        m : float
-            Exponential factor for volume fraction
-        K : float
-            Scaling factor
-        phase : str (optional)
-            Precipitate phase to apply parameters to
-            Default is 'all'
-        '''
-        self.m[phase] = m
-        self.K[phase] = K
-
-    def LoadDistribution(self, data):
+    def loadDistribution(self, data):
         '''
         Creates a particle size distribution from a set of data
         
@@ -102,12 +75,12 @@ class GrainGrowthModel(GenericModel):
         self.pbm.reset()
         self.pbm.PSD, self.pbm.PSDbounds = np.histogram(data, self.pbm.PSDbounds)
         self.pbm.PSD = self.pbm.PSD.astype('float')
-        self.Normalize()
+        self.normalize()
         self.avgR[0] = self.Rm(self.pbm.PSD)
         self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
         self.dissolutionIndex = self.pbm.getDissolutionIndex(self.maxDissolution, 0)
 
-    def LoadDistributionFunction(self, function):
+    def loadDistributionFunction(self, function):
         '''
         Creates a particle size distribution from a function
 
@@ -118,7 +91,7 @@ class GrainGrowthModel(GenericModel):
         '''
         self.pbm.reset()
         self.pbm.PSD = function(self.pbm.PSDsize)
-        self.Normalize()
+        self.normalize()
         self.avgR[0] = self.Rm(self.pbm.PSD)
         self._oldPSD, self._oldPSDbounds = np.array(self.pbm.PSD), np.array(self.pbm.PSDbounds)
         self.dissolutionIndex = self.pbm.getDissolutionIndex(self.maxDissolution, 0)
@@ -127,6 +100,7 @@ class GrainGrowthModel(GenericModel):
         '''
         Resets model with initially loaded grain size distribution
         '''
+        super().reset()
         self.time = np.zeros(1)
         self.avgR = np.zeros(1)
         self._z = 0
@@ -146,7 +120,7 @@ class GrainGrowthModel(GenericModel):
         x : np.array
             Grain size distribution corresponding to GrainGrowthModel.pbm.PSDbounds
         '''
-        return self.pbm.SecondMomentFromN(x) / self.pbm.FirstMomentFromN(x)
+        return self.pbm.secondMoment(N=x) / self.pbm.firstMoment(N=x)
     
     def Rm(self, x):
         '''
@@ -157,7 +131,7 @@ class GrainGrowthModel(GenericModel):
         x : np.array
             Grain size distribution corresponding to GrainGrowthModel.pbm.PSDbounds
         '''
-        return np.cbrt(self.pbm.ThirdMomentFromN(x) / self.pbm.ZeroMomentFromN(x))
+        return np.cbrt(self.pbm.thirdMoment(N=x) / self.pbm.zeroMoment(N=x))
     
     def grainGrowth(self, x):
         '''
@@ -171,14 +145,14 @@ class GrainGrowthModel(GenericModel):
         '''
         return self.alpha * self.M * self.gbe * (1 / self.Rcr(x) - 1 / self.pbm.PSDbounds)
     
-    def Normalize(self):
+    def normalize(self):
         '''
         Normalize PSD to have a third moment of 1
 
         Ideally, this isn't needed since the grain growth model accounts for constant volume
             But numerical errors will lead to small changes in volume over time
         '''
-        self.pbm.PSD *= 1 / self.pbm.ThirdMoment()
+        self.pbm.PSD *= 1 / self.pbm.thirdMoment()
 
     def constrainedGrowth(self, growthRate, z = 0):
         '''
@@ -213,7 +187,7 @@ class GrainGrowthModel(GenericModel):
         '''
         Returns current time and grain size distribution
         '''
-        return self.time[-1], [self.pbm.PSD]
+        return [self.pbm.PSD]
     
     def getdXdt(self, t, x):
         '''
@@ -251,11 +225,11 @@ class GrainGrowthModel(GenericModel):
             4. Normalize grain size distribution to 1 (should be a tiny correction factor due to step 3)
             5. Record time and average grain size
         '''
-        self.pbm.UpdatePBMEuler(time, x[0])
+        super().postProcess(time, x)
+        self.pbm.updatePBMEuler(time, x[0])
         self.pbm.adjustSizeClassesEuler(True)
         self.dissolutionIndex = self.pbm.getDissolutionIndex(self.maxDissolution, 0)
-        #self.pbm.PSD[:self.dissolutionIndex] = 0
-        self.Normalize()
+        self.normalize()
         self.time = np.append(self.time, time)
         self.avgR = np.append(self.avgR, self.Rm(self.pbm.PSD))
         self.updateCoupledModels()
@@ -273,30 +247,7 @@ class GrainGrowthModel(GenericModel):
         '''
         print('{}\t\t{:.1e}\t\t{:.1f}\t\t{:.3e}'.format(iteration, modelTime, simTimeElapsed, self.avgR[-1]*1e6))
 
-    def computeZenerRadius(self, model):
-        '''
-        Gets zener radius/drag force from PrecipitateModel
-
-        Drag force is defined as z_j = f_j^m_j / (K_j * avgR_j)
-            Where f_j is volume fraction for phase j
-            And   avgR_j is average radius for phase j
-        The total drag force is the sum of z_j over all the phases
-
-        Parameters
-        ----------
-        model : PrecpitateModel
-        '''
-        z = np.zeros(len(model.phases))
-        for p in range(len(model.phases)):
-            phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
-            #if model.avgR[model.n, p] > 0:
-            #    z[p] += np.power(model.betaFrac[model.n, p], self.m[phaseName]) / (self.K[phaseName] * model.avgR[model.n, p])
-            
-            if model.pData.Ravg[model.pData.n,p] > 0:
-                z[p] += np.power(model.pData.volFrac[model.pData.n,p], self.m[phaseName]) / (self.K[phaseName] * model.pData.Ravg[model.pData.n,p])
-        self._z = np.sum(z)
-
-    def computeZenerRadiusByN(self, model, x):
+    def computeZenerRadius(self, model: PrecipitateModel, x=None):
         '''
         Gets zener radius/drag force from PrecipitateModel and PSD defined by x
 
@@ -311,19 +262,21 @@ class GrainGrowthModel(GenericModel):
         x : list[np.array]
             List of particle size distributions in model
         '''
+        if x is None:
+            x = model.getCurrentX()
+
         z = np.zeros(len(model.phases))
         for p in range(len(model.phases)):
-            #volRatio = model.VmAlpha / model.VmBeta[p]
-            volRatio = model.matrixParameters.volume.Vm / model.precipitateParameters[p].volume.Vm
-            phaseName = model.phases[p] if model.phases[p] in self.m else 'all'
-            Ntot = model.PBM[p].ZeroMomentFromN(x[p])
-            RadSum = model.PBM[p].MomentFromN(x[p], 1)
-            #fBeta = np.amin([volRatio * model.GB[p].volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
-            fBeta = np.amin([volRatio * model.precipitateParameters[p].nucleation.volumeFactor * model.PBM[p].ThirdMomentFromN(x[p]), 1])
+            volRatio = model.matrix.volume.Vm / model.precipitates[p].volume.Vm
+            m = self.m.get(model.phases[p], self._mdefault)
+            K = self.K.get(model.phases[p], self._Kdefault)
+            Ntot = model.PBM[p].zeroMoment(N=x[p])
+            RadSum = model.PBM[p].moment(order=1, N=x[p])
+            fBeta = np.amin([volRatio * model.precipitates[p].nucleation.volumeFactor * model.PBM[p].thirdMoment(N=x[p]), 1])
             avgR = 0 if Ntot == 0 else RadSum / Ntot
 
             if avgR > 0:
-                z[p] += np.power(fBeta, self.m[phaseName]) / (self.K[phaseName] * avgR)
+                z[p] += np.power(fBeta, m) / (K * avgR)
             
         self._z = np.sum(z)
 
@@ -337,41 +290,64 @@ class GrainGrowthModel(GenericModel):
         model : PrecpitateModel
         '''
         self.computeZenerRadius(model)
-        self.solve(model.pData.time[model.pData.n] - model.pData.time[model.pData.n-1], solverType=self.solverType)
+        self.solve(model.data.time[model.data.n] - model.data.time[model.data.n-1], iterator=self.iterator)
 
-    def plotDistribution(self, ax, *args, **kwargs):
-        '''
-        Plots particle size distribution
+def _plot_grain_growth_generic(model: GrainGrowthModel, func, ax=None, *args, **kwargs):
+    ax = _get_axis(ax)
+    func(model.pbm, ax=ax)
+    ax.set_xlabel('Grain Radius (m)')
+    return ax
 
-        Parameters
-        ----------
-        ax : matplotlib axes
-        '''
-        self.pbm.PlotCurve(ax, *args, **kwargs)
-        ax.set_xlabel('Grain Radius (m)')
+def plotGrainPSD(model: GrainGrowthModel, ax=None, *args, **kwargs):
+    '''
+    Plots grain size distribution
 
-    def plotDistributionDensity(self, ax, *args, **kwargs):
-        '''
-        Plots particle size distribution density
+    Parameters
+    ----------
+    model: GrainGrowthModel
+    ax : matplotlib axes
+    '''
+    return _plot_grain_growth_generic(model, plotPSD, ax=ax, *args, **kwargs)
 
-        Parameters
-        ----------
-        ax : matplotlib axes
-        '''
-        self.pbm.PlotDistributionDensity(ax, *args, **kwargs)
-        ax.set_xlabel('Grain Radius (m)')
+def plotGrainPDF(model: GrainGrowthModel, ax=None, *args, **kwargs):
+    '''
+    Plots grain size distribution density
 
-    def plotRadiusvsTime(self, ax, bounds = None, timeUnits = 's', *args, **kwargs):
-        '''
-        Plots average grain radius over time
+    Parameters
+    ----------
+    model: GrainGrowthModel
+    ax : matplotlib axes
+    '''
+    return _plot_grain_growth_generic(model, plotPDF, ax=ax, *args, **kwargs)
 
-        Parameters
-        ----------
-        ax : matplotlib axes
-        '''
-        timeScale, timeLabel, bounds = getTimeAxis(self.time, timeUnits, bounds)
-        ax.plot(self.time*timeScale, self.avgR, *args, **kwargs)
-        ax.set_xlabel(timeLabel)
-        ax.set_ylabel('Grain Radius (m)')
-        ax.set_ylim([0, 1.1*np.amax(self.avgR)])
-        ax.set_xlim(bounds)
+def plotGrainCDF(model: GrainGrowthModel, ax=None, *args, **kwargs):
+    '''
+    Plots cumulative grain size distribution
+
+    Parameters
+    ----------
+    model: GrainGrowthModel
+    ax : matplotlib axes
+    '''
+    return _plot_grain_growth_generic(model, plotCDF, ax=ax, *args, **kwargs)
+
+def plotRadiusvsTime(model: GrainGrowthModel, timeUnits='s', ax=None, *args, **kwargs):
+    '''
+    Plots average grain size vs time
+
+    Parameters
+    ----------
+    model: GrainGrowthModel
+    timeUnits: str
+        's', 'min' or 'hr'
+    ax : matplotlib axes
+    '''
+    ax = _get_axis(ax)
+    time = model.time
+    timeScale, timeLabel, bounds = _get_time_axis(time, timeUnits)
+    ax.plot(timeScale*time, model.avgR, *args, **kwargs)
+    ax.set_xlabel(timeLabel)
+    ax.set_xlim(bounds)
+    ax.set_ylabel('Grain Radius (m)')
+    ax.set_ylim(bottom=0)
+    return ax

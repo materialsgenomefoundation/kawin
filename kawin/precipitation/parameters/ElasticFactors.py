@@ -30,6 +30,7 @@ For needle and plate-like precipitates, Eshelby's theory is used and taken from
 '''
 import itertools
 from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
 import numpy as np
 from kawin.precipitation.parameters.ShapeFactors import ShapeFactor
@@ -274,12 +275,13 @@ class StrainEnergyParameters:
     appliedStrain = np.zeros((3,3))
     constantEnergy = 0
 
-class StrainEnergyDescriptionBase:
+class StrainEnergyDescriptionBase (ABC):
     name = 'ABSTRACT STRAIN ENERGY DESCRIPTION'
 
     def __init__(self, params: StrainEnergyParameters = None):
         self.params = params
 
+    @abstractmethod
     def computeStrainEnergy(self, radius):
         raise NotImplementedError()
     

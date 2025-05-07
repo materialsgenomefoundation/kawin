@@ -1,11 +1,12 @@
 import numpy as np
 from numpy.testing import assert_allclose
 
-from kawin.precipitation import PrecipitateModel, VolumeParameter
-from kawin.diffusion import SinglePhaseModel
+from kawin.precipitation import PrecipitateModel, PrecipitateParameters, MatrixParameters, TemperatureParameters as PrecTemp
+from kawin.diffusion import SinglePhaseModel, TemperatureParameters as DiffTemp
+from kawin.diffusion.mesh import ProfileBuilder, Cartesian1D, LinearProfile1D
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.GenericModel import GenericModel, Coupler
-from kawin.solver import SolverType
+from kawin.solver import explicitEulerIterator, rk4Iterator
 from kawin.tests.datasets import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
@@ -22,14 +23,15 @@ def test_iterators():
     '''
     class TestModel(GenericModel):
         def __init__(self):
+            super().__init__()
             self.reset()
 
         def reset(self):
+            super().reset()
             self.x = np.array([0])
-            self.time = np.zeros(1)
 
         def getCurrentX(self):
-            return self.time[-1], [self.x[-1]]
+            return [self.x[-1]]
         
         def getdXdt(self, t, x):
             return [np.cos(t)]
@@ -38,16 +40,16 @@ def test_iterators():
             return 0.001
         
         def postProcess(self, time, x):
-            self.time = np.append(self.time, time)
+            super().postProcess(time, x)
             self.x = np.append(self.x, x[0])
             return x, False
         
     m = TestModel()
-    m.solve(10, solverType=SolverType.EXPLICITEULER)
+    m.solve(10, iterator=explicitEulerIterator)
     eulerX = m.x[-1]
 
     m.reset()
-    m.solve(10, solverType=SolverType.RK4)
+    m.solve(10, iterator=rk4Iterator)
     rkX = m.x[-1]
 
     assert_allclose(eulerX, np.sin(10), rtol=1e-2)
@@ -62,68 +64,51 @@ def test_coupler_shape():
         Diffusion model: [(elements,cells,)]
     Flattening the arrays will result in a 1D array of [bins + elements*cells]
     '''
-    #Create model
-    p_model = PrecipitateModel(phases=['AL3ZR'], elements=['ZR'])
-    bins = 75
-    minBins = 50
-    maxBins = 100
-    p_model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=bins, minBins=minBins, maxBins=maxBins)
-
-    xInit = 4e-3        #Initial composition (mole fraction)
-    p_model.setInitialComposition(xInit)
-
-    T = 450 + 273.15    #Temperature (K)
-    p_model.setTemperature(T)
-
-    gamma = 0.1         #Interfacial energy (J/m2)
-    p_model.setInterfacialEnergy(gamma)
-
     D0 = 0.0768         #Diffusivity pre-factor (m2/s)
     Q = 242000          #Activation energy (J/mol)
     Diff = lambda T: D0 * np.exp(-Q / (8.314 * T))
     AlZrTherm.setDiffusivity(Diff, 'FCC_A1')
-    #p_model.setDiffusivity(Diff)
 
     a = 0.405e-9        #Lattice parameter
     Va = a**3           #Atomic volume of FCC-Al
     Vb = a**3           #Assume Al3Zr has same unit volume as FCC-Al
     atomsPerCell = 4    #Atoms in an FCC unit cell
-    p_model.setVolumeAlpha(Va, VolumeParameter.ATOMIC_VOLUME, atomsPerCell)
-    p_model.setVolumeBeta(Vb, VolumeParameter.ATOMIC_VOLUME, atomsPerCell)
+    
+    matrix = MatrixParameters(['ZR'])
+    matrix.initComposition = 4e-3
+    matrix.volume.setVolume(Va, 'VA', atomsPerCell)
+    matrix.nucleationSites.setNucleationDensity(grainSize=1, dislocationDensity=1e15)
 
-    #Average grain size (um) and dislocation density (1e15)
-    p_model.setNucleationDensity(grainSize = 1, dislocationDensity = 1e15)
-    p_model.setNucleationSite('dislocations')
+    precipitate = PrecipitateParameters('AL3ZR')
+    precipitate.gamma = 0.1
+    precipitate.volume.setVolume(Vb, 'VA', atomsPerCell)
+    precipitate.nucleation.setNucleationType('dislocations')
 
-    #Set thermodynamic functions
-    #p_model.setThermodynamics(AlZrTherm, addDiffusivity=False)
-    p_model.setThermodynamics(AlZrTherm)
+    #Create model
+    p_model = PrecipitateModel(matrix, [precipitate], AlZrTherm, PrecTemp(450+273.15))
+    bins = 75
+    minBins = 50
+    maxBins = 100
+    p_model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=bins, minBins=minBins, maxBins=maxBins)
 
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
-    #Since we defined L12, the disordered phase as DIS_ attached to the front
     N = 20
-    d_model = SinglePhaseModel([-1e-3, 1e-3], N, ['NI', 'AL', 'CR'], ['DIS_FCC_A1'])
-
-    #Define Cr and Al composition, with step-wise change at z=0
-    #d_model.setCompositionLinear(0.077, 0.359, 'CR')
-    #d_model.setCompositionLinear(0.054, 0.062, 'AL')
-    d_model.setCompositionLinear(0.077, 0.359, 'CR')
-    d_model.setCompositionLinear(0.054, 0.062, 'AL')
-
-    d_model.setThermodynamics(NiAlCrTherm)
-    #d_model.setTemperature(1200 + 273.15)
-    d_model.setTemperature(1200+273.15)
+    profile = ProfileBuilder([(LinearProfile1D(-1e-3, [0.077, 0.054], 1e-3, [0.359, 0.062]), ['CR', 'AL'])])
+    mesh = Cartesian1D(['AL', 'CR'], [-1e-3, 1e-3], N)
+    mesh.setResponseProfile(profile)
+    d_model = SinglePhaseModel(mesh, ['NI', 'AL', 'CR'], ['FCC_A1'], NiAlCrTherm, DiffTemp(1200+273.15))
 
     coupled_model = Coupler([p_model, d_model])
     coupled_model.setup()
 
-    t, x = coupled_model.getCurrentX()
+    x = coupled_model.getCurrentX()
     x_flat = coupled_model.flattenX(x)
     x_restore = coupled_model.unflattenX(x_flat, x)
 
     assert(len(x) == 2)
     assert(len(x[0]) == 1 and x[0][0].shape == (bins,))
-    assert(len(x[1]) == 1 and x[1][0].shape == (2,N))
+    #assert(len(x[1]) == 1 and x[1][0].shape == (2,N))
+    assert(len(x[1]) == 1 and x[1][0].shape == (N,2))
     assert(x_flat.shape == (bins+2*N,))
     assert(len(x_restore) == len(x))
     assert(len(x_restore[0]) == len(x[0]) and x_restore[0][0].shape == x[0][0].shape)

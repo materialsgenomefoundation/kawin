@@ -28,10 +28,10 @@ The thermo factor is also defined in Wu et al. The differences between these two
 Holmedal et al uses the surface area correction of the particle to modify the Gibbs-Thomson 
 contribution while Wu et al uses the volume correction
 '''
-
+from abc import ABC, abstractmethod
 import numpy as np
 
-class ShapeDescriptionBase:
+class ShapeDescriptionBase (ABC):
     '''
     Defines functions to describe a precipitate shape
 
@@ -131,15 +131,19 @@ class ShapeDescriptionBase:
         factor[ar > 1] = self._thermoFactor(ar[ar > 1])
         return np.squeeze(factor)
     
+    @abstractmethod
     def _eqRadius(self, ar):
         raise NotImplementedError()
     
+    @abstractmethod
     def _normalRadii(self, ar):
         raise NotImplementedError()
     
+    @abstractmethod
     def _kineticFactor(self, ar):
         raise NotImplementedError()
     
+    @abstractmethod
     def _thermoFactor(self, ar):
         raise NotImplementedError()
     

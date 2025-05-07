@@ -2,142 +2,136 @@ import numpy as np
 
 from kawin.Constants import GAS_CONSTANT
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.thermo.Mobility import interstitials, x_to_u_frac
+from kawin.thermo.Mobility import interstitials, x_to_u_frac, u_to_x_frac, expand_u_frac
 from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
+from kawin.diffusion.mesh.MeshBase import DiffusionPair, arithmeticMean, harmonicMean, logMean
+
+def _homogenizationMean(Ds):
+    '''
+    Average homogenization flux
+    Ds should be in the shape of (m x N x y x 2)
+        m - number of items to average over
+        N - number of nodes
+        y - number of responses
+        2 - (transformation to volume fixed frame, homogenization term (\Gamma))
+            transformation is in composition, so use arithmetic average
+            homogenization term is in terms of mobility, so use log average (mobility is always positive)
+    '''
+    v = arithmeticMean([D[...,0] for D in Ds])
+    m = logMean([D[...,1] for D in Ds])
+    return v * m
+
+def _idealMean(Ds):
+    '''
+    Average homogenization flux
+    Ds should be in the shape of (m x N x y x 4)
+        m - number of items to average over
+        N - number of nodes
+        y - number of responses
+        4 - (transformation to volume fixed frame, temperature, homogenization term (\Gamma), inverse u term)
+            transformation is in composition, so use arithmetic average
+            temperature (+eps*R) is linear, so use arithmetic average
+            homogenization term is in terms of mobility, so use log average
+            inverse u term is inverse composition, so use harmonic mean (composition should always be > 0 based off constraints in diffusion model)
+    '''
+    v = arithmeticMean([D[...,0] for D in Ds])
+    t = arithmeticMean([D[...,1] for D in Ds])
+    m = logMean([D[...,2] for D in Ds])
+    invU = harmonicMean([D[...,3] for D in Ds])
+    #print(v.shape, t.shape, m.shape, invU.shape)
+    return v * t * m * invU
+
+def _atNodeProduct(Ds):
+    return np.prod(Ds, axis=-1)
 
 class HomogenizationModel(DiffusionModel): 
-    def __init__(self, zlim, N, elements, phases, 
+    def __init__(self, mesh, elements, phases, 
                  thermodynamics = None,
-                 temperatureParameters = None, 
-                 boundaryConditions = None,
-                 compositionProfile = None,
-                 constraints = None,
+                 temperature = None, 
                  homogenizationParameters = None,
-                 record = True):
-        super().__init__(zlim=zlim, N=N, elements=elements, phases=phases, 
+                 constraints = None,
+                 record = False):
+        super().__init__(mesh=mesh, elements=elements, phases=phases, 
                          thermodynamics=thermodynamics,
-                         temperatureParameters=temperatureParameters, 
-                         boundaryConditions=boundaryConditions, 
-                         compositionProfile=compositionProfile, 
-                         constraints=constraints, 
+                         temperature=temperature,  
+                         constraints=constraints,
                          record=record)
         self.homogenizationParameters = homogenizationParameters if homogenizationParameters is not None else HomogenizationParameters()
-
-    def setMobilityFunction(self, function):
-        '''
-        Sets averaging function to use for mobility
-
-        Default mobility value should be that a phase of unknown mobility will be ignored for average mobility calcs
-
-        Parameters
-        ----------
-        function : str
-            Options - 'upper wiener', 'lower wiener', 'upper hashin', 'lower hashin', 'lab'
-        '''
-        self.homogenizationParameters.setHomogenizationFunction(function)
-
-    def setLabyrinthFactor(self, n):
-        '''
-        Labyrinth factor
-
-        Parameters
-        ----------
-        n : int
-            Either 1 or 2
-            Note: n = 1 will the same as the weiner upper bounds
-        '''
-        self.homogenizationParameters.setLabyrinthFactor(n)
-
-    def setMobilityPostProcessFunction(self, function, functionArgs = None):
-        '''
-        Sets post process function by str or int
-
-        Parameters
-        ----------
-        functionName : Union[str, int]
-            Key for post process function ('none', 'predefined', 'majority', 'exclude')
-        functionArgs : Any
-            Additional function arguments
-            If functionName = 'predefined', functionArgs is str corresponding to predefined phase
-            If functionName = 'exclude', functionArgs is list[str] corresponding to phases to set mobility to 0
-        '''
-        self.homogenizationParameters.setPostProcessFunction(function, functionArgs)
-
-    def setIdealEps(self, eps):
-        '''
-        Factor for the ideal entropy contribution
-
-        Parameters
-        ----------
-        eps : float
-        '''
-        self.homogenizationParameters.eps = eps
     
-    def _getFluxes(self, t, x_curr):
+    def _getPairs(self, t, xCurr):
         '''
-        Return fluxes and time interval for the current iteration
+        Compute diffusivity-response pairs
 
-        Steps:
-            1. Get average mobility from homogenization function. Interpolate to get mobility (M) at cell boundaries
-            2. Interpolate composition to get composition (x) at cell boundaries
-            3. Calculate chemical potential gradient (dmu/dz) at cell boundaries
-            4. Calculate composition gradient (dx/dz) at cell boundaries
-            5. Calculate homogenization flux = -M / dmu/dz
-            6. Calculate ideal contribution = -eps * M*R*T / x * dx/dz
-            7. Apply boundary conditions for fluxes at ends of mesh
-                If fixed flux condition (Neumann) - then use the flux defined in the condition
-                If fixed composition condition (Dirichlet) - then use nearby flux (this will keep the composition fixed after apply the fluxes)
+        J_k = -\Gamma_k d\mu_k/dz - \eps*RT*\Gamma_k/u_k du_k/dz
+        J^n_k = -sum(\delta_jk - u_k) J_j
+        dx_k/dt = -dJ^n_k/dz
+
+        For x_k, a pair would comprise of:
+            (\delta_jk - u_k) \Gamma_j, \mu_k
+            (\delta_jk - u_k) \eps*RT*\Gamma_k/u_k, u_k
         '''
-        x = x_curr[0]
-        T = self.temperatureParameters(self.z, t)
+        # x is shape (N,e), so convert to mesh shape to obtain diffusion/response coordinates
+        # TODO: this feels inefficient to convert u->x for mobility, then back to u for flux calculation
+        u = expand_u_frac(xCurr[0], self.allElements, interstitials)
+        x = u_to_x_frac(u, self.allElements, interstitials)[:,1:]
+        x = self.mesh.unflattenResponse(x)
+        yD, zD = self.mesh.getDiffusivityCoordinates(x)
+        yR, zR = self.mesh.getResponseCoordinates(x)
 
-        avg_mob, mu = computeHomogenizationFunction(self.therm, x.T, T, self.homogenizationParameters, self.hashTable)
-        avg_mob = avg_mob.T
-        mu = mu.T
+        # temp is (N,e)
+        tempD = self.temperatureParameters(zD, t)
+        tempR = self.temperatureParameters(zR, t)
+        # mob and mu are (N,e)
+        mobD, muD = computeHomogenizationFunction(self.therm, yD, tempD, self.homogenizationParameters, self.hashTable)
+        mobR, muR = computeHomogenizationFunction(self.therm, yR, tempR, self.homogenizationParameters, self.hashTable)
 
-        #Get average mobility between nodes
-        log_mob = np.log(avg_mob)
-        avg_mob = np.exp(0.5*(log_mob[:,1:] + log_mob[:,:-1]))
+        # Full composition
+        # x_full = (N,e+1), u_full = (N,e+1), u_term = (N,e+1,e+1)
+        x_fullD = np.concatenate((1-np.sum(yD, axis=1)[:,np.newaxis], yD), axis=1)
+        u_fullD = x_to_u_frac(x_fullD, self.allElements, interstitials)
+        # u_term is the (\delta_jk - u_k), which converts from a lattice fixed frame to a volume fixed frame
+        u_termD = (np.eye(len(self.allElements))[np.newaxis,:,:] - u_fullD[:,:,np.newaxis])
+        # When converting to a volume fixed frame, only the substitutional (or volume contributing) elements
+        # contribute to the corrected flux. To account for interstitials, we replace the column
+        # corresponding to the interstitial (which at this point is [u_A, u_B, 1-u_I, u_D] where I is interstital)
+        # to be [0, 0, 1, 0]. So the column is 0 except for the interstitial row
+        for i,e in enumerate(self.allElements):
+            if e in interstitials:
+                u_termD[:,:,i] = 0
+                u_termD[:,i,i] = 1
 
-        #Composition between nodes
-        x_full = np.concatenate(([1-np.sum(x, axis=0)], x), axis=0)
-        u_frac = x_to_u_frac(x_full.T, self.allElements, interstitials).T
-        avgU = 0.5 * (u_frac[:,1:] + u_frac[:,:-1])
+        x_fullR = np.concatenate((1-np.sum(yR, axis=1)[:,np.newaxis], yR), axis=1)
+        u_fullR = x_to_u_frac(x_fullR, self.allElements, interstitials)
 
-        #Chemical potential gradient
-        dmudz = (mu[:,1:] - mu[:,:-1]) / self.dz
+        nEle = len(self.allElements)
+        # mobility matrix is repeated among rows
+        mobD_matrix = np.repeat(mobD[:,np.newaxis,:], nEle, axis=1)
+        # We'll group eps*R with T here
+        T_matrix = np.tile(tempD[:,np.newaxis,np.newaxis], (1, nEle, nEle)) * self.homogenizationParameters.eps * GAS_CONSTANT
+        # inverse composition and response is repeated among rows
+        invU_matrix = np.repeat(1/u_fullD[:,np.newaxis,:], nEle, axis=1)
+        mu_matrix = np.repeat(muR[:,np.newaxis,:], nEle, axis=1)
+        uR_matrix = np.repeat(u_fullR[:,np.newaxis,:], nEle, axis=1)
 
-        #Composition gradient (we need to calculate gradient for reference element)
-        dudz = (u_frac[:,1:] - u_frac[:,:-1]) / self.dz
-
-        # J = -M * dmu/dz
-        # Ideal contribution: J_id = -eps * M*R*T / x * dx/dz
-        fluxes = np.zeros((len(self.elements)+1, self.N-1))
-        fluxes = -avg_mob * dmudz
-        nonzeroComp = avgU != 0
-        Tmid = (T[1:] + T[:-1]) / 2
-        Tmidfull = Tmid[np.newaxis,:]
-        for i in range(fluxes.shape[0]-1):
-            Tmidfull = np.concatenate((Tmidfull, Tmid[np.newaxis,:]), axis=0)
-        fluxes[nonzeroComp] += -self.homogenizationParameters.eps * avg_mob[nonzeroComp] * GAS_CONSTANT * Tmidfull[nonzeroComp] * dudz[nonzeroComp] / avgU[nonzeroComp]
-
-        #Flux in a volume fixed frame: J_vi = J_i - x_i * sum(J_j)
-        vfluxes = np.zeros((len(self.elements), self.N+1))
-        vfluxes[:,1:-1] = fluxes[1:,:] - avgU[1:,:] * np.sum([fluxes[i] for i in range(len(self.allElements)) if self.allElements[i] not in interstitials], axis=0)
-
-        #Boundary conditions
-        self.boundaryConditions.applyBoundaryConditionsToFluxes(self.elements, vfluxes)
-
-        return vfluxes
-
-    def getFluxes(self):
-        '''
-        Return fluxes and time interval for the current iteration
-        '''
-        vfluxes = self._getFluxes(self.t, [self.x])
-        dJ = np.abs(vfluxes[:,1:] - vfluxes[:,:-1]) / self.dz
-        dt = self.constraints.maxCompositionChange / np.amax(dJ[dJ!=0])
-        return vfluxes, dt
+        pairs = []
+        # Since volume fixed frame leads to 1 dependent component (which we take as the first)
+        # we don't need to take the 1st row of mob_term and ideal_term
+        for i in range(len(self.allElements)):
+            # homogenization contribution - (vol transform * \Gamma) * dmu/dz
+            pairs.append(DiffusionPair(
+                diffusivity=np.transpose(np.array([u_termD[:,1:,i], mobD_matrix[:,1:,i]]), axes=(1,2,0)),
+                response=mu_matrix[:,1:,i],
+                averageFunction=_homogenizationMean,
+                atNodeFunction=_atNodeProduct
+            ))
+            # ideal contribution - (vol transform * eps*R*T * \Gamma / u) * du/dz
+            pairs.append(DiffusionPair(
+                diffusivity=np.transpose(np.array([u_termD[:,1:,i], T_matrix[:,1:,i], mobD_matrix[:,1:,i], invU_matrix[:,1:,i]]), axes=(1,2,0)),
+                response=uR_matrix[:,1:,i],
+                averageFunction=_idealMean,
+                atNodeFunction=_atNodeProduct
+            ))
+        return pairs
     
     def getDt(self, dXdt):
         '''

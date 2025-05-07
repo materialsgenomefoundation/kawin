@@ -1,8 +1,7 @@
 import numpy as np
-import matplotlib.pyplot as plt
+from kawin.PlotUtils import _get_axis, _adjust_kwargs
 from kawin.precipitation import PrecipitateModel
 from kawin.precipitation.StoppingConditions import PrecipitationStoppingCondition
-from typing import List
 
 class TTPCalculator:
     '''
@@ -15,8 +14,10 @@ class TTPCalculator:
         Stopping conditions to store times when these conditions are reached
         Model will continue to solve until the max time is reached or all conditions are satisfied
     '''
-    def __init__(self, model : PrecipitateModel, stopConds : List[PrecipitationStoppingCondition]):
+    def __init__(self, model : PrecipitateModel, stopConds : list[PrecipitationStoppingCondition]):
         self.model = model
+        if isinstance(stopConds, PrecipitationStoppingCondition):
+            stopConds = [stopConds]
         self.stopConds = stopConds
         self._maxTime = 0
         self.transformationTimes = None
@@ -37,7 +38,7 @@ class TTPCalculator:
             Temperature
         '''
         self.model.reset()
-        self.model.setTemperature(T)
+        self.model.temperatureParameters.setIsothermalTemperature(T)
         self.model.solve(self._maxTime, verbose = True, vIt = 1000)
 
         values = np.zeros(len(self.stopConds))
@@ -83,26 +84,26 @@ class TTPCalculator:
             for j in range(len(self.stopConds)):
                 self.transformationTimes[i,j] = outputs[i][j]
 
-    def plot(self, ax, labels, xlim = [1, 1e6], *args, **kwargs):
-        '''
-        Plots TTP diagram
+def plotTTP(ttp: TTPCalculator, ax=None, *args, **kwargs):
+    '''
+    Plots TTP diagram
 
-        Parameters
-        ----------
-        ax : Matplotlib axes object
-        labels : list of str
-            Labels for each stopping condition
-        xlim : list of float
-            x-axis limits
-            Plotting will be set on log scale, so lower limits will be set to be non-zero
-        '''
-        for i in range(len(self.stopConds)):
-            indices = self.transformationTimes[:,i] != -1
-            ax.plot(self.transformationTimes[indices,i], self.temperatures[indices], label=labels[i], *args, **kwargs)
-        ax.legend()
-        if xlim[0] == 0:
-            xlim[0] = 1e-3
-        ax.set_xlim(xlim)
-        ax.set_xlabel('Time (s)')
-        ax.set_xscale('log')
-        ax.set_ylabel('Temperature (K)')
+    Parameters
+    ----------
+    ax : Matplotlib axes object
+    labels : list of str
+        Labels for each stopping condition
+    xlim : list of float
+        x-axis limits
+        Plotting will be set on log scale, so lower limits will be set to be non-zero
+    '''
+    ax = _get_axis(ax)
+    for i in range(len(ttp.stopConds)):
+        indices = ttp.transformationTimes[:,i] != -1
+        plot_kwargs = _adjust_kwargs(ttp.stopConds[i].name, {'label': ttp.stopConds[i].label}, **kwargs)
+        ax.plot(ttp.transformationTimes[indices,i], ttp.temperatures[indices], *args, **plot_kwargs)
+    ax.set_xlabel('Time (s)')
+    ax.set_xscale('log')
+    ax.set_ylabel('Temperature (K)')
+    ax.legend()
+    return ax

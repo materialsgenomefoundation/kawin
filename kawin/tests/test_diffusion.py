@@ -453,9 +453,10 @@ def test_single_phase_2d():
     dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
     dt = m.getDt(dxdt)
 
-    print(dxdt[0][10,10])
+    # Note: dxdt is (400,2), so (210,) corresponds to (10,10,) on 2d array
+    print(dxdt[0][210])
     print(dt)
-    assert_allclose(dxdt[0][10,10], [2.85828916e-6, 2.01865282e-6], rtol=1e-3)
+    assert_allclose(dxdt[0][210], [2.85828916e-6, 2.01865282e-6], rtol=1e-3)
     assert_allclose(dt, 12630.562798, rtol=1e-3)
 
 def test_diffusion_profile():

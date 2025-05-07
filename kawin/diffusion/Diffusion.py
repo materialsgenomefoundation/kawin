@@ -1,6 +1,7 @@
 import numpy as np
 from kawin.GenericModel import GenericModel
 from kawin.thermo import GeneralThermodynamics
+from kawin.thermo.Mobility import x_to_u_frac, expand_x_frac, u_to_x_frac, expand_u_frac, interstitials
 from kawin.diffusion.mesh import AbstractMesh
 from kawin.diffusion.DiffusionParameters import TemperatureParameters, DiffusionConstraints, HashTable
 
@@ -48,6 +49,8 @@ class DiffusionModel(GenericModel):
             self.disableRecording()
             self._recordedX = None
             self._recordedTime = None
+
+        self._validateMeshComposition()
 
     def reset(self):
         '''
@@ -229,7 +232,12 @@ class DiffusionModel(GenericModel):
         scaledMinComp = len(self.allElements)*self.constraints.minComposition
         yFlat[yFlat > scaledMinComp] = yFlat[yFlat > scaledMinComp] - scaledMinComp
         yFlat[yFlat < scaledMinComp] = self.constraints.minComposition
-        self.mesh.y = self.mesh.unflattenResponse(yFlat)
+        #self.mesh.y = self.mesh.unflattenResponse(yFlat)
+
+        # Convert composition to u-fraction and store into mesh
+        yFull = expand_x_frac(yFlat)
+        uFull = x_to_u_frac(yFull, self.allElements, interstitials, return_usum=False)
+        self.mesh.y = self.mesh.unflattenResponse(uFull[:,1:])
 
     def setup(self):
         '''
@@ -243,7 +251,7 @@ class DiffusionModel(GenericModel):
             if self.therm is not None:
                 self.therm.clearCache()
 
-        self._validateMeshComposition()
+        #self._validateMeshComposition()
         self.isSetup = True
         self.record(self.currentTime) #Record at t = 0
 
@@ -266,7 +274,7 @@ class DiffusionModel(GenericModel):
         Computes dXdt from mesh and diffusivity-respones pairs
         '''
         pairs = self._getPairs(t, xCurr)
-        return [self.mesh.computedXdt(pairs)]
+        return [self.mesh.flattenResponse(self.mesh.computedXdt(pairs))]
     
     def printHeader(self):
         print('Iteration\tSim Time (h)\tRun time (s)')
@@ -276,7 +284,8 @@ class DiffusionModel(GenericModel):
         super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
-        return [self.mesh.y]
+        # This is a little inefficient, but the model should take in a shape of (N,e) regardless of the mesh
+        return [self.mesh.flattenResponse(self.mesh.y)]
     
     def postProcess(self, time, x):
         '''
@@ -284,8 +293,11 @@ class DiffusionModel(GenericModel):
         Records new values if recording is enabled
         '''
         super().postProcess(time, x)
-        x[0] = np.clip(x[0], self.constraints.minComposition, 1-self.constraints.minComposition)
-        self.mesh.y = x[0]
+        #for i, e in enumerate(self.elements):
+        #    if e not in interstitials:
+        #        x[0][:,i] = np.clip(x[0][:,i], self.constraints.minComposition, 1-self.constraints.minComposition)
+        #x[0] = np.clip(x[0], self.constraints.minComposition, 1-self.constraints.minComposition)
+        self.mesh.y = self.mesh.unflattenResponse(x[0])
         self.updateCoupledModels()
         self.record(time)
         return self.getCurrentX(), False

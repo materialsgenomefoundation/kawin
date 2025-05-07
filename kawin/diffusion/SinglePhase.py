@@ -1,4 +1,5 @@
 import numpy as np
+from kawin.thermo.Mobility import u_to_x_frac, expand_u_frac, interstitials
 from kawin.diffusion.Diffusion import DiffusionModel
 from kawin.diffusion.mesh.MeshBase import DiffusionPair, arithmeticMean
 
@@ -12,8 +13,10 @@ class SinglePhaseModel(DiffusionModel):
 
         For x_k, a pair would comprise of (D^n_jk, x_j)
         '''
-        #Calculate diffusivity at cell centers
-        x = xCurr[0]
+        # x is shape (N,e), so convert to mesh shape to obtain diffusion/response coordinates
+        u = expand_u_frac(xCurr[0], self.allElements, interstitials)
+        x = u_to_x_frac(u, self.allElements, interstitials)[:,1:]
+        x = self.mesh.unflattenResponse(x)
         yD, zD = self.mesh.getDiffusivityCoordinates(x)
         yR, zR = self.mesh.getResponseCoordinates(x)
 

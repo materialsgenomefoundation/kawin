@@ -2,7 +2,7 @@ import numpy as np
 
 from kawin.Constants import GAS_CONSTANT
 from kawin.diffusion.Diffusion import DiffusionModel
-from kawin.thermo.Mobility import interstitials, x_to_u_frac
+from kawin.thermo.Mobility import interstitials, x_to_u_frac, u_to_x_frac, expand_u_frac
 from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 from kawin.diffusion.mesh.MeshBase import DiffusionPair, arithmeticMean, harmonicMean, logMean
 
@@ -70,7 +70,11 @@ class HomogenizationModel(DiffusionModel):
             (\delta_jk - u_k) \Gamma_j, \mu_k
             (\delta_jk - u_k) \eps*RT*\Gamma_k/u_k, u_k
         '''
-        x = xCurr[0]
+        # x is shape (N,e), so convert to mesh shape to obtain diffusion/response coordinates
+        # TODO: this feels inefficient to convert u->x for mobility, then back to u for flux calculation
+        u = expand_u_frac(xCurr[0], self.allElements, interstitials)
+        x = u_to_x_frac(u, self.allElements, interstitials)[:,1:]
+        x = self.mesh.unflattenResponse(x)
         yD, zD = self.mesh.getDiffusivityCoordinates(x)
         yR, zR = self.mesh.getResponseCoordinates(x)
 

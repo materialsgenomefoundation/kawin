@@ -47,7 +47,7 @@ class SinglePhaseModel(DiffusionModel):
                     averageFunction=arithmeticMean
                     ))
                 #pairs.append((d[:,:,i], np.tile([yR[:,i]], (numElements, 1)).T, arithmeticMean))
-        self._currdt = 0.4 * np.amin(self.mesh.dz)**2 / np.amax(d) / self.mesh.dims
+        self._currdt = 0.4 * self.mesh.dz**2 / np.amax(d) / self.mesh.dims
         return pairs
     
     def getDt(self, dXdt):

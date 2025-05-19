@@ -255,10 +255,16 @@ class AbstractMesh (ABC):
         Number of response variables
     responses: list[str]
         Names of response variables
+    N: int
+        Total number of nodes
+    dims: int
+        Number of dimensions in z
     y: np.ndarray
         Values of response variables
     z: np.ndarray
         Values of spatial coordinates corresponding to y
+    dz: float
+        In general, the smallest distance between two nodes
 
     Default assumptions in this mesh:
         y has shape [N,e] - e is number of responses
@@ -414,9 +420,9 @@ class FiniteVolumeGrid(AbstractMesh):
         super().__init__(responses)
         self.dims = dims
         self.zlim = zlims
-        self.N = Ns
-        self.Ntot = np.prod(Ns)
-        self.y = np.zeros((*self.N, self.numResponses))
+        self.Ns = Ns
+        self.N = np.prod(Ns)
+        self.y = np.zeros((*self.Ns, self.numResponses))
         self.defineZCoordinates()
         
     @abstractmethod
@@ -429,14 +435,14 @@ class FiniteVolumeGrid(AbstractMesh):
         '''
         numResponses = self.numResponses if numResponses is None else numResponses
         shape = y.shape     # shape is (n,m,...,e,...)
-        return np.reshape(y, (self.Ntot, numResponses, *shape[len(self.N)+1:]))
+        return np.reshape(y, (self.N, numResponses, *shape[len(self.Ns)+1:]))
     
     def flattenSpatial(self, z):
         '''
         Converts z [n x m x ..., d, ...] to zFlat [N, d, ...]
         '''
         shape = z.shape     # shape is (n,m,...,e,...)
-        return np.reshape(z, (self.Ntot, self.dims, *shape[len(self.N)+1:]))
+        return np.reshape(z, (self.N, self.dims, *shape[len(self.Ns)+1:]))
     
     def unflattenResponse(self, yFlat, numResponses = None):
         '''
@@ -444,14 +450,14 @@ class FiniteVolumeGrid(AbstractMesh):
         '''
         numResponses = self.numResponses if numResponses is None else numResponses
         shape = yFlat.shape     # shape is (N,e,...)
-        return np.reshape(yFlat, (*self.N, numResponses, *shape[2:]))
+        return np.reshape(yFlat, (*self.Ns, numResponses, *shape[2:]))
     
     def unflattenSpatial(self, zFlat):
         '''
         Converts zFlat [N, e, ...] to z [n x m x ..., e, ...]
         '''
         shape = zFlat.shape     # shape is (N,e,...)
-        return np.reshape(zFlat, (*self.N, self.dims, *shape[2:]))
+        return np.reshape(zFlat, (*self.Ns, self.dims, *shape[2:]))
 
     
 

@@ -293,10 +293,14 @@ class DiffusionModel(GenericModel):
         Records new values if recording is enabled
         '''
         super().postProcess(time, x)
-        #for i, e in enumerate(self.elements):
-        #    if e not in interstitials:
-        #        x[0][:,i] = np.clip(x[0][:,i], self.constraints.minComposition, 1-self.constraints.minComposition)
-        #x[0] = np.clip(x[0], self.constraints.minComposition, 1-self.constraints.minComposition)
+        # Bound u-fraction to not be invalid values
+        #   For substitutional - u-fraction = (0, 1)
+        #   For interstitial   - u-fraction = (0, inf)
+        for i, e in enumerate(self.elements):
+            if e not in interstitials:
+                x[0][:,i] = np.clip(x[0][:,i], self.constraints.minComposition, 1-self.constraints.minComposition)
+            else:
+                x[0][:,i] = np.clip(x[0][:,i], self.constraints.minComposition, None)
         self.mesh.y = self.mesh.unflattenResponse(x[0])
         self.updateCoupledModels()
         self.record(time)

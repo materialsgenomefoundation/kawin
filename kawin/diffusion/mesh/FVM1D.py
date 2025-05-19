@@ -255,9 +255,10 @@ class FiniteVolume1D(FiniteVolumeGrid):
         self.computeAtMidpoint(computeMidpoint)
 
     def defineZCoordinates(self):
-        self.zEdge = np.reshape(np.linspace(self.zlim[0][0], self.zlim[0][1], self.N[0]+1), (self.N[0]+1,1))
+        self.zEdge = np.reshape(np.linspace(self.zlim[0][0], self.zlim[0][1], self.Ns[0]+1), (self.Ns[0]+1,1))
         self.z = 0.5*(self.zEdge[1:,:] + self.zEdge[:-1,:])
-        self.dz = [self.z[1] - self.z[0]]
+        self.dzs = [self.z[1] - self.z[0]]
+        self.dz = np.amin(self.dzs)
 
     def setResponseProfile(self, profileBuilder, boundaryConditions = None):
         if boundaryConditions is None:
@@ -286,7 +287,7 @@ class FiniteVolume1D(FiniteVolumeGrid):
 
     def computeFluxes(self, pairs: list[DiffusionPair]):
         '''Compute fluxes from (diffusivity, response) pairs on a 1D FVM mesh'''
-        fluxes = np.zeros((self.N[0]+1, self.numResponses))
+        fluxes = np.zeros((self.Ns[0]+1, self.numResponses))
         isPeriodic = isinstance(self.boundaryConditions, PeriodicBoundary1D)
         for p in pairs:
             # compute fluxes for all but first and last edge (these are handled by boundary condition)
@@ -294,11 +295,11 @@ class FiniteVolume1D(FiniteVolumeGrid):
             avgFunc = arithmeticMean if p.averageFunction is None else p.averageFunction
             atNodeFunc = noChangeAtNode if p.atNodeFunction is None else p.atNodeFunction
             Dmid, Dend = self.midPointCalculator.getDMid(D, isPeriodic=isPeriodic, avgFunc=avgFunc, atNodeFunc=atNodeFunc)
-            fluxes[1:-1] += self._diffusiveFlux(Dmid, r[1:], r[:-1], self.dz[0])
+            fluxes[1:-1] += self._diffusiveFlux(Dmid, r[1:], r[:-1], self.dzs[0])
 
             # if periodic, then wrap first cell to the end, and first/last flux will be the same
             if isPeriodic:
-                endFlux = self._diffusiveFlux(Dend, r[0], r[-1], self.dz[0])
+                endFlux = self._diffusiveFlux(Dend, r[0], r[-1], self.dzs[0])
                 fluxes[0] += endFlux
                 fluxes[-1] += endFlux
 
@@ -320,7 +321,7 @@ class FiniteVolume1D(FiniteVolumeGrid):
 class Cartesian1D(FiniteVolume1D):
     def _fluxTodXdt(self, fluxes):
         '''For cartesian: dx/dt = -dJ/dz'''
-        return -(fluxes[1:] - fluxes[:-1]) / self.dz[0]
+        return -(fluxes[1:] - fluxes[:-1]) / self.dzs[0]
     
 class Cylindrical1D(FiniteVolume1D):
     def __init__(self, responses, rlim, N, computeMidpoint = False):
@@ -336,7 +337,7 @@ class Cylindrical1D(FiniteVolume1D):
     def _fluxTodXdt(self, fluxes):
         '''For cylindrical: dx/dt = -1/r dJ/dz'''
         fr = fluxes*self.zEdge
-        return -(fr[1:] - fr[:-1]) / self.z / self.dz[0]
+        return -(fr[1:] - fr[:-1]) / self.z / self.dzs[0]
     
 class Spherical1D(FiniteVolume1D):
     def __init__(self, responses, rlim, N, boundaryConditions = None, computeMidpoint = False):
@@ -353,4 +354,4 @@ class Spherical1D(FiniteVolume1D):
     def _fluxTodXdt(self, fluxes):
         '''For spherical: dx/dt = -1/r^2 dJ/dz'''
         fr = fluxes*self.zEdge**2
-        return -(fr[1:] - fr[:-1]) / self.z**2 / self.dz[0]
+        return -(fr[1:] - fr[:-1]) / self.z**2 / self.dzs[0]

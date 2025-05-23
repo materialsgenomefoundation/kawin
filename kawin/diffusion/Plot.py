@@ -169,8 +169,7 @@ def plot1DPhases(model: DiffusionModel, phases=None, zScale=1, zOffset=0, ax=Non
     # Temporary hash table, since we don't want to interfere with the internal model hash
     hashTable = HashTable()
     # Convert mesh.y (u-fraction) to composition to compute phase fractions
-    u_full = expand_u_frac(mesh.y, model.allElements, interstitials)
-    x_full = u_to_x_frac(u_full, model.allElements, interstitials)
+    x_full = model.getCompositions()
     mob_data = computeMobility(model.therm, x_full[:,1:], T, hashTable)
     #mob_data = computeMobility(model.therm, mesh.y, T, hashTable)
     phases = model.phases if phases is None else phases
@@ -328,9 +327,7 @@ def plot2DPhases(model: DiffusionModel, phase, zScale=1, ax=None, *args, **kwarg
 
     # We want z and y to be in [N,d] and [N,e] to be compatible with TemperatureParameters and computeMobility
     flatZ = mesh.flattenSpatial(mesh.z)
-    flatY = mesh.flattenResponse(mesh.y)
-    fullU = expand_u_frac(flatY, model.allElements, interstitials)
-    fullX = u_to_x_frac(fullU, model.allElements, interstitials)
+    fullX = model.getCompositions()
     T = model.temperatureParameters(flatZ, model.currentTime)
     # Temporary hash table, since we don't want to interfere with the internal model hash
     hashTable = HashTable()

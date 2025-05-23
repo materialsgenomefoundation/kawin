@@ -559,4 +559,3 @@ def test_diffusion_boundary_conditions():
     # First and last flux should be equal
     assert_allclose(dt, 26548.48400, rtol=1e-3)
     assert_allclose(fluxes[0], fluxes[-1], rtol=1e-3)
-

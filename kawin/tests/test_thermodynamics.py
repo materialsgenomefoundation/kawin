@@ -4,6 +4,7 @@ from numpy.testing import assert_allclose
 from pycalphad import Database
 
 from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
+from kawin.thermo.Mobility import expand_x_frac, expand_u_frac, x_to_u_frac, u_to_x_frac
 from kawin.tests.datasets import *
 
 #Default driving force method will be 'tangent'
@@ -471,3 +472,40 @@ def test_Diff_order_disorder():
     inter = AlNiTherm.getInterdiffusivity(xNi, T, False, phase='BCC_B2')
     assert_allclose(tracer, [3.935858e-16, 8.248783e-16], rtol=1e-3)
     assert_allclose(inter, 5.275807e-15, rtol=1e-3)
+
+def test_u_fraction_conversion():
+    '''
+    Test that we can convert between composition and u-fraction
+
+    If all components are substitutional then composition = u-fraction
+    '''
+    # Substitutional case
+    comps = ['AL', 'CR', 'NI']
+    x = [0.2, 0.3]
+    x_ext = expand_x_frac(x)
+    assert np.allclose(x_ext, [0.5, 0.2, 0.3], rtol=1e-3)
+
+    # For substitutional, x = u
+    u_ext = x_to_u_frac(x_ext, comps, ['C'], False)
+    assert np.allclose(x_ext, u_ext, rtol=1e-3)
+
+    # Check that converting back to x gives the original value
+    x_ext_back = u_to_x_frac(u_ext, comps, ['C'])
+    assert np.allclose(x_ext, x_ext_back, rtol=1e-3)
+
+    # Interstitial case
+    comps = ['AL', 'CR', 'C']
+    x_ext = [0.5, 0.2, 0.3]
+    u_ext = x_to_u_frac(x_ext, comps, ['C'], False)
+    # Total u-sum is Al+Cr=0.7
+    assert np.allclose(u_ext, [0.5/0.7, 0.2/0.7, 0.3/0.7], rtol=1e-3)
+    
+    # Check that we can expand u-frac if we're missing the dependent component
+    u = u_ext[1:]
+    u_ext_2 = expand_u_frac(u, comps, ['C'])
+    assert np.allclose(u_ext, u_ext_2, rtol=1e-3)
+
+    # Check that converting back to x gives the original value
+    x_ext_back = u_to_x_frac(u_ext, comps, ['C'])
+    assert np.allclose(x_ext, x_ext_back, rtol=1e-3)
+

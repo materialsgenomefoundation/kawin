@@ -321,3 +321,20 @@ class DiffusionModel(GenericModel):
         Reshape X_flat to original shape
         '''
         return [np.reshape(X_flat, X_ref[0].shape)]
+
+    def getCompositions(self):
+        '''
+        Returns composition of nodes in mesh as (N,e)
+        Since the diffusion model stores everything in terms of u-fraction
+        this is a useful way to get compositions back
+        We return composition in (N,e), but the mesh can be used to convert
+        this shape back to the internal mesh shape
+
+        Returns
+        -------
+        composition: np.ndarray (N,e)
+            N is number of nodes in mesh and e is the full list of elements (including dependent)
+        '''
+        u_flat = self.mesh.flattenResponse(self.mesh.y)
+        u_ext = expand_u_frac(u_flat, self.allElements, interstitials)
+        return u_to_x_frac(u_ext, self.allElements, interstitials)

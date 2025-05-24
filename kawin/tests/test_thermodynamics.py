@@ -15,6 +15,7 @@ NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC
 NiAlCrThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
 AlCrNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'CR', 'NI'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
 AlNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'NI'], ['BCC_A2', 'BCC_B2'])
+FeCTherm = BinaryThermodynamics(FECRC_DB, ['FE', 'C'], ['FCC_A1'])
 
 #Set constant sampling densities for each Thermodynamics object
 #pycalphad equilibrium results may change based off sampling density, so this is to make sure
@@ -473,6 +474,27 @@ def test_Diff_order_disorder():
     assert_allclose(tracer, [3.935858e-16, 8.248783e-16], rtol=1e-3)
     assert_allclose(inter, 5.275807e-15, rtol=1e-3)
 
+def test_Diff_interstitial():
+    '''
+    Tests that diffusivity can be computed for interstitial
+    And that making the vacancy poor assumption changes the
+    interdiffusivity by a factor of yva
+    '''
+    x_c = 0.04
+    T = 1073
+    d_va = FeCTherm.getInterdiffusivity(x_c, T)
+
+    # applying the vacancy poor sublattice assumption will not
+    # multiply yVa to the interstitial mobility
+    FeCTherm.vacancyPoorInterstitialSublattice['FCC_A1'] = True
+    d_no_va = FeCTherm.getInterdiffusivity(x_c, T)
+    FeCTherm.vacancyPoorInterstitialSublattice['FCC_A1'] = False
+
+    y_c = x_c / (1 - x_c)
+    y_va = 1 - y_c
+    assert_allclose([d_va, d_no_va], [4.325740e-12, 4.513815e-12], rtol=1e-3)
+    assert_allclose(d_va / d_no_va, y_va, rtol=1e-3)
+
 def test_u_fraction_conversion():
     '''
     Test that we can convert between composition and u-fraction
@@ -508,4 +530,3 @@ def test_u_fraction_conversion():
     # Check that converting back to x gives the original value
     x_ext_back = u_to_x_frac(u_ext, comps, ['C'])
     assert np.allclose(x_ext, x_ext_back, rtol=1e-3)
-

@@ -16,6 +16,7 @@ NiCrTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR'], ['FCC_A1', 'BCC_A2']
 NiCrAlTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'BCC_A2'])
 FeCrNiTherm = GeneralThermodynamics(FECRNI_DB, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'])
 FeCrNiTherm_sigma = GeneralThermodynamics(FECRNI_DB, ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2', 'SIGMA'])
+FeCTherm = GeneralThermodynamics(FECRC_DB, ['FE', 'C'], ['FCC_A1'])
 
 def test_compositionInput():
     '''
@@ -559,3 +560,55 @@ def test_diffusion_boundary_conditions():
     # First and last flux should be equal
     assert_allclose(dt, 26548.48400, rtol=1e-3)
     assert_allclose(fluxes[0], fluxes[-1], rtol=1e-3)
+
+def test_diffusion_interstitial():
+    '''
+    Tests diffusion model with interstitial mobility
+
+    This tests both that interdiffusivity and the diffusion model correctly
+    accounts for the non-volume assumption for interstitials
+
+    This follows the diffusivity model and diffusion simulaton from
+    J. Agren, Scripta Metallugrica 20 (1996) 1507
+    '''
+    mesh = Cartesian1D(['C'], [-2e-2, 2e-2], 100)
+    profile = ProfileBuilder()
+    profile.addBuildStep(StepProfile1D(0, 0.0775, 0), 'C')
+    mesh.setResponseProfile(profile)
+
+    model = SinglePhaseModel(mesh, ['FE', 'C'], ['FCC_A1'], FeCTherm, 1127+273.15)
+
+    # Assert that mesh is converted to u-fraction
+    assert_allclose(mesh.y[0], 0.0775/(1-0.0775), rtol=1e-3)
+
+    model.solve(19.5*3600)
+
+    comps = model.getCompositions()
+    assert_allclose(comps[40,1], 0.063489, rtol=1e-3)
+    assert_allclose(comps[60,1], 0.014441, rtol=1e-3)
+
+    # Repeat for homogenization
+    # TODO: we should consider whether the mesh should be constant
+    #       that way we would be able to re-use the mesh in different models
+    mesh = Cartesian1D(['C'], [-2e-2, 2e-2], 100)
+    profile = ProfileBuilder()
+    profile.addBuildStep(StepProfile1D(0, 0.0775, 0), 'C')
+    mesh.setResponseProfile(profile)
+
+    model = HomogenizationModel(mesh, ['FE', 'C'], ['FCC_A1'], FeCTherm, 1127+273.15)
+    model.homogenizationParameters.eps = 0
+    # Set low max composition change constraint since this affects the time step
+    # The homogenization model does not have a clear way to defining a time step
+    # unlike the single phase model where we could use the von Neumann conditions
+    # If it's too large, then this could result in compositions that are off
+    # For the general case, the default of 2e-3 balances accuracy and performance
+    # quite well, but for dilute compositions, it might be too high
+    model.constraints.maxCompositionChange = 0.5e-3
+
+    model.solve(19.5*3600)
+
+    comps = model.getCompositions()
+    # Because of the different time, step, the compositions are
+    # slightly different
+    assert_allclose(comps[40,1], 0.062904, rtol=1e-3)
+    assert_allclose(comps[60,1], 0.016167, rtol=1e-3)

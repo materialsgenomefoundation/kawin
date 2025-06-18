@@ -260,7 +260,9 @@ class AbstractMesh (ABC):
     dims: int
         Number of dimensions in z
     y: np.ndarray
-        Values of response variables
+        Initial values of response variables
+        This is intended not to change in a model. Time evolution
+        of response variables should be stored in MeshData
     z: np.ndarray
         Values of spatial coordinates corresponding to y
     dz: float
@@ -458,8 +460,119 @@ class FiniteVolumeGrid(AbstractMesh):
         '''
         shape = zFlat.shape     # shape is (N,e,...)
         return np.reshape(zFlat, (*self.Ns, self.dims, *shape[2:]))
+    
+class MeshData:
+    '''
+    Stores time and response variables for a mesh
+
+    Parameters
+    ----------
+    mesh : AbstractMesh
+        Mesh to take dimensions of response variables from
+    record : bool | int
+        Record interval or whether to record
+        If False, only the current state of the mesh will be stored
+        If int, then every n iterations will be stored
+    '''
+    def __init__(self, mesh: AbstractMesh, record: bool | int = False):
+        if isinstance(record, bool):
+            if record:
+                self.recordInterval = 1
+            else:
+                self.recordInterval = -1
+        else:
+            self.recordInterval = record
+
+        self.batchSize = 1000
+        self.yShape = mesh.flattenResponse(mesh.y).shape
+        self.reset()
+
+    def reset(self):
+        '''
+        Resets arrays
+        '''
+        self._y = np.zeros((self.batchSize, *self.yShape))
+        self._time = np.zeros(self.batchSize)
+        self.currentIndex = 0
+        self.currentY = self._y[0]
+        self.currentTime = self._time[0]
+        self.N = 0
+        
+    def record(self, time, y, force = False):
+        '''
+        Stores current state of time and response variables
+        Response variables should be in the flattened state
+            This is the same format as used in GenericModel
+            But for the mesh, we must call flattenResponse
+        '''
+        if self.recordInterval > 0:
+            if self.currentIndex % self.recordInterval == 0 or force:
+                self.N = int(self.currentIndex / self.recordInterval)
+
+                # Path a batch of empty rows to y and time if we reached the last row
+                if self.N >= self._time.shape[0]:
+                    self._y = np.pad(self._y, ((0, self.batchSize), (0, 0), (0, 0)))
+                    self._time = np.pad(self._time, (0, self.batchSize))
+
+                self._y[self.N] = y
+                self._time[self.N] = time
+
+            self.currentIndex += 1
+        else:
+            self._y[self.N] = y
+            self._time[self.N] = time
+
+        self.currentY = y
+        self.currentTime = time
+
+    def setResponseAtN(self, y, N = -1):
+        '''
+        Sets response profile at index N
+        If N is not supplied, then this sets at the current index
+        '''
+        if N < 0:
+            N = self.N
+        self._y[N] = y
+
+    def finalize(self):
+        '''
+        Removes extra padding
+        '''
+        self.record(self.currentTime, self.currentY, force=True)
+        self._y = self._y[:self.N+1]
+        self._time = self._time[:self.N+1]
+
+    def y(self, time = None):
+        '''
+        Returns reponse variable at time
+
+        If recording is disabled, then this will return the current state
+        '''
+        # If time is not supplied, then return current state of response
+        if time is None:
+            return self._y[self.N]
+        
+        # If time is supplied, then interpolate if recording, else return current state
+        if self.recordInterval > 0:
+            if time < self._time[0]:
+                print('Input time is lower than smallest recorded time, returning data at t = {:.3e}'.format(self._time[0]))
+                return self._y[0]
+            elif time > self._time[-1]:
+                print('Input time is larger than longest recorded time, return data at t = {:.3e}'.format(self._time[-1]))
+                return self._y[-1]
+            else:
+                uind = np.argmax(self._time > time)
+                lind = uind - 1
+
+                ux, utime = self._y[uind], self._time[uind]
+                lx, ltime = self._y[lind], self._time[lind]
+
+                flatY = (ux - lx) * (time - ltime) / (utime - ltime) + lx
+                return flatY
+        else:
+            print('Recording is disabled. Returning current state.')
+            return self._y[0]
 
     
-
     
     

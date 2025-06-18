@@ -427,17 +427,21 @@ def test_diffusionSavingLoading():
     new_m.load('kawin/tests/diff.npz')
     os.remove('kawin/tests/diff.npz')
 
-    assert_allclose(m.mesh.y, new_m.mesh.y)
+    #assert_allclose(m.mesh.y, new_m.mesh.y)
+    assert_allclose(m.data.currentY, new_m.data.currentY)
     assert_allclose(m.currentTime, new_m.currentTime)
 
-    new_m.setMeshtoRecordedTime(-1)
-    assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[0], rtol=1e-3)
-    new_m.setMeshtoRecordedTime(11*3600)
-    assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[-1], rtol=1e-3)
+    #new_m.setMeshtoRecordedTime(-1)
+    #assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[0], rtol=1e-3)
+    assert_allclose(new_m.data.y(-1), new_m.data._y[0], rtol=1e-3)
+    #new_m.setMeshtoRecordedTime(11*3600)
+    #assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[-1], rtol=1e-3)
+    assert_allclose(new_m.data.y(11*3600), new_m.data._y[-1], rtol=1e-3)
 
     # Interpolate, if we set to 0, then the interpolation should result in the first recorded entry
-    new_m.setMeshtoRecordedTime(0)
-    assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[0], rtol=1e-3)
+    #new_m.setMeshtoRecordedTime(0)
+    #assert_allclose(mesh.flattenResponse(new_m.mesh.y), new_m._recordedX[0], rtol=1e-3)
+    assert_allclose(new_m.data.y(0), new_m.data._y[0], rtol=1e-3)
 
 def test_single_phase_2d():
     '''
@@ -579,7 +583,8 @@ def test_diffusion_interstitial():
     model = SinglePhaseModel(mesh, ['FE', 'C'], ['FCC_A1'], FeCTherm, 1127+273.15)
 
     # Assert that mesh is converted to u-fraction
-    assert_allclose(mesh.y[0], 0.0775/(1-0.0775), rtol=1e-3)
+    #assert_allclose(mesh.y[0], 0.0775/(1-0.0775), rtol=1e-3)
+    assert_allclose(model.data.currentY[0], 0.0775/(1-0.0775), rtol=1e-3)
 
     model.solve(19.5*3600)
 
@@ -588,13 +593,6 @@ def test_diffusion_interstitial():
     assert_allclose(comps[60,1], 0.014441, rtol=1e-3)
 
     # Repeat for homogenization
-    # TODO: we should consider whether the mesh should be constant
-    #       that way we would be able to re-use the mesh in different models
-    mesh = Cartesian1D(['C'], [-2e-2, 2e-2], 100)
-    profile = ProfileBuilder()
-    profile.addBuildStep(StepProfile1D(0, 0.0775, 0), 'C')
-    mesh.setResponseProfile(profile)
-
     model = HomogenizationModel(mesh, ['FE', 'C'], ['FCC_A1'], FeCTherm, 1127+273.15)
     model.homogenizationParameters.eps = 0
     # Set low max composition change constraint since this affects the time step

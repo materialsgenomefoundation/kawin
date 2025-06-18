@@ -318,6 +318,11 @@ class GenericModel:
         self.setTimeInfo(self.currentTime, simTime)
         solver.solve(self.initialTime, X0, self.finalTime, verbose, vIt)
 
+        self.postSolve()
+
+    def postSolve(self):
+        pass
+
 class Coupler(GenericModel):
     '''
     Class for coupling multiple GenericModel objects together
@@ -414,7 +419,6 @@ class Coupler(GenericModel):
         for m in self.models:
             x = m.getCurrentX()
             xs.append(x)
-
         return xs
     
     def getDt(self, dXdt):

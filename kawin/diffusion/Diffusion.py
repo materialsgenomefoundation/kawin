@@ -2,7 +2,7 @@ import numpy as np
 from kawin.GenericModel import GenericModel
 from kawin.thermo import GeneralThermodynamics
 from kawin.thermo.Mobility import x_to_u_frac, expand_x_frac, u_to_x_frac, expand_u_frac, interstitials
-from kawin.diffusion.mesh import AbstractMesh
+from kawin.diffusion.mesh import AbstractMesh, MeshData
 from kawin.diffusion.DiffusionParameters import TemperatureParameters, DiffusionConstraints, HashTable
 
 class DiffusionModel(GenericModel):
@@ -40,15 +40,8 @@ class DiffusionModel(GenericModel):
         self.therm = thermodynamics
         self.hashTable = HashTable()
 
+        self.data = MeshData(self.mesh, record)
         self.reset()
-        
-        self._recordBatch = 1000
-        if record:
-            self.enableRecording(record)
-        else:
-            self.disableRecording()
-            self._recordedX = None
-            self._recordedTime = None
 
         self._validateMeshComposition()
 
@@ -60,9 +53,11 @@ class DiffusionModel(GenericModel):
         as well as resetting the composition and phase profiles
         '''
         super().reset()
-
         if self.therm is not None:
             self.therm.clearCache()
+
+        self.data.reset()
+        self.data.record(0, self.mesh.flattenResponse(self.mesh.y))
         
         self.isSetup = False
 
@@ -71,12 +66,10 @@ class DiffusionModel(GenericModel):
         Converts diffusion data to dictionary
         '''
         data = {
-            'finalTime': self.currentTime,
-            'finalX': self.mesh.flattenResponse(self.mesh.y),
-            'recordInterval': self._record,
-            'recordIndex': self._recordIndex,
-            'recordX': self._recordedX[:self._recordIndex],
-            'recordTime': self._recordedTime[:self._recordIndex]
+            'x': self.data._y,
+            'time': self.data._time,
+            'interval': self.data.recordInterval,
+            'index': self.data.N,
         }
         return data
 
@@ -84,12 +77,13 @@ class DiffusionModel(GenericModel):
         '''
         Converts dictionary of data to diffusion data
         '''
-        self.currentTime = data['finalTime']
-        self.mesh.y = self.mesh.unflattenResponse(data['finalX'])
-        self._record = data['recordInterval']
-        self._recordIndex = data['recordIndex']
-        self._recordedX = data['recordX']
-        self._recordedTime = data['recordTime']
+        self.data.recordInterval = data['interval']
+        self.data.N = data['index']
+        self.data._y = data['x']
+        self.data._time = data['time']
+        self.data.currentY = self.data._y[-1]
+        self.data.currentTime = self.data._time[-1]
+        self.currentTime = self.data.currentTime
     
     def setHashSensitivity(self, s):
         '''
@@ -121,74 +115,6 @@ class DiffusionModel(GenericModel):
         Clears the composition cache
         '''
         self.hashTable.clearCache()
-
-    def enableRecording(self, record = 1):
-        '''
-        Enables recording of composition and phase
-        '''
-        if isinstance(record, bool):
-            record = 1
-        self._record = record
-        self.resetRecordedData()
-
-    def disableRecording(self):
-        '''
-        Disables recording
-        '''
-        self._record = -1
-        self.resetRecordedData()
-
-    def resetRecordedData(self):
-        '''
-        Resets arrays storing response variables over time
-        '''
-        flatY = self.mesh.flattenResponse(self.mesh.y)
-        # Initial size will be (batch size, N, e)
-        self._recordedX = np.zeros((self._recordBatch, *flatY.shape))
-        self._recordedTime = np.zeros(self._recordBatch)
-        self._recordIndex = 0
-
-    def record(self, time):
-        '''
-        Adds current mesh data to recorded arrays
-        '''
-        if self._record > 0:
-            # we record every N iterations (where N is self._record)
-            if self._recordIndex % self._record == 0:
-                row = int(self._recordIndex / self._record)
-
-                # Pad a batch of empty rows to recordedX and recordedTime if we reached the last row
-                if row >= self._recordedTime.shape[0]:
-                    self._recordedX = np.pad(self._recordedX, ((0, self._recordBatch), (0, 0), (0, 0)))
-                    self._recordedTime = np.pad(self._recordedTime, (0, self._recordBatch))
-
-                # Add new data to current row
-                self._recordedX[row] = self.mesh.flattenResponse(self.mesh.y)
-                self._recordedTime[row] = time
-
-            self._recordIndex += 1
-
-    def setMeshtoRecordedTime(self, time):
-        '''
-        From recorded values, interpolated at time to get composition and phase fraction
-        '''
-        if self._record > 0:
-            print(time, self._recordedTime)
-            if time < self._recordedTime[0]:
-                print('Input time is lower than smallest recorded time, setting data to t = {:.3e}'.format(self._recordedTime[0]))
-                self.mesh.y = self.mesh.unflattenResponse(self._recordedX[0])
-            elif time > self._recordedTime[-1]:
-                print('Input time is larger than longest recorded time, setting data to t = {:.3e}'.format(self._recordedTime[-1]))
-                self.mesh.y = self.mesh.unflattenResponse(self._recordedX[-1])
-            else:
-                uind = np.argmax(self._recordedTime > time)
-                lind = uind - 1
-
-                ux, utime = self._recordedX[uind], self._recordedTime[uind]
-                lx, ltime = self._recordedX[lind], self._recordedTime[lind]
-
-                flatY = (ux - lx) * (time - ltime) / (utime - ltime) + lx
-                self.mesh.y = self.mesh.unflattenResponse(flatY)
 
     def _getElementIndex(self, element = None):
         '''
@@ -232,12 +158,12 @@ class DiffusionModel(GenericModel):
         scaledMinComp = len(self.allElements)*self.constraints.minComposition
         yFlat[yFlat > scaledMinComp] = yFlat[yFlat > scaledMinComp] - scaledMinComp
         yFlat[yFlat < scaledMinComp] = self.constraints.minComposition
-        #self.mesh.y = self.mesh.unflattenResponse(yFlat)
 
         # Convert composition to u-fraction and store into mesh
         yFull = expand_x_frac(yFlat)
         uFull = x_to_u_frac(yFull, self.allElements, interstitials, return_usum=False)
-        self.mesh.y = self.mesh.unflattenResponse(uFull[:,1:])
+        self.data.setResponseAtN(uFull[:,1:])
+        self.data.currentY = uFull[:,1:]
 
     def setup(self):
         '''
@@ -251,9 +177,7 @@ class DiffusionModel(GenericModel):
             if self.therm is not None:
                 self.therm.clearCache()
 
-        #self._validateMeshComposition()
         self.isSetup = True
-        self.record(self.currentTime) #Record at t = 0
 
     def _getPairs(self, t, xCurr):
         '''
@@ -285,7 +209,7 @@ class DiffusionModel(GenericModel):
 
     def getCurrentX(self):
         # This is a little inefficient, but the model should take in a shape of (N,e) regardless of the mesh
-        return [self.mesh.flattenResponse(self.mesh.y)]
+        return [self.data.currentY]
     
     def postProcess(self, time, x):
         '''
@@ -301,9 +225,8 @@ class DiffusionModel(GenericModel):
                 x[0][:,i] = np.clip(x[0][:,i], self.constraints.minComposition, 1-self.constraints.minComposition)
             else:
                 x[0][:,i] = np.clip(x[0][:,i], self.constraints.minComposition, None)
-        self.mesh.y = self.mesh.unflattenResponse(x[0])
+        self.data.record(time, x[0])
         self.updateCoupledModels()
-        self.record(time)
         return self.getCurrentX(), False
     
     def flattenX(self, X):
@@ -321,8 +244,11 @@ class DiffusionModel(GenericModel):
         Reshape X_flat to original shape
         '''
         return [np.reshape(X_flat, X_ref[0].shape)]
+    
+    def postSolve(self):
+        self.data.finalize()
 
-    def getCompositions(self):
+    def getCompositions(self, time = -1):
         '''
         Returns composition of nodes in mesh as (N,e)
         Since the diffusion model stores everything in terms of u-fraction
@@ -335,6 +261,6 @@ class DiffusionModel(GenericModel):
         composition: np.ndarray (N,e)
             N is number of nodes in mesh and e is the full list of elements (including dependent)
         '''
-        u_flat = self.mesh.flattenResponse(self.mesh.y)
+        u_flat = self.data.y(time)
         u_ext = expand_u_frac(u_flat, self.allElements, interstitials)
         return u_to_x_frac(u_ext, self.allElements, interstitials)

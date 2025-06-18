@@ -340,7 +340,7 @@ class Cylindrical1D(FiniteVolume1D):
         return -(fr[1:] - fr[:-1]) / self.z / self.dzs[0]
     
 class Spherical1D(FiniteVolume1D):
-    def __init__(self, responses, rlim, N, boundaryConditions = None, computeMidpoint = False):
+    def __init__(self, responses, rlim, N, computeMidpoint = False):
         if rlim[0] < 0 or rlim[1] < 0:
             raise ValueError('Radial limits must be positive')
         

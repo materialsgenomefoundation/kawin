@@ -19,7 +19,7 @@ def _set_1D_xlim(ax, mesh: FiniteVolume1D, zScale, zOffset):
     ax.set_xlim([(mesh.zEdge[0]+zOffset)/zScale, (mesh.zEdge[-1]+zOffset)/zScale])
     ax.set_xlabel(f'Distance*{zScale:.0e} (m)')
 
-def plot1D(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=None, plotUFrac=False, *args, **kwargs):
+def plot1D(model: DiffusionModel, elements=None, zScale=1, zOffset=0, time=None, ax=None, plotUFrac=False, *args, **kwargs):
     '''
     Plots composition profile of 1D mesh
 
@@ -52,7 +52,7 @@ def plot1D(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=None, p
         elements = [elements]
 
     # Convert y to full composition space and convert to composition if plotting
-    y_full = expand_u_frac(mesh.y, model.allElements, interstitials)
+    y_full = expand_u_frac(model.data.y(time), model.allElements, interstitials)
     if not plotUFrac:
         y_full = u_to_x_frac(y_full, model.allElements, interstitials)
     for e in elements:
@@ -67,7 +67,7 @@ def plot1D(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=None, p
     ax.set_ylabel(f'Composition (at.)')
     return ax
 
-def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset=0, axL=None, axR=None, plotUFrac=False, *args, **kwargs):
+def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset=0, time=None, axL=None, axR=None, plotUFrac=False, *args, **kwargs):
     '''
     Plots composition profile of 1D mesh on left and right axes
 
@@ -108,7 +108,7 @@ def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset
         elementsR = [elementsR]
 
     # Convert y to full composition space and convert to composition if plotting
-    y_full = expand_u_frac(mesh.y, model.allElements, interstitials)
+    y_full = expand_u_frac(model.data.y(time), model.allElements, interstitials)
     if not plotUFrac:
         y_full = u_to_x_frac(y_full, model.allElements, interstitials)
 
@@ -117,7 +117,6 @@ def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset
     for ax, elements in zip([axL, axR], [elementsL, elementsR]):
         for e in elements:
             y = y_full[:,model.allElements.index(e)]
-            #y = _get_y(model, mesh.y, e, 1, convert_to_x = not plotUFrac)
             plot_kwargs = _adjust_kwargs(e, {'label': e, 'color': f'C{i}'}, kwargs)
             ax.plot((mesh.z+zOffset)/zScale, y, *args, **plot_kwargs)
             i += 1
@@ -137,7 +136,7 @@ def plot1DTwoAxis(model: DiffusionModel, elementsL, elementsR, zScale=1, zOffset
     axL.legend(linesL+linesR, labelsL+labelsR, framealpha=1)
     return axL, axR
 
-def plot1DPhases(model: DiffusionModel, phases=None, zScale=1, zOffset=0, ax=None, *args, **kwargs):
+def plot1DPhases(model: DiffusionModel, phases=None, zScale=1, zOffset=0, time=None, ax=None, *args, **kwargs):
     '''
     Plots phase fractions over z
 
@@ -169,9 +168,8 @@ def plot1DPhases(model: DiffusionModel, phases=None, zScale=1, zOffset=0, ax=Non
     # Temporary hash table, since we don't want to interfere with the internal model hash
     hashTable = HashTable()
     # Convert mesh.y (u-fraction) to composition to compute phase fractions
-    x_full = model.getCompositions()
+    x_full = model.getCompositions(time)
     mob_data = computeMobility(model.therm, x_full[:,1:], T, hashTable)
-    #mob_data = computeMobility(model.therm, mesh.y, T, hashTable)
     phases = model.phases if phases is None else phases
     if isinstance(phases, str):
         phases = [phases]
@@ -191,7 +189,7 @@ def plot1DPhases(model: DiffusionModel, phases=None, zScale=1, zOffset=0, ax=Non
     ax.set_ylabel(f'Phase Fraction')
     return ax
 
-def plot1DFlux(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=None, *args, **kwargs):
+def plot1DFlux(model: DiffusionModel, elements=None, zScale=1, zOffset=0, time=None, ax=None, *args, **kwargs):
     '''
     Plots flux of 1D mesh
 
@@ -223,7 +221,7 @@ def plot1DFlux(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=Non
     if isinstance(elements, str):
         elements = [elements]
 
-    fluxes = model.getFluxes(model.currentTime, model.getCurrentX())
+    fluxes = model.getFluxes(model.currentTime, [model.data.y(time)])
     # Sum of fluxes for substitutional elements = 0
     fluxes_sub = [fluxes[:,i] for i,e in enumerate(model.elements) if e not in interstitials]
     # If all dependent elements are interstitial, then flux of dependent element (substitutional) is 0
@@ -234,7 +232,6 @@ def plot1DFlux(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=Non
     fluxes_full = np.concatenate((fluxes_sum, fluxes), axis=1)
     for e in elements:
         y = fluxes_full[:,model.allElements.index(e)]
-        #y = _get_y(model, fluxes, e, 0)
         plot_kwargs = _adjust_kwargs(e, {'label': e}, kwargs)
         ax.plot((mesh.zEdge+zOffset)/zScale, y, *args, **plot_kwargs)
 
@@ -244,7 +241,7 @@ def plot1DFlux(model: DiffusionModel, elements=None, zScale=1, zOffset=0, ax=Non
     ax.set_ylabel(f'$J/V_m$ ($m/s$)')
     return ax
 
-def plot2D(model: DiffusionModel, element, zScale=1, ax=None, plotUFrac=False, *args, **kwargs):
+def plot2D(model: DiffusionModel, element, zScale=1, time=None, ax=None, plotUFrac=False, *args, **kwargs):
     '''
     Plots a composition profile on a 2D mesh
 
@@ -276,7 +273,7 @@ def plot2D(model: DiffusionModel, element, zScale=1, ax=None, plotUFrac=False, *
     if zScale.shape[0] == 1:
         zScale = zScale[0]*np.ones(2)
 
-    y_flat = mesh.flattenResponse(mesh.y)
+    y_flat = model.data.y(time)
     y_full = expand_u_frac(y_flat, model.allElements, interstitials)
     if not plotUFrac:
         y_full = u_to_x_frac(y_full, model.allElements, interstitials)
@@ -285,8 +282,6 @@ def plot2D(model: DiffusionModel, element, zScale=1, ax=None, plotUFrac=False, *
 
     # plot element
     # TODO: there should be a way to do contour and contourf (maybe separate plot functions?)
-    #y = _get_y(model, mesh.flattenResponse(mesh.y), element, 1)
-    #y = mesh.unflattenResponse(y, 1)
     plot_kwargs = _adjust_kwargs(element, {'vmin': 0, 'vmax': 1}, kwargs)
     cm = ax.pcolormesh(mesh.z[...,0]/zScale[0], mesh.z[...,1]/zScale[1], y, *args, **plot_kwargs)
     ax.set_title(element)
@@ -294,7 +289,7 @@ def plot2D(model: DiffusionModel, element, zScale=1, ax=None, plotUFrac=False, *
     ax.set_ylabel(f'Distance y*{zScale[1]:.0e} (m)')
     return ax, cm
 
-def plot2DPhases(model: DiffusionModel, phase, zScale=1, ax=None, *args, **kwargs):
+def plot2DPhases(model: DiffusionModel, phase, zScale=1, time=None, ax=None, *args, **kwargs):
     '''
     Plots a composition profile on a 2D mesh
 
@@ -327,12 +322,11 @@ def plot2DPhases(model: DiffusionModel, phase, zScale=1, ax=None, *args, **kwarg
 
     # We want z and y to be in [N,d] and [N,e] to be compatible with TemperatureParameters and computeMobility
     flatZ = mesh.flattenSpatial(mesh.z)
-    fullX = model.getCompositions()
+    fullX = model.getCompositions(time)
     T = model.temperatureParameters(flatZ, model.currentTime)
     # Temporary hash table, since we don't want to interfere with the internal model hash
     hashTable = HashTable()
     mob_data = computeMobility(model.therm, fullX[:,1:], T, hashTable)
-    #mob_data = computeMobility(model.therm, flatY, T, hashTable)
     pf = []
     for p_labels, p_fracs in zip(mob_data.phases, mob_data.phase_fractions):
         pf.append(np.sum(p_fracs[p_labels==phase]))
@@ -346,7 +340,7 @@ def plot2DPhases(model: DiffusionModel, phase, zScale=1, ax=None, *args, **kwarg
     ax.set_ylabel(f'Distance y*{zScale[1]:.0e} (m)')
     return ax, cm
 
-def plot2DFluxes(model: DiffusionModel, element, direction, zScale=1, ax=None, *args, **kwargs):
+def plot2DFluxes(model: DiffusionModel, element, direction, zScale=1, time=None, ax=None, *args, **kwargs):
     '''
     Plots flux in x or y direction of element
 
@@ -382,7 +376,7 @@ def plot2DFluxes(model: DiffusionModel, element, direction, zScale=1, ax=None, *
     if direction != 'x' and direction != 'y':
         raise ValueError("direction must be \'x\' or \'y\'")
 
-    fluxes = model.getFluxes(model.currentTime, model.getCurrentX())
+    fluxes = model.getFluxes(model.currentTime, [model.data.y(time)])
     if direction == 'x':
         fluxes = fluxes[0]
         z = (mesh.zCorner[:,:-1] + mesh.zCorner[:,1:]) / 2
@@ -400,9 +394,7 @@ def plot2DFluxes(model: DiffusionModel, element, direction, zScale=1, ax=None, *
         fluxes_sum = 0-np.sum(fluxes_sub, axis=0)[:,np.newaxis]
     fluxes_flat = np.concatenate((fluxes_sum, fluxes_flat), axis=1)
     y = fluxes_flat[:,model.allElements.index(element)]
-    #y = _get_y(model, flat_fluxes, element, 0)
     y = np.reshape(y, (flux_shape[0], flux_shape[1]))
-    #y = _get_y(model, fluxes, element, 0)
     cm = ax.pcolormesh(z[...,0]/zScale[0], z[...,1]/zScale[1], y, *args, **kwargs)
     ax.set_title(f'$J_x/V_m$ {element} ($m/s$)')
     ax.set_xlabel(f'Distance x*{zScale[0]:.0e} (m)')

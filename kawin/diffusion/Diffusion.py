@@ -208,7 +208,6 @@ class DiffusionModel(GenericModel):
         super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
-        # This is a little inefficient, but the model should take in a shape of (N,e) regardless of the mesh
         return [self.data.currentY]
     
     def postProcess(self, time, x):
@@ -248,7 +247,7 @@ class DiffusionModel(GenericModel):
     def postSolve(self):
         self.data.finalize()
 
-    def getCompositions(self, time = -1):
+    def getCompositions(self, time = None):
         '''
         Returns composition of nodes in mesh as (N,e)
         Since the diffusion model stores everything in terms of u-fraction

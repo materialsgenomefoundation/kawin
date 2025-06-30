@@ -493,6 +493,13 @@ class Coupler(GenericModel):
         each models or between models after an iteration
         '''
         return
+    
+    def postSolve(self):
+        '''
+        Post solve function for each model
+        '''
+        for m in self.models:
+            m.postSolve()
 
 
 

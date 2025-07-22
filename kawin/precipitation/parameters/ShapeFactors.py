@@ -27,6 +27,11 @@ doi:10.1007/s1161-015-3197-5
 The thermo factor is also defined in Wu et al. The differences between these two papers is that
 Holmedal et al uses the surface area correction of the particle to modify the Gibbs-Thomson 
 contribution while Wu et al uses the volume correction
+
+For shapes with aspect ratio, the characteristic length will always be the short axis
+Then equivalent spherical radius factor is the factor to multiply the characteristic length to get R_sph
+Normal radii can be multiplied by R_sph to get [short, short, long] or [long, long, short] depending on shape
+Thermo factor (surface area) can be multiplied by 4*pi*R_sph^2 to get the surface area of the ellipsoid or cuboid
 '''
 from abc import ABC, abstractmethod
 import numpy as np

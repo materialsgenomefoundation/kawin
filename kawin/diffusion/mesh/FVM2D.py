@@ -15,6 +15,9 @@ class Cartesian2D(FiniteVolumeGrid):
 
     Parameters
     ----------
+    responses: int | list[str]
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
     zx: list[float]
         Left and right boundary position of mesh
     Nx: int
@@ -23,8 +26,6 @@ class Cartesian2D(FiniteVolumeGrid):
         Top and bottom boundary position of mesh
     Ny: int
         Number of cells along y
-    responses: int | list[str]
-        Response variables
     '''
     def __init__(self, responses, zx, Nx, zy, Ny):
         super().__init__(responses, [zx, zy], [Nx, Ny], 2)

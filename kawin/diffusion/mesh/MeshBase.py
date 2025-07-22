@@ -30,7 +30,7 @@ Basic idea:
 '''
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Union
+from typing import Union, Protocol
 import numpy as np
 
 DiffusionPair = namedtuple('DiffusionPair', ['diffusivity', 'response', 'averageFunction', 'atNodeFunction'], defaults=[None, None, None, None])
@@ -148,9 +148,36 @@ class BoundaryCondition(ABC):
 
 # TODO: consider removing this since it doesn't really do anything other than store
 #       a list that the user can create themselves
+
+class ProfileFunction(Protocol):
+    def __call__(self, z: np.ndarray) -> np.ndarray:
+        '''
+        Function that takes in a list of coordinates and returns compositions at
+        the corresponding coordinates
+
+        Parameters
+        ----------
+        z: np.ndarray
+            Array of floats with shape of (N,d)
+            where N is number of points and d is number of dimensions
+    
+        Returns
+        -------
+        np.ndarray of shape (N,r) where N is number of points and
+        r is number of response variables
+
+        Note that the number of response variables can be specific to the
+        profile function. It does not have to correspond to the responses in
+        the mesh as long as the ProfileBuilder knows what response variables
+        the ProfileFunction corresponds to
+        '''
+        ...
+
 class ProfileBuilder:
     '''
     Stores build steps to construct a response profile in a mesh
+
+    Note that all steps are additive to the response profile
 
     TODO: consider removing this since it doesn't really do anything other
           than store a list that the user can create themselves
@@ -165,20 +192,43 @@ class ProfileBuilder:
         for step in steps:
             self.addBuildStep(step[0], step[1])
 
-    def addBuildStep(self, func, responseVar=0):
+    def addBuildStep(self, func: ProfileFunction, responseVar: int|str|list[int|str] = 0):
+        '''
+        Adds a build step to construct the initial profile
+
+        Parameters
+        ----------
+        func: ProfileFunction
+            Function that takes in a set of coordinates and returns the profile values
+            at coordinates
+        responseVar: int or str or list of int or str (optional)
+            Response variable(s) that func will return
+            This does not have to match exactly to the mesh variables, but only needs
+            to be a subset
+        '''
         self.buildSteps.append((func, np.atleast_1d(responseVar)))
 
     def clearBuildSteps(self):
+        '''
+        Removes all build steps
+        '''
         self.buildSteps.clear()
 
-class ConstantProfile:
+class ConstantProfile(ProfileFunction):
+    '''
+    Constant value across profile
+    '''
     def __init__(self, value):
         self.value = np.atleast_1d(value)
 
     def __call__(self, z):
         return np.squeeze(self.value[np.newaxis,:]*np.ones((_formatSpatial(z).shape[0], self.value.shape[0])))
     
-class DiracDeltaProfile:
+class DiracDeltaProfile(ProfileFunction):
+    '''
+    Zero at all values except at z
+    Note: if a mesh does not have a node exactly at z, it will choose the closest node
+    '''
     def __init__(self, z, value):
         self.value = np.atleast_1d(value)
         self.z = np.atleast_1d(z)
@@ -191,7 +241,11 @@ class DiracDeltaProfile:
         y[nearestIndex,:] = self.value
         return np.squeeze(y)
     
-class GaussianProfile:
+class GaussianProfile(ProfileFunction):
+    '''
+    Gaussian function centered around z with standard deviation of sigma
+    Scaled to maxValue
+    '''
     def __init__(self, z, sigma, maxValue):
         self.maxValue = np.atleast_1d(maxValue)
         self.z = np.atleast_1d(z)
@@ -209,7 +263,12 @@ class GaussianProfile:
         y = y[:,np.newaxis]*self.maxValue[np.newaxis,:]
         return np.squeeze(y)
     
-class BoundedRectangleProfile:
+class BoundedRectangleProfile(ProfileFunction):
+    '''
+    Defines rectangle with lower and upper corners
+    innerValue corresponds to value inside the rectangle while
+    outerValue corresponds to value outside the rectangle (defaults to 0)
+    '''
     def __init__(self, lowerZ, upperZ, innerValue, outerValue = 0):
         self.iv = np.atleast_1d(innerValue)
         if outerValue == 0:
@@ -228,7 +287,12 @@ class BoundedRectangleProfile:
         y[indices,:] = self.iv
         return np.squeeze(y)
     
-class BoundedEllipseProfile:
+class BoundedEllipseProfile(ProfileFunction):
+    '''
+    Defines ellipse centered at z with radii r
+    innerValue corresponds to value inside the rectangle while
+    outerValue corresponds to value outside the rectangle (defaults to 0)
+    '''
     def __init__(self, z, r, innerValue, outerValue = 0):
         self.iv = np.atleast_1d(innerValue)
         self.ov = np.atleast_1d(outerValue)
@@ -248,6 +312,12 @@ class BoundedEllipseProfile:
 class AbstractMesh (ABC):
     '''
     Abstract mesh class that defines basic methods to be used in a diffusion model
+
+    Parameters
+    ----------
+    responses: int | list[str]
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
 
     Attributes
     ----------

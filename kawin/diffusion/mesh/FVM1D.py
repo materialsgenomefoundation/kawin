@@ -1,7 +1,7 @@
 from typing import Union
 from abc import ABC, abstractmethod
 import numpy as np
-from kawin.diffusion.mesh.MeshBase import FiniteVolumeGrid, BoundaryCondition, DiffusionPair, noChangeAtNode, arithmeticMean, _getResponseVariables, _getResponseIndex, _formatSpatial
+from kawin.diffusion.mesh.MeshBase import FiniteVolumeGrid, BoundaryCondition, DiffusionPair, noChangeAtNode, arithmeticMean, _getResponseVariables, _getResponseIndex, _formatSpatial, ProfileFunction
 
 class PeriodicBoundary1D(BoundaryCondition):
     '''
@@ -23,11 +23,17 @@ class MixedBoundary1D(BoundaryCondition):
     Currently, left and right boundary conditions both are defined here
     We'll need a way to define boundary conditions at any edge, which will
     especially be the case if we add a 2D mesh
+
+    Parameters
+    ----------
+    responses: int | list[str]
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
     '''
     NEUMANN = 0
     DIRICHLET = 1
 
-    def __init__(self, responses):
+    def __init__(self, responses: Union[int, list[str]]):
         self.numResponses, self.responses = _getResponseVariables(responses)
         self.LBCtype = MixedBoundary1D.NEUMANN * np.ones(self.numResponses)
         self.LBCvalue = np.zeros(self.numResponses)
@@ -122,7 +128,10 @@ class MixedBoundary1D(BoundaryCondition):
             if self.RBCtype[d] == MixedBoundary1D.DIRICHLET:
                 dXdt[-1,d] = 0
 
-class StepProfile1D:
+class StepProfile1D(ProfileFunction):
+    '''
+    Step function at z
+    '''
     def __init__(self, z, leftValue, rightValue):
         self.lv = np.atleast_1d(leftValue)
         self.rv = np.atleast_1d(rightValue)
@@ -134,7 +143,12 @@ class StepProfile1D:
         y[z >= self.z,:] = self.rv
         return np.squeeze(y)
     
-class LinearProfile1D:
+class LinearProfile1D(ProfileFunction):
+    '''
+    Linear function from (leftZ, leftValue) to (rightZ, rightValue)
+    lowerLeftValue and upperRightValue corresponds to the value outside the bounds of
+    leftZ and rightZ. By default they will use leftValue and rightValue
+    '''
     def __init__(self, leftZ, leftValue, rightZ, rightValue, lowerLeftValue = None, upperRightValue = None):
         self.lv = np.atleast_1d(leftValue)
         self.lz = leftZ
@@ -153,7 +167,12 @@ class LinearProfile1D:
         y[self.rz < z,:] = self.urv
         return np.squeeze(y)
     
-class ExperimentalProfile1D:
+class ExperimentalProfile1D(ProfileFunction):
+    '''
+    Given experimental values at z, this will interpolate in between
+    left and right are the values used if the mesh goes beyond z. By default, they
+    will use the left-most and right-most values
+    '''
     def __init__(self, z, values, left=None, right=None):
         values = np.atleast_2d(values)
         if values.shape[0] == 1:
@@ -243,7 +262,8 @@ class FiniteVolume1D(FiniteVolumeGrid):
     N: int
         Number of cells
     responses: int | list[str]
-        Response variables
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
     boundaryConditions: BoundaryCondition1D
         Boundary conditions on mesh
     computeMidpoint: bool
@@ -319,11 +339,58 @@ class FiniteVolume1D(FiniteVolumeGrid):
         return self.midPointCalculator.getDiffusivityCoordinates(y, self.z, self.zEdge, isPeriodic=isPeriodic)
     
 class Cartesian1D(FiniteVolume1D):
+    '''
+    1D finite volume mesh in cartesian coordinates
+
+    Cell will be a volume with thickness dz
+        y - value at node center
+        z - spatial coordinate at node center
+        zEdge - spatial coordinate at node edge
+
+    Parameters
+    ----------
+    zlim: list[float]
+        Left and right boundary position of mesh
+    N: int
+        Number of cells
+    responses: int | list[str]
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
+    boundaryConditions: BoundaryCondition1D
+        Boundary conditions on mesh
+    computeMidpoint: bool
+        Whether to compute diffusivity at average midpoint composition (True) or
+        average diffusivities computed on nearby cell centers (False)
+    '''
     def _fluxTodXdt(self, fluxes):
         '''For cartesian: dx/dt = -dJ/dz'''
         return -(fluxes[1:] - fluxes[:-1]) / self.dzs[0]
     
 class Cylindrical1D(FiniteVolume1D):
+    '''
+    1D finite volume mesh in cylindrical coordinates
+
+    Cell will be a volume with thickness dz
+        y - value at node center
+        z - spatial coordinate at node center
+        zEdge - spatial coordinate at node edge
+
+    Parameters
+    ----------
+    rlim: list[float]
+        Left and right boundary position of mesh in terms of radius
+        Both min and max radius must be above 0
+    N: int
+        Number of cells
+    responses: int | list[str]
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
+    boundaryConditions: BoundaryCondition1D
+        Boundary conditions on mesh
+    computeMidpoint: bool
+        Whether to compute diffusivity at average midpoint composition (True) or
+        average diffusivities computed on nearby cell centers (False)
+    '''
     def __init__(self, responses, rlim, N, computeMidpoint = False):
         if rlim[0] < 0 or rlim[1] < 0:
             raise ValueError('Radial limits must be positive')
@@ -340,6 +407,30 @@ class Cylindrical1D(FiniteVolume1D):
         return -(fr[1:] - fr[:-1]) / self.z / self.dzs[0]
     
 class Spherical1D(FiniteVolume1D):
+    '''
+    1D finite volume mesh in spherical coordinates
+
+    Cell will be a volume with thickness dz
+        y - value at node center
+        z - spatial coordinate at node center
+        zEdge - spatial coordinate at node edge
+
+    Parameters
+    ----------
+    rlim: list[float]
+        Left and right boundary position of mesh in terms of radius
+        Both min and max radius must be above 0
+    N: int
+        Number of cells
+    responses: int | list[str]
+        If int, then this is the number of responses and the names will be R{i}
+        If list[str], then theses are the response names and the number of responses will be the list length
+    boundaryConditions: BoundaryCondition1D
+        Boundary conditions on mesh
+    computeMidpoint: bool
+        Whether to compute diffusivity at average midpoint composition (True) or
+        average diffusivities computed on nearby cell centers (False)
+    '''
     def __init__(self, responses, rlim, N, computeMidpoint = False):
         if rlim[0] < 0 or rlim[1] < 0:
             raise ValueError('Radial limits must be positive')

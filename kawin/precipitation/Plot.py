@@ -425,7 +425,6 @@ def plotEqVolumeFraction(model: PrecipitateBase, timeUnits='s', phases=None, ax 
         ['s', 'min', 'hr']
     phases: str | list[str] (optional)
         If None, then model phases will be used
-        'total' not supported for equilibrium volume fraction
     ax: matplotlib Axis (optional)
         If None, then ax will be generated
 
@@ -454,7 +453,6 @@ def plotSupersaturation(model: PrecipitateBase, timeUnits='s', phases=None, ax =
         ['s', 'min', 'hr']
     phases: str | list[str] (optional)
         If None, then model phases will be used
-        'total' not supported for equilibrium volume fraction
     ax: matplotlib Axis (optional)
         If None, then ax will be generated
 
@@ -473,6 +471,30 @@ def plotSupersaturation(model: PrecipitateBase, timeUnits='s', phases=None, ax =
     return _plot_term(model, ys, phases, 'Eq. Volume Fraction', timeUnits, ax=ax, *args, **kwargs)
 
 def plotSizeDistribution(model: PrecipitateModel, phases=None, radius='spherical', fill=False, ax=None, *args, **kwargs):
+    '''
+    Plots final particle size distribution (N vs r)
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        'total' not supported for equilibrium volume fraction
+    radius: str (optional)
+        For non-spherical precipitates, the average radius can be transformed to:
+            'spherical' - equivalent spherical radius (default)
+            'short' - short axis
+            'long' - long axis
+    fill: bool (optional)
+        If True, will fill between the PSD curve and y=0
+        Defaults to False
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
     ax = _get_axis(ax)
     phases = _get_plot_list(phases, model.phases)
     for p in phases:
@@ -482,6 +504,30 @@ def plotSizeDistribution(model: PrecipitateModel, phases=None, radius='spherical
     return ax
 
 def plotDistributionDensity(model: PrecipitateModel, phases=None, radius='spherical', fill=False, ax=None, *args, **kwargs):
+    '''
+    Plots final particle size distribution density (N/R) vs R
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        'total' not supported for equilibrium volume fraction
+    radius: str (optional)
+        For non-spherical precipitates, the average radius can be transformed to:
+            'spherical' - equivalent spherical radius (default)
+            'short' - short axis
+            'long' - long axis
+    fill: bool (optional)
+        If True, will fill between the PSD curve and y=0
+        Defaults to False
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
     ax = _get_axis(ax)
     phases = _get_plot_list(phases, model.phases)
     for p in phases:
@@ -490,7 +536,30 @@ def plotDistributionDensity(model: PrecipitateModel, phases=None, radius='spheri
         plotPDF(pbm, scale=scale, fill=fill, ax=ax, *args, **kwargs)
     return ax
 
-def plotCumulativeDensity(model: PrecipitateModel, phases=None, radius='spherical', order=1, ax=None, *args, **kwargs):
+def plotCumulativeDistribution(model: PrecipitateModel, phases=None, radius='spherical', order=1, ax=None, *args, **kwargs):
+    '''
+    Plots cumulative density functio of particle size distribution
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        'total' not supported for equilibrium volume fraction
+    radius: str (optional)
+        For non-spherical precipitates, the average radius can be transformed to:
+            'spherical' - equivalent spherical radius (default)
+            'short' - short axis
+            'long' - long axis
+    order: int (optional)
+        Moment of PSD to plot CDF in
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
     ax = _get_axis(ax)
     phases = _get_plot_list(phases, model.phases)
     for p in phases:
@@ -500,6 +569,34 @@ def plotCumulativeDensity(model: PrecipitateModel, phases=None, radius='spherica
     return ax
 
 def plotPrecipitateResults(model: PrecipitateModel, term, ax=None, *args, **kwargs):
+    '''
+    General function to plot precipitate results
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    term: str
+        Term to plot. Options are:
+            'volume fraction'
+            'critical radius'
+            'volume average radius' - average radius given volume fraction and precipitate density
+            'aspect ratio' - average aspect ratio vs time
+            'driving force'
+            'nucleation rate'
+            'precipitate density'
+            'temperature'
+            'composition'
+            'eq comp alpha' - equilibrium composition of matrix phase
+            'eq comp beta' - equilibrium composition of precipitate phase
+            'supersaturation'
+            'eq volume fraction' - equilibrium volume fraction of precipitate phase
+            'psd' - particle size distribution
+            'pdf' - particle size distribution density
+            'cdf' - particle cumulative size distribution
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    '''
     plotFunctions = {
         'volume fraction': plotVolumeFraction,
         'critical radius': plotCriticalRadius,
@@ -517,9 +614,9 @@ def plotPrecipitateResults(model: PrecipitateModel, term, ax=None, *args, **kwar
         'eq volume fraction': plotEqVolumeFraction,
         'psd': plotSizeDistribution,
         'pdf': plotDistributionDensity,
-        'cdf': plotCumulativeDensity
+        'cdf': plotCumulativeDistribution
     }
     if term.lower() not in plotFunctions:
         functionList = ', '.join(list(plotFunctions.keys()))
         raise ValueError(f'term must be one of the following: [{functionList}]')
-    plotFunctions[term.lower()](model, ax=ax, *args, **kwargs)
+    return plotFunctions[term.lower()](model, ax=ax, *args, **kwargs)

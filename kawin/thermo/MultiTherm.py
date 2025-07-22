@@ -6,7 +6,6 @@ from pycalphad import variables as v
 
 from kawin.thermo.utils import _getPrecipitatePhase, _process_xT_arrays, _process_x
 from kawin.thermo.Thermodynamics import GeneralThermodynamics
-from kawin.thermo.LocalEquilibrium import local_equilibrium
 from kawin.thermo.FreeEnergyHessian import dMudX
 from kawin.thermo.Mobility import inverseMobility, inverseMobility_from_diffusivity, tracer_diffusivity, tracer_diffusivity_from_diff
 

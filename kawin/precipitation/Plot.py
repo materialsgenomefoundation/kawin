@@ -1,7 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def getTimeAxis(time, timeUnits='s', bounds=None):
+from kawin.PlotUtils import _get_axis, _adjust_kwargs
+from kawin.precipitation.PrecipitationParameters import PrecipitateParameters
+from kawin.precipitation.PopulationBalance import PopulationBalanceModel, plotPDF, plotPSD, plotCDF
+from kawin.precipitation import PrecipitateBase, PrecipitateModel
+
+def _get_time_axis(time, timeUnits='s', bounds=None):
         '''
         Returns scaling factor, label and x-limits depending on units of time
 
@@ -26,393 +31,592 @@ def getTimeAxis(time, timeUnits='s', bounds=None):
 
         return timeScale, timeLabel, bounds
 
-def plotBase(precModel, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
+def _total_sum(model: PrecipitateBase, plotVar):
     '''
-    Plots model outputs
+    Total var is sum along phases
+    '''
+    return np.sum(plotVar, axis=1)
+
+def _total_average(model: PrecipitateBase, plotVar):
+    '''
+    Total var is average along phases
+    '''
+    totalN = np.sum(model.data.precipitateDensity, axis=1)
+    totalN[totalN==0] = 1
+    totalV = np.sum(plotVar*model.data.precipitateDensity, axis=1)
+    return totalV/totalN
+
+def _total_vol_average(model: PrecipitateBase, plotVar):
+    '''
+    This is specific for volume average radius, where R^3 = fv / (4/3*pi*N)
+    '''
+    totalN = np.sum(model.data.precipitateDensity, axis=1)
+    totalV = np.sum(model.data.volFrac, axis=1)
+    indices = totalN > 0
+    volAvg = np.zeros(totalV.shape)
+    volAvg[indices] = np.cbrt(totalV[indices] / totalN[indices] / (4/3*np.pi))
+    return volAvg
+
+def _total_none(model: PrecipitateBase, plotVar):
+    '''
+    For variables that done have a defined total (ex. driving force, supersaturation, eq volume fraction)
+    '''
+    return None
+
+def _get_plot_list(currList, defaultList):
+    if currList is None:
+        currList = defaultList
+    if isinstance(currList, str):
+        currList = [currList]
+    return currList
+
+def _get_ys_phases(model: PrecipitateBase, plotVar, phases=None, totalFunc=_total_sum):
+    '''
+    Given the plot variable and list of phases (which may include 'total')
+    return a list of y's and corresponding labels to plot
+    '''
+    phases = _get_plot_list(phases, model.phases)
+    ys, labels = [], []
+    for p in phases:
+        if p.upper() == 'TOTAL':
+            totalVar = totalFunc(model, plotVar)
+            if totalVar is not None:
+                ys.append(totalVar)
+                labels.append(p)
+        else:
+            ys.append(plotVar[:,list(model.phases).index(p)])
+            labels.append(p)
+    return ys, labels
+
+def _get_ys_elements(model: PrecipitateBase, plotVar, elements=None):
+    '''
+    Given the plot variable and list of elements
+    return a list of y's and corresponding labels to plot
+    '''
+    elements = _get_plot_list(elements, model.elements)
+    ys = []
+    for e in elements:
+        ys.append(plotVar[:,list(model.elements).index(e)])
+    return ys, elements
+
+def _radius_scale(precipitate: PrecipitateParameters, radius, r):
+    radius = radius.lower()
+    if radius not in ['spherical', 'short', 'long']:
+        raise ValueError("Radius must be \'spherical\', \'short\' or \'long\'")
     
+    scale = 1
+    if precipitate.nucleation.isGrainBoundaryNucleation:
+        scale = precipitate.nucleation.areaRemoval
+    else:
+        if radius != 'spherical':
+            scale = 1 / precipitate.shapeFactor.eqRadiusFactor(r)
+            if radius == 'long':
+                scale *= precipitate.shapeFactor.aspectRatio(r)
+    return scale
+
+def _plot_term(model: PrecipitateBase, ys, labels, yLabel, timeUnits='s', ax=None, yBottom=0, *args, **kwargs):
+    '''
+    Plot a variable from a precipitate model
+    This will scale the x-axis to the desired time unit and apply labels when possible
+    '''
+    ax = _get_axis(ax)
+    time = model.data.time
+    timeScale, timeLabel, bounds = _get_time_axis(time, timeUnits)
+    for label, y in zip(labels, ys):
+        plot_kwargs = _adjust_kwargs(label, {'label': label}, kwargs)
+        ax.semilogx(timeScale*time, y, *args, **plot_kwargs)
+    if len(labels) > 1:
+        ax.legend()
+
+    ax.set_xlabel(timeLabel)
+    ax.set_xlim(bounds)
+    ax.set_ylabel(yLabel)
+    if yBottom is not None:
+        ax.set_ylim(bottom=yBottom)
+    return ax
+
+def plotVolumeFraction(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots volume fraction vs time on a semilog plot
+
     Parameters
     ----------
-    axes : Axis
-    variable : str
-        Specified variable to plot
-        Options are 'Volume Fraction', 'Total Volume Fraction', 'Critical Radius',
-            'Average Radius', 'Volume Average Radius', 'Total Average Radius', 
-            'Total Volume Average Radius', 'Aspect Ratio', 'Total Aspect Ratio'
-            'Driving Force', 'Nucleation Rate', 'Total Nucleation Rate',
-            'Precipitate Density', 'Total Precipitate Density', 
-            'Temperature' and 'Composition'
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        If 'total' is in phase list, then sum of f_v will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
-            Note: for multi-phase simulations, adding the word 'Total' will
-                sum the variable for all phases. Without the word 'Total', the variable
-                for each phase will be plotted separately
-                
-    bounds : tuple (optional)
-        Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
-    timeUnits : str (optional)
-        Plot time dependent variables per seconds ('s'), minutes ('min') or hours ('h')
-    radius : str (optional)
-        For non-spherical precipitates, plot the Average Radius by the -
-            Equivalent spherical radius ('spherical')
-            Short axis ('short')
-            Long axis ('long')
-        Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
-    *args, **kwargs - extra arguments for plotting
+    Returns
+    -------
+    Matplotlib Axis
     '''
-    timeScale, timeLabel, bounds = getTimeAxis(precModel.pData.time, timeUnits, bounds)
+    ys, phases = _get_ys_phases(model, model.data.volFrac, phases, totalFunc=_total_sum)
+    return _plot_term(model, ys, phases, r'Volume Fraction', timeUnits, ax=ax, yBottom=0, *args, **kwargs)
 
-    axes.set_xlabel(timeLabel)
-    axes.set_xlim(bounds)
-
-    labels = {
-        'Volume Fraction': 'Volume Fraction',
-        'Total Volume Fraction': 'Volume Fraction',
-        'Critical Radius': 'Critical Radius (m)',
-        'Average Radius': 'Average Radius (m)',
-        'Volume Average Radius': 'Volume Average Radius (m)',
-        'Total Average Radius': 'Average Radius (m)',
-        'Total Volume Average Radius': 'Volume Average Radius (m)',
-        'Aspect Ratio': 'Mean Aspect Ratio',
-        'Total Aspect Ratio': 'Mean Aspect Ratio',
-        'Driving Force': 'Driving Force (J/m$^3$)',
-        'Nucleation Rate': 'Nucleation Rate (#/m$^3$-s)',
-        'Total Nucleation Rate': 'Nucleation Rate (#/m$^3$-s)',
-        'Precipitate Density': 'Precipitate Density (#/m$^3$)',
-        'Total Precipitate Density': 'Precipitate Density (#/m$^3$)',
-        'Temperature': 'Temperature (K)',
-        'Composition': 'Matrix Composition (at.%)',
-        'Eq Composition Alpha': 'Matrix Composition (at.%)',
-        'Eq Composition Beta': 'Matrix Composition (at.%)',
-        'Supersaturation': 'Supersaturation',
-        'Eq Volume Fraction': 'Volume Fraction'
-    }
-
-    totalVariables = ['Total Volume Fraction', 'Total Average Radius', 'Total Aspect Ratio', \
-                        'Total Nucleation Rate', 'Total Precipitate Density', 'Total Volume Average Radius']
-    singleVariables = ['Volume Fraction', 'Critical Radius', 'Average Radius', 'Aspect Ratio', \
-                        'Driving Force', 'Nucleation Rate', 'Precipitate Density', 'Volume Average Radius']
-    eqCompositions = ['Eq Composition Alpha', 'Eq Composition Beta']
-    saturations = ['Supersaturation', 'Eq Volume Fraction']
-
-    if variable == 'Temperature':
-        plotTemperature(precModel, timeScale, labels, variable, axes, *args, **kwargs)
-    elif variable == 'Composition':
-        plotCompositions(precModel, timeScale, labels, variable, axes, *args, **kwargs)
-    elif variable in eqCompositions:
-        plotEqCompositions(precModel, timeScale, labels, variable, axes, *args, **kwargs)
-    elif variable in saturations:
-        plotSaurations(precModel, timeScale, labels, variable, axes, *args, **kwargs)
-    elif variable in singleVariables:
-        plotSingleVariables(precModel, timeScale, radius, labels, variable, axes, *args, **kwargs)
-    elif variable in totalVariables:
-        plotTotalVariables(precModel, timeScale, labels, variable, axes, *args, **kwargs)
-
-def plotEuler(precModel, axes, variable, bounds = None, timeUnits = 's', radius='spherical', *args, **kwargs):
+def plotCriticalRadius(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
     '''
-    Plots model outputs
-    
+    Plots critical radius vs time on a semilog plot
+
     Parameters
     ----------
-    axes : Axis
-    variable : str
-        Specified variable to plot
-        Options are 'Volume Fraction', 'Total Volume Fraction', 'Critical Radius',
-            'Average Radius', 'Volume Average Radius', 'Total Average Radius', 
-            'Total Volume Average Radius', 'Aspect Ratio', 'Total Aspect Ratio'
-            'Driving Force', 'Nucleation Rate', 'Total Nucleation Rate',
-            'Precipitate Density', 'Total Precipitate Density', 
-            'Temperature', 'Composition',
-            'Size Distribution', 'Size Distribution Curve',
-            'Size Distribution KDE', 'Size Distribution Density
-            'Interfacial Composition Alpha', 'Interfacial Composition Beta'
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        If 'total' is in phase list, then average of R_crit will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
-            Note: for multi-phase simulations, adding the word 'Total' will
-                sum the variable for all phases. Without the word 'Total', the variable
-                for each phase will be plotted separately
-
-                Interfacial composition terms are more relavent for binary systems than
-                for multicomponent systems
-                
-    bounds : tuple (optional)
-        Limits on the x-axis (float, float) or None (default, this will set bounds to (initial time, final time))
-    radius : str (optional)
-        For non-spherical precipitates, plot the Average Radius by the -
-            Equivalent spherical radius ('spherical')
-            Short axis ('short')
-            Long axis ('long')
-        Note: Total Average Radius and Volume Average Radius will still use the equivalent spherical radius
-    *args, **kwargs - extra arguments for plotting
+    Returns
+    -------
+    Matplotlib Axis
     '''
-    sizeDistributionVariables = ['Size Distribution', 'Size Distribution Curve', 'Size Distribution KDE', 'Size Distribution Density']
-    compositionVariables = ['Interfacial Composition Alpha', 'Interfacial Composition Beta']
+    ys, phases = _get_ys_phases(model, model.data.Rcrit, phases, totalFunc=_total_average)
+    return _plot_term(model, ys, phases, r'Critical Radius ($m$)', timeUnits, ax=ax, yBottom=0, *args, **kwargs)
 
-    scale = []
-    for p in range(len(precModel.phases)):
-        # if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
-        #     if radius == 'spherical':
-        #         scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
-        #     else:
-        #         scale.append(1/precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
-        #         if radius == 'long':
-        #             scale.append(precModel.shapeFactors[p].aspectRatio(precModel.PBM[p].PSDbounds) / precModel.shapeFactors[p].eqRadiusFactor(precModel.PBM[p].PSDbounds))
-        # else:
-        #     scale.append(precModel._GBareaRemoval(p) * np.ones(len(precModel.PBM[p].PSDbounds)))
+def plotAverageRadius(model: PrecipitateBase, timeUnits='s', phases=None, radius='spherical', ax = None, *args, **kwargs):
+    '''
+    Plots average radius vs time on a semilog plot
 
-        if not precModel.precipitateParameters[p].nucleation.description.isGrainBoundaryNucleation:
-            if radius == 'spherical':
-                scale.append(precModel.precipitateParameters[p].nucleation.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
-            else:
-                scale.append(1/precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
-                if radius == 'long':
-                    scale.append(precModel.precipitateParameters[p].shapeFactor.aspectRatio(precModel.PBM[p].PSDbounds) / precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.PBM[p].PSDbounds))
-        else:
-            scale.append(precModel.precipitateParameters[p].nucleation.areaRemoval * np.ones(len(precModel.PBM[p].PSDbounds)))
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        If 'total' is in phase list, then average of R_avg will be used
+    radius: str (optional)
+        For non-spherical precipitates, the average radius can be transformed to:
+            'spherical' - equivalent spherical radius (default)
+            'short' - short axis
+            'long' - long axis
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    # Convert average radius to equivalent spherical, short axis or long axis
+    plotVar = model.data.Ravg
+    for p in range(len(model.phases)):
+        plotVar[:,p] *= _radius_scale(model.precipitates[p], radius, plotVar[:,p])
 
-    if variable in compositionVariables:
-        plotEulerComposition(precModel, variable, axes, *args, **kwargs)
-    elif variable in sizeDistributionVariables:
-        plotEulerSizeDistribution(precModel, scale, variable, axes, *args, **kwargs)
-    elif variable == 'Cumulative Size Distribution':
-        plotEulerCumulativeSizeDistribution(precModel, scale, variable, axes, *args, **kwargs)
-    elif variable == 'Aspect Ratio Distribution':
-        plotEulerAspectRatioDistribution(precModel, scale, variable, axes, *args, **kwargs) 
-    else:
-        plotBase(precModel, axes, variable, bounds, timeUnits, radius, *args, **kwargs)
+    ys, phases = _get_ys_phases(model, plotVar, phases, totalFunc=_total_average)
+    return _plot_term(model, ys, phases, r'Average Radius ($m$)', timeUnits, ax=ax, yBottom=0, *args, **kwargs)
 
-def plotTemperature(precModel, timeScale, labels, variable, axes, *args, **kwargs):
-    axes.semilogx(timeScale * precModel.pData.time, precModel.pData.temperature, *args, **kwargs)
-    axes.set_ylabel(labels[variable])
+def plotVolumeAverageRadius(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots volume averaged radius vs time on a semilog plot
+        R_v = cbrt(f_v / (4/3 pi N_v)
 
-def plotCompositions(precModel, timeScale, labels, variable, axes, *args, **kwargs):
-    if precModel.numberOfElements == 1:
-        axes.semilogx(timeScale * precModel.pData.time, precModel.pData.composition[:,0], *args, **kwargs)
-        axes.set_ylabel('Matrix Composition (at.% ' + precModel.elements[0] + ')')
-    else:
-        #If kwargs has label, add it as an extension to the label we add
-        #And also pop label from kwargs so we don't have double arguments
-        label_ext = ''
-        if 'label' in kwargs:
-            label_ext = '_' + kwargs['label']
-            kwargs.pop('label')
-        for i in range(precModel.numberOfElements):
-            #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-            if 'color' in kwargs:
-                axes.semilogx(timeScale * precModel.pData.time, precModel.pData.composition[:,i], label=precModel.elements[i] + label_ext, *args, **kwargs)
-            else:
-                axes.semilogx(timeScale * precModel.pData.time, precModel.pData.composition[:,i], label=precModel.elements[i] + label_ext, color='C'+str(i), *args, **kwargs)
-        axes.legend()
-        axes.set_ylabel(labels[variable])
-    yRange = [np.amin(precModel.pData.composition), np.amax(precModel.pData.composition)]
-    axes.set_ylim([yRange[0] - 0.1 * (yRange[1] - yRange[0]), yRange[1] + 0.1 * (yRange[1] - yRange[0])])
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        If 'total' is in phase list, then average will be cbrt(sum(f_v) / sum(N_v) / (4/3 pi))
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    plotVariable = np.zeros(model.data.volFrac.shape)
+    indices = model.data.precipitateDensity > 0
+    plotVariable[indices] = np.cbrt(model.data.volFrac[indices] / model.data.precipitateDensity[indices] / (4/3*np.pi))
+    ys, phases = _get_ys_phases(model, plotVariable, phases, totalFunc=_total_vol_average)
+    return _plot_term(model, ys, phases, r'Volume Average Radius ($m$)', timeUnits, ax=ax, yBottom=0, *args, **kwargs)
 
-def plotEqCompositions(precModel, timeScale, labels, variable, axes, *args, **kwargs):
-    if variable == 'Eq Composition Alpha':
-        plotVariable = precModel.pData.xEqAlpha
-    elif variable == 'Eq Composition Beta':
-        plotVariable = precModel.pData.xEqBeta
+def plotAspectRatio(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots precipitate aspect ratio vs time on a semilog plot
 
-    if len(precModel.phases) == 1:
-        if precModel.numberOfElements == 1:
-            axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0,0], *args, **kwargs)
-            axes.set_ylabel('Matrix Composition (at.% ' + precModel.elements[0] + ')')
-        else:
-            for i in range(precModel.numberOfElements):
-                #Keep color consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-                if 'color' in kwargs:
-                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0,i], label=precModel.elements[i]+'_Eq', *args, **kwargs)
-                else:
-                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0,i], label=precModel.elements[i]+'_Eq', color='C'+str(i), *args, **kwargs)
-            axes.legend()
-            axes.set_ylabel(labels[variable])
-    else:
-        if precModel.numberOfElements == 1:
-            for p in range(len(precModel.phases)):
-                #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-                if 'color' in kwargs:
-                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,0], label=precModel.phases[p]+'_Eq', *args, **kwargs)
-                else:
-                    axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,0], label=precModel.phases[p]+'_Eq', color='C'+str(p), *args, **kwargs)
-            axes.legend()
-            axes.set_ylabel('Matrix Composition (at.% ' + precModel.elements[0] + ')')
-        else:
-            cIndex = 0
-            for p in range(len(precModel.phases)):
-                for i in range(precModel.numberOfElements):
-                    #Keep color somewhat consistent between Composition, Eq Composition Alpha and Eq Composition Beta if color isn't passed as an arguement
-                    if 'color' in kwargs:
-                        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,i], label=precModel.phases[p]+'_'+precModel.elements[i]+'_Eq', *args, **kwargs)
-                    else:
-                        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p,i], label=precModel.phases[p]+'_'+precModel.elements[i]+'_Eq', color='C'+str(cIndex), *args, **kwargs)
-                    cIndex += 1
-            axes.legend()
-            axes.set_ylabel(labels[variable])
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        If 'total' is in phase list, then average of AR will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
-def plotSaurations(precModel, timeScale, labels, variable, axes, *args, **kwargs):
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ys, phases = _get_ys_phases(model, model.data.ARavg, phases, totalFunc=_total_average)
+    return _plot_term(model, ys, phases, r'Aspect Ratio', timeUnits, ax=ax, yBottom=1, *args, **kwargs)
+
+def plotDrivingForce(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots driving force vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        'total' is not supported for driving forces
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ys, phases = _get_ys_phases(model, model.data.drivingForce, phases, totalFunc=_total_none)
+    return _plot_term(model, ys, phases, r'Driving Force ($J/m^3$)', timeUnits, ax=ax, yBottom=None)
+
+def plotNucleationRate(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots nucleation rate vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        If 'total' is in phase list, then sum of dN/dt will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ys, phases = _get_ys_phases(model, model.data.nucRate, phases, totalFunc=_total_sum)
+    return _plot_term(model, ys, phases, r'Nucleation Rate (#$/m^3-s$)', timeUnits, ax=ax, yBottom=0, *args, **kwargs)
+
+def plotPrecipitateDensity(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots precipitate density vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        If 'total' is in phase list, then sum of N will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ys, phases = _get_ys_phases(model, model.data.precipitateDensity, phases, totalFunc=_total_sum)
+    return _plot_term(model, ys, phases, r'Precipitate Density (#$/m^3$)', timeUnits, ax=ax, yBottom=0, *args, **kwargs)
+
+def plotTemperature(model: PrecipitateBase, timeUnits='s', ax = None, *args, **kwargs):
+    '''
+    Plots temperature vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    return _plot_term(model, [model.data.temperature], ['Temperature'], 'Temperature (K)', timeUnits, ax=ax, *args, **kwargs)
+
+def plotComposition(model: PrecipitateBase, timeUnits='s', elements=None, ax = None, *args, **kwargs):
+    '''
+    Plots composition vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    elements: str | list[str] (optional)
+        If None, then model elements will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ys, elements = _get_ys_elements(model, model.data.composition, elements)
+    return _plot_term(model, ys, elements, 'Composition (at.)', timeUnits, ax=ax, *args, **kwargs)
+
+def plotEqMatrixComposition(model: PrecipitateBase, timeUnits='s', elements=None, phase=None, ax = None, *args, **kwargs):
+    '''
+    Plots equilibrium matrix composition vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    elements: str | list[str] (optional)
+        If None, then model elements will be used
+    phase: str (optional)
+        Precipitate phase that matrix is in equilibrium with
+        If None, first phase will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    index = model.phaseIndex(phase)
+    ys, elements = _get_ys_elements(model, model.data.xEqAlpha[:,index,:], elements)
+    return _plot_term(model, ys, elements, r'Eq. Composition $\alpha$ (at.)', timeUnits, ax=ax, *args, **kwargs)
+
+def plotEqPrecipitateComposition(model: PrecipitateBase, timeUnits='s', elements=None, phase=None, ax = None, *args, **kwargs):
+    '''
+    Plots equilibrium precipitate composition vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    elements: str | list[str] (optional)
+        If None, then model elements will be used
+    phase: str (optional)
+        Precipitate phase that matrix is in equilibrium with
+        If None, first phase will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    index = model.phaseIndex(phase)
+    ys, elements = _get_ys_elements(model, model.data.xEqBeta[:,index,:], elements)
+    return _plot_term(model, ys, elements, r'Eq. Composition $\beta$ (at.)', timeUnits, ax=ax, *args, **kwargs)
+
+def plotEqVolumeFraction(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots equilibrium volume fraction vs time on a semilog plot
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
     #Since supersaturation is calculated in respect to the tie-line, it is the same for each element
     #Thus only a single element is needed
-    plotVariable = np.zeros(precModel.pData.volFrac.shape)
-    for p in range(len(precModel.phases)):
-        if variable == 'Eq Volume Fraction':
-            num = precModel.pData.composition[0,0] - precModel.pData.xEqAlpha[:,p,0]
-        else:
-            num = precModel.pData.composition[:,0] - precModel.pData.xEqAlpha[:,p,0]
-        den = precModel.pData.xEqBeta[:,p,0] - precModel.pData.xEqAlpha[:,p,0]
-        #If precipitate is unstable, both xEqAlpha and xEqBeta are set to 0
-        #For these cases, change the values of numerator and denominator so that supersaturation is 0 instead of undefined
-        num[den == 0] = 0
-        den[den == 0] = 1
-        plotVariable[:,p] = num / den
-    
-    if len(precModel.phases) == 1:
-        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0], *args, **kwargs)
-    else:
-        for p in range(len(precModel.phases)):
-            if 'color' in kwargs:
-                axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p], label=precModel.phases[p], *args, **kwargs)
-            else:
-                axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p], label=precModel.phases[p], color='C'+str(p), *args, **kwargs)
-        axes.legend()
-    axes.set_ylabel(labels[variable])
+    num = model.data.composition[0,0] - model.data.xEqAlpha[:,:,0]
+    den = model.data.xEqBeta[:,:,0] - model.data.xEqAlpha[:,:,0]
+    num[den == 0] = 0
+    den[den == 0] = 1
+    plotVariable = num / den
+    ys, phases = _get_ys_phases(model, plotVariable, phases, totalFunc=_total_none)
+    return _plot_term(model, ys, phases, 'Eq. Volume Fraction', timeUnits, ax=ax, *args, **kwargs)
 
-def plotSingleVariables(precModel, timeScale, radius, labels, variable, axes, *args, **kwargs):
-    if variable == 'Volume Fraction':
-        plotVariable = precModel.pData.volFrac
-    elif variable == 'Critical Radius':
-        plotVariable = precModel.pData.Rcrit
-    elif variable == 'Average Radius':
-        plotVariable = precModel.pData.Ravg
-        for p in range(len(precModel.phases)):
-            # if precModel.GB[p].nucleationSiteType == precModel.GB[p].BULK or precModel.GB[p].nucleationSiteType == precModel.GB[p].DISLOCATION:
-            #     if radius != 'spherical':
-            #         plotVariable[p] /= precModel.shapeFactors[p].eqRadiusFactor(precModel.pData.Ravg[p])
-            #     if radius == 'long':
-            #         plotVariable[p] *= precModel.pData.ARavg[p]
-            # else:
-            #     plotVariable[p] *= precModel._GBareaRemoval(p)
-            if not precModel.precipitateParameters[p].nucleation.description.isGrainBoundaryNucleation:
-                if radius != 'spherical':
-                    plotVariable[p] /= precModel.precipitateParameters[p].shapeFactor.eqRadiusFactor(precModel.pData.Ravg[p])
-                if radius == 'long':
-                    plotVariable[p] *= precModel.pData.ARavg[p]
-            else:
-                plotVariable[p] *= precModel.precipitateParameters[p].nucleation.areaRemoval
-    elif variable == 'Volume Average Radius':
-        plotVariable = np.zeros(precModel.pData.volFrac.shape)
-        indices = precModel.pData.precipitateDensity > 0
-        plotVariable[indices] = np.cbrt(precModel.pData.volFrac[indices] / precModel.pData.precipitateDensity[indices] / (4/3*np.pi))
-    elif variable == 'Aspect Ratio':
-        plotVariable = precModel.pData.ARavg
-    elif variable == 'Driving Force':
-        plotVariable = precModel.pData.drivingForce
-    elif variable == 'Nucleation Rate':
-        plotVariable = precModel.pData.nucRate
-    elif variable == 'Precipitate Density':
-        plotVariable = precModel.pData.precipitateDensity
+def plotSupersaturation(model: PrecipitateBase, timeUnits='s', phases=None, ax = None, *args, **kwargs):
+    '''
+    Plots supersaturation vs time on a semilog plot
 
-    if (len(precModel.phases)) == 1:
-        axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,0], *args, **kwargs)
-    else:
-        for p in range(len(precModel.phases)):
-            axes.semilogx(timeScale * precModel.pData.time, plotVariable[:,p], label=precModel.phases[p], color='C'+str(p), *args, **kwargs)
-        axes.legend()
-    axes.set_ylabel(labels[variable])
-    yb = 1 if variable == 'Aspect Ratio' else 0
-    axes.set_ylim([yb, 1.1 * np.amax(plotVariable)])
+    Parameters
+    ----------
+    model: PrecipitateBase
+    timeUnits: str
+        ['s', 'min', 'hr']
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
-def plotTotalVariables(precModel, timeScale, labels, variable, axes, *args, **kwargs):
-    if variable == 'Total Volume Fraction':
-        plotVariable = np.sum(precModel.pData.volFrac, axis=1)
-    elif variable == 'Total Average Radius':
-        totalN = np.sum(precModel.pData.precipitateDensity, axis=1)
-        totalN[totalN == 0] = 1
-        totalR = np.sum(precModel.pData.Ravg * precModel.pData.precipitateDensity, axis=1)
-        plotVariable = totalR / totalN
-    elif variable == 'Total Volume Average Radius':
-        totalN = np.sum(precModel.pData.precipitateDensity, axis=1)
-        totalN[totalN == 0] = 1
-        totalVol = np.sum(precModel.pData.volFrac, axis=1)
-        plotVariable = np.cbrt(totalVol / totalN)
-    elif variable == 'Total Aspect Ratio':
-        totalN = np.sum(precModel.pData.precipitateDensity, axis=1)
-        totalN[totalN == 0] = 1
-        totalAR = np.sum(precModel.pData.ARavg * precModel.pData.precipitateDensity, axis=1)
-        plotVariable = totalAR / totalN
-    elif variable == 'Total Nucleation Rate':
-        plotVariable = np.sum(precModel.pData.nucRate, axis=1)
-    elif variable == 'Total Precipitate Density':
-        plotVariable = np.sum(precModel.pData.precipitateDensity, axis=1)
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    #Since supersaturation is calculated in respect to the tie-line, it is the same for each element
+    #Thus only a single element is needed
+    num = model.data.composition[:,0][:,np.newaxis] - model.data.xEqAlpha[:,:,0]
+    den = model.data.xEqBeta[:,:,0] - model.data.xEqAlpha[:,:,0]
+    num[den == 0] = 0
+    den[den == 0] = 1
+    plotVariable = num / den
+    ys, phases = _get_ys_phases(model, plotVariable, phases, totalFunc=_total_none)
+    return _plot_term(model, ys, phases, 'Eq. Volume Fraction', timeUnits, ax=ax, *args, **kwargs)
 
-    axes.semilogx(timeScale * precModel.pData.time, plotVariable, *args, **kwargs)
-    axes.set_ylabel(labels[variable])
-    yb = 1 if variable == 'Total Aspect Ratio' else 0
-    axes.set_ylim(bottom=yb)
+def plotSizeDistribution(model: PrecipitateModel, phases=None, radius='spherical', fill=False, ax=None, *args, **kwargs):
+    '''
+    Plots final particle size distribution (N vs r)
 
-def plotEulerComposition(precModel, variable, axes, *args, **kwargs):
-    if variable == 'Interfacial Composition Alpha':
-        yVar = precModel.PSDXalpha
-        ylabel = 'Composition in Alpha phase'
-    else:
-        yVar = precModel.PSDXbeta
-        ylabel = 'Composition in Beta Phase'
+    Parameters
+    ----------
+    model: PrecipitateBase
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        'total' not supported for equilibrium volume fraction
+    radius: str (optional)
+        For non-spherical precipitates, the average radius can be transformed to:
+            'spherical' - equivalent spherical radius (default)
+            'short' - short axis
+            'long' - long axis
+    fill: bool (optional)
+        If True, will fill between the PSD curve and y=0
+        Defaults to False
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
-    if (len(precModel.phases)) == 1:
-        axes.semilogx(precModel.PBM[0].PSDbounds, yVar[0], *args, **kwargs)
-    else:
-        for p in range(len(precModel.phases)):
-            axes.plot(precModel.PBM[p].PSDbounds, yVar[p], label=precModel.phases[p], *args, **kwargs)
-        axes.legend()
-    axes.set_xlim([precModel.PBM[0].PSDbounds[0], precModel.PBM[0].PSDbounds[-1]])
-    axes.set_xlabel('Radius (m)')
-    axes.set_ylabel(ylabel)
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ax = _get_axis(ax)
+    phases = _get_plot_list(phases, model.phases)
+    for p in phases:
+        pbm = model.getPBM(p)
+        scale = _radius_scale(model.precipitates[model.phaseIndex(p)], radius, pbm.PSDsize)
+        plotPSD(pbm, scale=scale, fill=fill, ax=ax, *args, **kwargs)
+    return ax
 
-def plotEulerSizeDistribution(precModel, scale, variable, axes, *args, **kwargs):
-    ylabel = 'Frequency (#/$m^3$)'
-    if variable == 'Size Distribution':
-        functionName = 'PlotHistogram'
-    elif variable == 'Size Distribution KDE':
-        functionName = 'PlotKDE'
-    elif variable == 'Size Distribution Density':
-        functionName = 'PlotDistributionDensity'
-        ylabel = 'Distribution Density (#/$m^4$)'
-    else:
-        functionName = 'PlotCurve'
+def plotDistributionDensity(model: PrecipitateModel, phases=None, radius='spherical', fill=False, ax=None, *args, **kwargs):
+    '''
+    Plots final particle size distribution density (N/R) vs R
 
-    if len(precModel.phases) == 1:
-        getattr(precModel.PBM[0], functionName)(axes, scale=scale[0], *args, **kwargs)
-    else:
-        for p in range(len(precModel.phases)):
-            getattr(precModel.PBM[p], functionName)(axes, label=precModel.phases[p], scale=scale[p], *args, **kwargs)
-        axes.legend()
-    axes.set_xlabel('Radius (m)')
-    axes.set_ylabel(ylabel)
-    axes.set_xlim([0, np.amax([pb.max for pb in precModel.PBM])])
-    if variable == 'Size Distribution Density':
-        axes.set_ylim([0, 1.1*np.amax(np.concatenate(([np.amax(pb.PSD/(pb.PSDbounds[1:] - pb.PSDbounds[:-1])) for pb in precModel.PBM], [1])))])
-    else:
-        axes.set_ylim([0, 1.1*np.amax(np.concatenate(([np.amax(pb.PSD) for pb in precModel.PBM], [1])))])
+    Parameters
+    ----------
+    model: PrecipitateBase
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        'total' not supported for equilibrium volume fraction
+    radius: str (optional)
+        For non-spherical precipitates, the average radius can be transformed to:
+            'spherical' - equivalent spherical radius (default)
+            'short' - short axis
+            'long' - long axis
+    fill: bool (optional)
+        If True, will fill between the PSD curve and y=0
+        Defaults to False
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
 
-def plotEulerCumulativeSizeDistribution(precModel, scale, variable, axes, *args, **kwargs):
-    ylabel = 'CDF'
-    if len(precModel.phases) == 1:
-        precModel.PBM[0].PlotCDF(axes, scale=scale[0], *args, **kwargs)
-    else:
-        for p in range(len(precModel.phases)):
-            precModel.PBM[p].PlotCDF(axes, label=precModel.phases[p], scale=scale[p], *args, **kwargs)
-        axes.legend()
-    axes.set_xlabel('Radius (m)')
-    axes.set_ylabel(ylabel)
-    axes.set_xlim([0, np.amax([pb.max for pb in precModel.PBM])])
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ax = _get_axis(ax)
+    phases = _get_plot_list(phases, model.phases)
+    for p in phases:
+        pbm = model.getPBM(p)
+        scale = _radius_scale(model.precipitates[model.phaseIndex(p)], radius, pbm.PSDsize)
+        plotPDF(pbm, scale=scale, fill=fill, ax=ax, *args, **kwargs)
+    return ax
 
-def plotEulerAspectRatioDistribution(precModel, scale, variable, axes, *args, **kwargs):
-    if len(precModel.phases) == 1:
-        axes.plot(precModel.PBM[0].PSDbounds * np.interp(precModel.PBM[0].PSDbounds, precModel.PBM[0].PSDbounds, scale[0]), precModel.eqAspectRatio[0], *args, **kwargs)
-    else:
-        for p in range(len(precModel.phases)):
-            axes.plot(precModel.PBM[p].PSDbounds * np.interp(precModel.PBM[p].PSDbounds, precModel.PBM[p].PSDbounds, scale[p]), precModel.eqAspectRatio[p], label=precModel.phases[p], *args, **kwargs)
-        axes.legend()
-    axes.set_xlim([0, np.amax([precModel.PBM[p].PSDbounds * np.interp(precModel.PBM[p].PSDbounds, precModel.PBM[p].PSDbounds, scale[p]) for p in range(len(precModel.phases))])])
-    axes.set_ylim(bottom=1)
-    axes.set_xlabel('Radius (m)')
-    axes.set_ylabel('Aspect ratio distribution')
+def plotCumulativeDistribution(model: PrecipitateModel, phases=None, radius='spherical', order=1, ax=None, *args, **kwargs):
+    '''
+    Plots cumulative density functio of particle size distribution
 
+    Parameters
+    ----------
+    model: PrecipitateBase
+    phases: str | list[str] (optional)
+        If None, then model phases will be used
+        'total' not supported for equilibrium volume fraction
+    radius: str (optional)
+        For non-spherical precipitates, the average radius can be transformed to:
+            'spherical' - equivalent spherical radius (default)
+            'short' - short axis
+            'long' - long axis
+    order: int (optional)
+        Moment of PSD to plot CDF in
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    Returns
+    -------
+    Matplotlib Axis
+    '''
+    ax = _get_axis(ax)
+    phases = _get_plot_list(phases, model.phases)
+    for p in phases:
+        pbm = model.getPBM(p)
+        scale = _radius_scale(model.precipitates[model.phaseIndex(p)], radius, pbm.PSDsize)
+        plotCDF(pbm, scale=scale, order=order, ax=ax, *args, **kwargs)
+    return ax
+
+def plotPrecipitateResults(model: PrecipitateModel, term, ax=None, *args, **kwargs):
+    '''
+    General function to plot precipitate results
+
+    Parameters
+    ----------
+    model: PrecipitateBase
+    term: str
+        Term to plot. Options are:
+            'volume fraction'
+            'critical radius'
+            'volume average radius' - average radius given volume fraction and precipitate density
+            'aspect ratio' - average aspect ratio vs time
+            'driving force'
+            'nucleation rate'
+            'precipitate density'
+            'temperature'
+            'composition'
+            'eq comp alpha' - equilibrium composition of matrix phase
+            'eq comp beta' - equilibrium composition of precipitate phase
+            'supersaturation'
+            'eq volume fraction' - equilibrium volume fraction of precipitate phase
+            'psd' - particle size distribution
+            'pdf' - particle size distribution density
+            'cdf' - particle cumulative size distribution
+    ax: matplotlib Axis (optional)
+        If None, then ax will be generated
+
+    '''
+    plotFunctions = {
+        'volume fraction': plotVolumeFraction,
+        'critical radius': plotCriticalRadius,
+        'average radius': plotAverageRadius,
+        'volume average radius': plotVolumeAverageRadius,
+        'aspect ratio': plotAspectRatio,
+        'driving force': plotDrivingForce,
+        'nucleation rate': plotNucleationRate,
+        'precipitate density': plotPrecipitateDensity,
+        'temperature': plotTemperature,
+        'composition': plotComposition,
+        'eq comp alpha': plotEqMatrixComposition,
+        'eq comp beta': plotEqPrecipitateComposition,
+        'supersaturation': plotSupersaturation,
+        'eq volume fraction': plotEqVolumeFraction,
+        'psd': plotSizeDistribution,
+        'pdf': plotDistributionDensity,
+        'cdf': plotCumulativeDistribution
+    }
+    if term.lower() not in plotFunctions:
+        functionList = ', '.join(list(plotFunctions.keys()))
+        raise ValueError(f'term must be one of the following: [{functionList}]')
+    return plotFunctions[term.lower()](model, ax=ax, *args, **kwargs)

@@ -126,6 +126,7 @@ $ The parameters of the following database follows the publication
 $ N. Dupin, I. Ansara, Thermodynamic Re-Assessment of the Ternary System
 $ Al-Cr-Ni, Calphad, 25 (2), 279-298 (2001).
 $
+$
 
 $Element     Standard state             mass [g/mol]    H_298       S_298
  ELEMENT /-   ELECTRON_GAS               .0000E+00       .0000E+00   .0000E+00!
@@ -1189,6 +1190,75 @@ PARAMETER MQ(FCC_A1&CR,NI;0) 298.15 -287000-64.4*T; 6000 N 96Eng !
 PARAMETER MQ(FCC_A1&CR,AL,CR;0) 298.15 +487000; 6000 N 96Eng !
 PARAMETER MQ(FCC_A1&CR,AL,NI;0) 298.15 -118000; 6000 N 96Eng !
 PARAMETER MQ(FCC_A1&CR,CR,NI;0) 298.15 -68000; 6000 N 96Eng !
+
+$ Parameters for A2
+
+PARAMETER MQ(BCC_A2&NI,AL;0) 298.15 -204000; 6000 N !
+PARAMETER MQ(BCC_A2&NI,NI;0) 298.15 -204000; 6000 N 95Jon !
+PARAMETER MQ(BCC_A2&NI,CR;0) 298.15 -407000; 6000 N 95Jon !
+
+PARAMETER MF(BCC_A2&NI,AL;0) 298.15 -90.837*T; 6000 N  !
+PARAMETER MF(BCC_A2&NI,NI;0) 298.15 -90.837*T; 6000 N 95Jon !
+PARAMETER MF(BCC_A2&NI,CR;0) 298.15 -17.2*T; 6000 N 95Jon !
+
+
+PARAMETER MQ(BCC_A2&CR,AL;0) 298.15 -218000; 6000 N  !
+PARAMETER MQ(BCC_A2&CR,NI;0) 298.15 -218000; 6000 N 95Jon !
+PARAMETER MQ(BCC_A2&CR,CR;0) 298.15 -407000; 6000 N 95Jon !
+
+PARAMETER MF(BCC_A2&CR,AL;0) 298.15 +R*T*LN(8.5E-05); 6000 N !
+PARAMETER MF(BCC_A2&CR,NI;0) 298.15 +R*T*LN(8.5E-05); 6000 N 95Jon !
+PARAMETER MF(BCC_A2&CR,CR;0) 298.15 -35.6*T; 6000 N 95Jon !
+
+PARAMETER MQ(BCC_A2&AL,AL;0) 298.15 -215000; 6000 N ! 
+PARAMETER MQ(BCC_A2&AL,NI;0) 298.15 -215000; 6000 N !
+PARAMETER MQ(BCC_A2&AL,CR;0) 298.15 -215000; 6000 N !
+
+PARAMETER MF(BCC_A2&AL,AL;0) 298.15 -80.20*T; 6000 N !
+PARAMETER MF(BCC_A2&AL,NI;0) 298.15 -80.20*T; 6000 N !
+PARAMETER MF(BCC_A2&AL,CR;0) 298.15 -80.20*T; 6000 N !
+
+PARAMETER MQ(BCC_A2&AL,AL,NI;0) 298.15 +327400; 6000 N !
+PARAMETER MQ(BCC_A2&NI,AL,NI;0) 298.15 +327400; 6000 N !
+PARAMETER MQ(BCC_A2&CR,CR,NI;0) 298.15 +350000; 6000 N 95Jon !
+PARAMETER MQ(BCC_A2&NI,CR,NI;0) 298.15 +350000; 6000 N 95Jon !
+
+$$ Order Parameters for B2
+
+PARAMETER MQ(BCC_B2&Al,NI:AL;0) 298.15 -3.458048E+5; 6000 N !
+PARAMETER MQ(BCC_B2&AL,AL:NI;0) 298.15 -3.458048E+5; 6000 N !
+PARAMETER MQ(BCC_B2&Al,AL:VA;0) 298.15 +2.534667E+5; 6000 N !
+PARAMETER MQ(BCC_B2&AL,VA:AL;0) 298.15 +2.534667E+5; 6000 N !
+
+$$$ Dummy PARAMETERS for CR 
+PARAMETER MQ(BCC_B2&Al,CR:AL;0) 298.15 -3.458048E+5; 6000 N !
+PARAMETER MQ(BCC_B2&Al,AL:CR;0) 298.15 -3.458048E+5; 6000 N !
+PARAMETER MQ(BCC_B2&AL,CR:NI;0) 298.15 -9.19170E+5; 6000 N !
+PARAMETER MQ(BCC_B2&AL,NI:CR;0) 298.15 -9.19170E+5; 6000 N !
+PARAMETER MQ(BCC_B2&Al,CR:VA;0) 298.15 +0; 6000 N !
+PARAMETER MQ(BCC_B2&AL,VA:CR;0) 298.15 +0; 6000 N !
+
+PARAMETER MQ(BCC_B2&NI,NI:AL;0) 298.15 -3.193892E+5; 6000 N !
+PARAMETER MQ(BCC_B2&NI,AL:NI;0) 298.15 -3.193892E+5; 6000 N !
+PARAMETER MQ(BCC_B2&NI,AL:VA;0) 298.15 -2.260378E+5; 6000 N !
+PARAMETER MQ(BCC_B2&NI,VA:AL;0) 298.15 -2.260378E+5; 6000 N !
+
+$$$ Dummy PARAMETERS for CR 
+PARAMETER MQ(BCC_B2&NI,CR:AL;0) 298.15  -3.193892E+5; 6000 N !
+PARAMETER MQ(BCC_B2&NI,AL:CR;0) 298.15  -3.193892E+5; 6000 N !
+PARAMETER MQ(BCC_B2&NI,CR:NI;0) 298.15  -3.9048E+5; 6000 N !
+PARAMETER MQ(BCC_B2&NI,NI:CR;0) 298.15  -3.9048E+5; 6000 N !
+
+
+$$$ Dummy PARAMETERS for CR 
+PARAMETER MQ(BCC_B2&CR,CR:AL;0) 298.15 -3.193892E+5; 6000 N !
+PARAMETER MQ(BCC_B2&CR,AL:CR;0) 298.15 -3.193892E+5; 6000 N !
+PARAMETER MQ(BCC_B2&CR,CR:NI;0) 298.15 -3.9048E+5; 6000 N !
+PARAMETER MQ(BCC_B2&CR,NI:CR;0) 298.15 -3.9048E+5; 6000 N !
+PARAMETER MQ(BCC_B2&CR,NI:AL;0) 298.15 -7.4291E+4; 6000 N !
+PARAMETER MQ(BCC_B2&CR,AL:NI;0) 298.15 -7.4291E+4; 6000 N !
+PARAMETER MQ(BCC_B2&CR,AL:VA;0) 298.15 -2.260378E+5; 6000 N !
+PARAMETER MQ(BCC_B2&CR,VA:AL;0) 298.15 -2.260378E+5; 6000 N !
 $
 $****************************************************************************
 
@@ -2434,4 +2504,423 @@ C00029-C37 Al-Mg-Si, U-phases    S.J. Andersen, C.D. Marioara, R. Vissers, A. Fr
 
       11  Smithells Metals Reference Book, Seventh Edition, Butterworth-Heinemann, Oxford, 1999.  
       32  J. Yao, Y.W. Cui, H. Liu, H. Kou, J. Li, L. Zhou, Computer Coupling of Phase Diagrams and Thermochemistry Vol.32, 602-607, 2008.
+"""
+
+FECRC_DB = """
+$
+$ Database for Cr-Fe-C from A.V. Khvan and B. Hallstedt, 2013
+$
+$ ----------------------------------------------------------------------------
+ TEMP-LIM 298.15 6000.00 !
+$
+$ELEMENT NAME  REF. STATE               ATOMIC MASS H298-H0    S298    !
+$
+ ELEMENT VA   VACUUM                      0.0          0.0      0.0    ! 
+ ELEMENT C    GRAPHITE                   12.011     1054.0      5.7423 ! 
+ ELEMENT CR   BCC_A2                     51.996     4050.0     23.5429 ! 
+ ELEMENT FE   BCC_A2                     55.847     4489.0     27.2797 ! 
+$ ----------------------------------------------------------------------------
+$ Phase definitions
+$
+ PHASE LIQUID:L % 1 1 !
+ CONST LIQUID:L : C CR FE : !
+$
+$ Fcc (cF4, Fm-3m) and MeX (cF8, Fm-3m)
+$
+ PHASE FCC_A1 %A 2 1 1 !
+ CONST FCC_A1 : CR FE% : C VA% : !
+$
+$ Bcc (cI2, Im-3m)
+$
+ PHASE BCC_A2 %B 2 1 3 !
+ CONST BCC_A2 : CR FE : C VA% : !
+$
+$ Hcp (hP2, P6_3/mmc) and Me2X (NiAs-type, hP4, P6_3/mmc, B8_1)
+$
+ PHASE HCP_A3 % 2 1 0.5 !
+ CONST HCP_A3 : CR FE : C VA% : !
+$
+$ Prototype C (cF8, Fd-3m)
+$
+ PHASE DIAMOND_A4 % 1 1 !
+ CONST DIAMOND_A4 : C : !
+$
+$ Prototype C (hP4, P6_3/mmc)
+$
+ PHASE GRAPHITE % 1 1 !
+ CONST GRAPHITE : C : !
+$
+$ Prototype Fe3C (oP16, Pnma)
+$
+ PHASE CEMENTITE_D011 %A 2 3 1 !
+ CONST CEMENTITE_D011 : CR FE : C : !
+$
+$ Prototype Cr3C2 (oP20, Pnma)
+$
+ PHASE CR3C2_D510 % 2 3 2 !
+ CONST CR3C2_D510 : CR : C : !
+$
+$ Prototype Cr7C3 (oP40, Pnma)
+$
+ PHASE M7C3_D101 % 2 7 3 !
+ CONST M7C3_D101 : CR FE : C : !
+$
+$ Prototype Cr23C6 (cF116, Fm-3m)
+$
+ PHASE M23C6_D84 % 3 20 3 6 !
+ CONST M23C6_D84 : CR FE : CR FE : C : !
+$
+$ Prototype Cr23C6 (cF116, Fm-3m)
+$
+ PHASE M23C6_S % 2 23 6 !
+ CONST M23C6_S : CR FE : C : !
+$
+$ Prototype CrFe (tP30, P4_2/mnm)
+$
+ PHASE SIGMA_D8B % 3 10 4 16 !
+ CONST SIGMA_D8B : FE : CR : CR FE : !
+$
+$ Sigma in TCFE 2000 and SSOL V4
+$
+ PHASE SIGMA_OLD % 3 8 4 18 !
+ CONST SIGMA_OLD : FE : CR : CR FE : !
+$ ----------------------------------------------------------------------------
+$ Defaults
+$
+ DEFAULT-COM DEFINE_SYSTEM_ELEMENT VA !
+ DEFAULT-COM REJECT_PHASE SIGMA_OLD M23C6_S !
+ TYPE-DEF % SEQ * !
+ TYPE-DEF A GES AMEND_PHASE_DESCRIPTION @ MAGNETIC -3 0.28 !
+ TYPE-DEF B GES AMEND_PHASE_DESCRIPTION @ MAGNETIC -1 0.4 !
+ FUNCTION ZERO      298.15  0;                                        6000 N !
+ FUNCTION UN_ASS    298.15  0;                                        6000 N !
+$ ----------------------------------------------------------------------------
+$ Element data
+$ ----------------------------------------------------------------------------
+$ C
+$
+ PAR  G(GRAPHITE,C),,                   +GHSERCC;,,                  N 91Din !
+ PAR  G(DIAMOND_A4,C),,                 +GDIACC;,,                   N 91Din !
+ PAR  G(LIQUID,C),,                     +GHSERCC+117369-24.63*T;,,   N 91Din !
+$
+ FUNCTION GHSERCC   298.15  -17368.441+170.73*T-24.3*T*LN(T)
+       -4.723E-04*T**2+2562600*T**(-1)-2.643E+08*T**(-2)+1.2E+10*T**(-3);
+      6000.00  N !
+ FUNCTION GDIACC    298.15  -16359.441+175.61*T-24.31*T*LN(T)
+       -4.723E-04*T**2+2698000*T**(-1)-2.61E+08*T**(-2)+1.11E+10*T**(-3);
+      6000.00  N !
+$ ----------------------------------------------------------------------------
+$ Cr
+$
+ PAR  G(BCC_A2,CR:VA),,                 +GHSERCR;,,                  N 91Din !
+ PAR  TC(BCC_A2,CR:VA),,                 -311.50;,,                  N 91Din !
+ PAR  BM(BCC_A2,CR:VA),,                   -0.008;,,                 N 91Din !
+ PAR  G(FCC_A1,CR:VA),,                 +GHSERCR+7284+0.163*T;,,     N 91Din !
+ PAR  TC(FCC_A1,CR:VA),,                -1109.00;,,                  N 91Din !
+ PAR  BM(FCC_A1,CR:VA),,                   -2.46;,,                  N 91Din !
+ PAR  G(HCP_A3,CR:VA),,                 +GHSERCR+4438;,,             N 91Din !
+ PAR  TC(HCP_A3,CR:VA),,                -1109.00;,,                  N 91Din !
+ PAR  BM(HCP_A3,CR:VA),,                   -2.46;,,                  N 91Din !
+ PAR  G(LIQUID,CR),,                    +GLIQCR;,,                   N 91Din !
+$
+ FUNCTION GHSERCR   298.15  -8856.94+157.48*T-26.908*T*LN(T)
+       +0.00189435*T**2-1.47721E-06*T**3+139250*T**(-1);
+      2180.00  Y  -34869.344+344.18*T-50*T*LN(T)-2.88526E+32*T**(-9);
+      6000.00  N !
+ FUNCTION GLIQCR    298.15  +24339.955-11.420225*T+GHSERCR+2.37615E-21*T**7;
+      2180.00  Y  -16459.984+335.616316*T-50*T*LN(T);
+      6000.00  N !
+ FUNCTION GFCCCR    298.15  +GHSERCR+7284+0.163*T;                    6000 N !
+$ ----------------------------------------------------------------------------
+$ Fe
+$
+ PAR  G(BCC_A2,FE:VA),,                 +GHSERFE;,,                  N 91Din !
+ PAR  TC(BCC_A2,FE:VA),,                 1043.00;,,                  N 91Din !
+ PAR  BM(BCC_A2,FE:VA),,                    2.22;,,                  N 91Din !
+ PAR  G(FCC_A1,FE:VA),,                 +GFCCFE;,,                   N 91Din !
+ PAR  TC(FCC_A1,FE:VA),,                 -201.00;,,                  N 91Din !
+ PAR  BM(FCC_A1,FE:VA),,                   -2.10;,,                  N 91Din !
+ PAR  G(HCP_A3,FE:VA),,                 +GHCPFE;,,                   N 91Din !
+ PAR  G(CBCC_A12,FE:VA),,               +GHSERFE+4745;,,             N 91Din !
+ PAR  G(CUB_A13,FE:VA),,                +GHSERFE+3745;,,             N 91Din !
+ PAR  G(LIQUID,FE),,                    +GLIQFE;,,                   N 91Din !
+$
+ FUNCTION GHSERFE   298.15  +1225.7+124.134*T-23.5143*T*LN(T)
+       -0.00439752*T**2-5.8927E-08*T**3+77359*T**(-1);
+      1811.00  Y  -25383.581+299.31255*T-46*T*LN(T)+2.29603E+31*T**(-9);
+      6000.00  N !
+ FUNCTION GFCCFE    298.15  -1462.4+8.282*T-1.15*T*LN(T)
+       +6.4E-04*T**2+GHSERFE;
+      1811.00  Y  -1713.815+0.940009*T+GHSERFE+4.9251E+30*T**(-9);
+      6000.00  N !
+ FUNCTION GHCPFE    298.15  -3705.78+12.591*T-1.15*T*LN(T)
+       +6.4E-04*T**2+GHSERFE;
+      1811.00  Y  -3957.195+5.249009*T+GHSERFE+4.9251E+30*T**(-9);
+      6000.00  N !
+ FUNCTION GLIQFE    298.15  +12040.17-6.55843*T+GHSERFE-3.67516E-21*T**7;
+      1811.00  Y  -10838.83+291.302*T-46*T*LN(T);
+      6000.00  N !
+$ ----------------------------------------------------------------------------
+$ Binary systems
+$ ----------------------------------------------------------------------------
+$ Cr-Fe
+$
+$ From J.-O. Andersson and B. Sundman 1987 (included in LB Vol. 2)
+$ Liquid changed by B.-J. Lee 1993
+$
+$ The SIGMA_D8B and SIGMA_OLD phase fields are very similar.
+$ Checked against LB. Checked at 6000 K.
+$
+ PAR  L(LIQUID,CR,FE;0),,               -17737+7.996546*T;,,        N 93Lee1 !
+ PAR  L(LIQUID,CR,FE;1),,               -1331;,,                    N 93Lee1 !
+$PAR  L(LIQUID,CR,FE;0),,               -14550+6.65*T;,,            N 87And1 !
+$
+ PAR  L(BCC_A2,CR,FE:VA;0),,            +20500-9.68*T;,,            N 87And1 !
+ PAR  BM(BCC_A2,CR,FE:VA;0),,              -0.85;,,                 N 87And1 !
+ PAR  TC(BCC_A2,CR,FE:VA;0),,           +1650;,,                    N 87And1 !
+ PAR  TC(BCC_A2,CR,FE:VA;1),,            +550;,,                    N 87And1 !
+$
+ PAR  L(FCC_A1,CR,FE:VA;0),,            +10833-7.477*T;,,           N 87And1 !
+ PAR  L(FCC_A1,CR,FE:VA;1),,            +1410;,,                    N 87And1 !
+$
+ PAR  G(SIGMA_D8B,FE:CR:CR),,           +10*GFCCFE+20*GHSERCR
+             +83844-111.32*T;,,                                     N 00Wes !
+ PAR  G(SIGMA_D8B,FE:CR:FE),,           +10*GFCCFE+4*GHSERCR
+             +16*GHSERFE+140515-111.32*T;,,                         N 00Wes !
+$
+ PAR  G(SIGMA_OLD,FE:CR:CR),,           +8*GFCCFE+22*GHSERCR
+             +92300-95.96*T;,,                                      N 87And1 !
+ PAR  G(SIGMA_OLD,FE:CR:FE),,           +8*GFCCFE+4*GHSERCR
+             +18*GHSERFE+117300-95.96*T;,,                          N 87And1 !
+$
+$ metastable
+$
+ PAR  L(HCP_A3,CR,FE:VA;0),,            +10833-7.477*T;,,           N 90Fri1 !
+$ ----------------------------------------------------------------------------
+$ Cr-C
+$
+$ A.V. Khvan, B. Hallstedt, K. Chang, Calphad, 39, 54-61(2012).
+$
+$ Checked against paper. Checked at 6000 K.
+$
+$ The liquid interaction has been changed compared to 92Lee.
+$ There is still very nearly a stable miscibility gap on the C-rich side.
+$
+$ M7C3 and M3C2 become stable again above 9000K. This is a result of the
+$ T**2 terms and is not important.
+$
+$ The enthalpies and Gibbs energies of formation compare well with recent
+$ data from Kleykamp (J. Alloys Compd., 321, 138-45(2001)) and
+$ Meschel and Kleppa on Cr7C3 (J. Alloys Compd., 257, 227-33(1997)).
+$ The standard entropies and cp at 298K are not quite as good as they
+$ could (or should) be, but it doesn't motivate a reassessment.
+$
+ PAR  L(LIQUID,C,CR;0),,                -69245-35*T;,,              N 12Khv1 !
+ PAR  L(LIQUID,C,CR;1),,                +83242;,,                   N 12Khv1 !
+ PAR  L(LIQUID,C,CR;2),,                +88000;,,                   N 12Khv1 !
+$
+ PAR  G(BCC_A2,CR:C),,                +GHSERCR+3*GHSERCC+416000;,,  N 87And2 !
+ PAR  TC(BCC_A2,CR:C),,                  -311.50;,,                 N 90Kaj !
+ PAR  BM(BCC_A2,CR:C),,                    -0.008;,,                N 90Kaj !
+ PAR  L(BCC_A2,CR:C,VA;0),,             -190*T;,,                   N 87And2 !
+$
+ PAR  G(M23C6_D84,CR:CR:C),,            +GCRM23C6;,,                N 87And2 !
+ PAR  G(M23C6_S,CR:C),,                 +GCRM23C6;,,                N 87And2 !
+ PAR  G(CR3C2_D510,CR:C),,              -100823.8+530.66989*T
+             -89.6694*T*LN(T)-0.0301188*T**2;,,                     N 92Lee !
+ PAR  G(M7C3_D101,CR:C),,               -201690+1103.128*T
+             -190.177*T*LN(T)-0.0578207*T**2;,,                     N 92Lee !
+$
+$ metastable
+$
+ PAR  G(FCC_A1,CR:C),,                  +GHSERCR+GHSERCC
+             +1200-1.94*T;,,                                        N 92Fer !
+$ The parameter below turned out to be the old one.
+$PAR  G(FCC_A1,CR:C),,                  -32690+248.42*T
+$            -41.678*T*LN(T)-0.00301955*T**2;,,                     N 04Bra !
+ PAR  L(FCC_A1,CR:C,VA;0),,             -11977+6.8194*T;,,          N 92Lee !
+$
+ PAR  G(HCP_A3,CR:C),,                  +GHSERCR+0.5*GHSERCC
+             -18504+9.4173*T-2.4997*T*LN(T)+0.001386*T**2;,,        N 92Lee !
+ PAR  L(HCP_A3,CR:C,VA;0),,             +4165;,,                    N 88Gus5 !
+$
+ PAR  G(CEMENTITE_D011,CR:C),,          +3*GHSERCR+GHSERCC
+             -48000-9.2888*T;,,                                     N 92Fer !
+$
+ PAR  G(FE4N_L1,CR:C),,                 +UN_ASS;,,                  N !
+$
+ PAR  G(KSI_CARBIDE,CR:C),,             +3*GHSERCR+GHSERCC
+             +114060-47.2519*T;,,                                   N 92Qiu !
+$
+ FUNCTION GCRM23C6  298.15  -521983+3622.24*T-620.965*T*LN(T)-0.126431*T**2;
+      6000.00  N !
+$ ----------------------------------------------------------------------------
+$ Fe-C
+$
+$ Database for Fe-C from B. Hallstedt et al. 2010
+$
+$ B. Hallstedt, D. Djurovic, J. von Appen, R. Dronskowski, A. Dick,
+$ F. Koermann, T. Hickel, J. Neugebauer, Calphad, 34, 129-33(2010).
+$
+$ Based on the assessment by P. Gustafson 1985.
+$ Cementite has been changed. Bcc-Fe, graphite and cementite have Gibbs energy
+$ expressions valid from 0.01 K in the paper, but here the standard SGTE
+$ expressions are kept.
+$
+$ The eutectoid (bcc+fcc+cem) temperature changed from 999.78 to 999.68 K.
+$ The eutectic (fcc+liq+cem) temperature changed from 1421.51 to 1421.31 K.
+$ The congruent melting point of cementite changed from 1497.8 to 1497.1 K.
+$
+$ BCC_A2 is stable above 4000 K around x(C)=0.33.
+$ There is an inverse miscibility gap in the liquid with a minimum at
+$ 5559 K and x(C)=0.53.
+$
+ PAR  L(LIQUID,C,FE;0),,                -124320+28.5*T;,,            N 85Gus !
+ PAR  L(LIQUID,C,FE;1),,                +19300;,,                    N 85Gus !
+ PAR  L(LIQUID,C,FE;2),,                +49260-19*T;,,               N 85Gus !
+$
+ PAR  G(BCC_A2,FE:C),,                  +GHSERFE+3*GHSERCC
+             +322050+75.667*T;,,                                     N 85Gus !
+ PAR  TC(BCC_A2,FE:C),,                  1043.00;,,                  N 85Gus !
+ PAR  BM(BCC_A2,FE:C),,                     2.22;,,                  N 85Gus !
+ PAR  L(BCC_A2,FE:C,VA;0),,             -190*T;,,                    N 85Gus !
+$
+ PAR  G(FCC_A1,FE:C),,                  +GFCCFE+GHSERCC
+             +77207-15.877*T;,,                                      N 85Gus !
+ PAR  TC(FCC_A1,FE:C),,                  -201.00;,,                  N 85Gus !
+ PAR  BM(FCC_A1,FE:C),,                    -2.10;,,                  N 85Gus !
+ PAR  L(FCC_A1,FE:C,VA;0),,             -34671;,,                    N 85Gus !
+$
+ PAR  G(CEMENTITE_D011,FE:C) 0.01       +GFECEM;,,                   N 10Hal !
+ PAR  TC(CEMENTITE_D011,FE:C) 0.01        485.00;,,                  N 10Hal !
+$ For Fe3C
+ PAR  BM(CEMENTITE_D011,FE:C) 0.01          1.008;,,                 N 10Hal !
+$
+$ metastable
+$
+ PAR  G(HCP_A3,FE:C),,                  +GFCCFE+0.5*GHSERCC
+             +52905-11.9075*T;,,                                    N 88And2 !
+ PAR  L(HCP_A3,FE:C,VA;0),,             -17335;,,                   N 88And2 !
+$
+ PAR  G(CBCC_A12,FE:C),,                +GHSERFE+GHSERCC+80000;,,   N 90Hua2 !
+ PAR  L(CBCC_A12,FE:C,VA;0),,           -34671;,,                   N 90Hua2 !
+$
+ PAR  G(CUB_A13,FE:C),,                 +GHSERFE+GHSERCC+90000;,,   N 90Hua2 !
+ PAR  L(CUB_A13,FE:C,VA;0),,            -34671;,,                   N 90Hua2 !
+$
+ PAR  G(M7C3_D101,FE:C),,               +2.333333*GFECEM
+             +0.666667*GHSERCC+13200;,,                              N 11Dju !
+$PAR  G(M7C3_D101,FE:C),,               +7*GHSERFE+3*GHSERCC
+$            +75000-48.2168*T;,,                                     N 92Lee !
+ PAR  G(M23C6_D84,FE:FE:C),,            +GFEM23C6;,,                 N 11Dju !
+ PAR  G(M23C6_S,FE:C),,                 +GFEM23C6;,,                 N 11Dju !
+ PAR  G(M5C2,FE:C),,                    +1.666667*GFECEM
+             +0.333333*GHSERCC+6200;,,                               N 11Dju !
+$PAR  G(M5C2,FE:C),,                    +5*GHSERFE+2*GHSERCC
+$            +54852-33.7518*T;,,                                    N 93Lee2 !
+ PAR  G(FE4N_L1,FE:C),,                 +4*GHSERFE+GHSERCC+23224;,,   N 91Du !
+ PAR  G(FECN_CHI,FE:C),,                +2.2*GHSERFE+GHSERCC
+             +9131-4.539*T;,,                                         N 91Du !
+ PAR  G(KSI_CARBIDE,FE:C),,             +3*GHSERFE+GHSERCC
+             +14540+20*T;,,                                         N 88And2 !
+ PAR  G(V3C2,FE:C),,                    +7250+741.566*T
+             -125.833*T*LN(T)+779485*T**(-1);,,                      N 91Hua !
+$
+ FUNCTION GFECEM      0.01  +11369.937746-5.641259263*T-8.333E-6*T**4;
+        43.00  Y  +11622.647246-59.537709263*T+15.74232*T*LN(T)
+       -0.27565*T**2;
+       163.00  Y  -10195.860754+690.949887637*T-118.47637*T*LN(T)
+                  -0.0007*T**2+590527*T**(-1);
+      6000.00  N !
+ FUNCTION GFEM23C6  298.15  +7.666667*GFECEM-1.666667*GHSERCC+15000;  6000 N !
+$ Function from 88And3 below
+$FUNCTION GFEM23C6  298.15  +7.666667*GFECEM-1.666667*GHSERCC
+$      +66920-40*T;
+$     6000.00  N !
+$ ------------------------------------------------------------------------------
+$ Ternary system
+$
+$ From A.V. Khvan and B. Hallstedt, 2013
+$
+ PAR  L(LIQUID,C,CR,FE;0),,             -528500;,,                   N 13Khv !
+ PAR  L(LIQUID,C,CR,FE;1),,             +57150;,,                    N 13Khv !
+ PAR  L(LIQUID,C,CR,FE;2),,             +62630;,,                    N 13Khv !
+$
+ PAR  L(BCC_A2,CR,FE:C;0),,             -1320000+667.7*T;,,          N 13Khv !
+ PAR  BM(BCC_A2,CR,FE:C;0),,               -0.85;,,                 N 88And3 !
+ PAR  TC(BCC_A2,CR,FE:C;0),,            +1650;,,                    N 88And3 !
+ PAR  TC(BCC_A2,CR,FE:C;1),,             +550;,,                    N 88And3 !
+$
+ PAR  L(FCC_A1,CR,FE:C;0),,             -69534+3.2353*T;,,           N 13Khv !
+$
+ PAR  L(CEMENTITE_D011,CR,FE:C;0),,     +14586-9.18*T;,,             N 13Khv !
+$
+ PAR  G(M23C6_D84,FE:CR:C),,            +0.130435*GCRM23C6
+             +0.869565*GFEM23C6;,,                                  N 88And3 !
+ PAR  G(M23C6_D84,CR:FE:C),,            +0.869565*GCRM23C6
+             +0.130435*GFEM23C6;,,                                  N 88And3 !
+ PAR  L(M23C6_D84,CR,FE:CR:C;0),,       +6609;,,                     N 13Khv !
+ PAR  L(M23C6_D84,CR,FE:FE:C;0),,       +6609;,,                     N 13Khv !
+ PAR  L(M23C6_D84,CR:CR,FE:C;0),,       +991;,,                      N 13Khv !
+ PAR  L(M23C6_D84,FE:CR,FE:C;0),,       +991;,,                      N 13Khv !
+ PAR  L(M23C6_D84,CR,FE:CR:C;1),,       -43600;,,                    N 13Khv !
+ PAR  L(M23C6_D84,CR,FE:FE:C;1),,       -43600;,,                    N 13Khv !
+ PAR  L(M23C6_D84,CR:CR,FE:C;1),,       -6540;,,                     N 13Khv !
+ PAR  L(M23C6_D84,FE:CR,FE:C;1),,       -6540;,,                     N 13Khv !
+$
+ PAR  L(M23C6_S,CR,FE:C;0),,            +7600;,,                     N 13Khv !
+ PAR  L(M23C6_S,CR,FE:C;1),,            -50140;,,                    N 13Khv !
+$
+ PAR  L(M7C3_D101,CR,FE:C;0),,          +81940-61.86*T;,,            N 13Khv !
+ PAR  L(M7C3_D101,CR,FE:C;1),,          -7310;,,                     N 13Khv !
+ PAR  L(M7C3_D101,CR,FE:C;2),,          +27050;,,                    N 13Khv !
+$ ------------------------------------------------------------------------------
+$
+$
+
+$ D = 0.18 exp(-64500/RT) in cm2/s
+PAR MQ(FCC_A1&FE,FE:*;0) 298.15 -64500*4.184 + 8.314*T*LOG(0.18e-4); 6000 N !
+
+PAR MQ(FCC_A1&C,FE:VA;0) 298.15 -147723*(1-0.4*T/1801) + 8.314*T*LOG(4.53e-7); 6000 N !
+PAR MQ(FCC_A1&C,FE:C;0) 298.15 72077*(1-0.4*T/1801) + 8.314*T*LOG(4.53e-7); 6000 N !
+
+
+ LIST-OF-REFERENCE
+ NUMBER  SOURCE
+  Null   'Unknown source'
+  REFLAV 'Laves phase convention: G(LAVES,X:X)=+3*GHSERXX+15000'
+  85Gus  'P. Gustafson, Scand. J. Metall., 14, 259-67(1985); Fe-C'
+  87And1 'J.-O. Andersson, B. Sundman, Calphad, 11, 83-92(1987); Cr-Fe'
+  87And2 'J.-O. Andersson, Calphad, 11, 271-76(1987); Cr-C'
+  88And2 'J.-O. Andersson, Calphad, 12, 9-23(1988); Fe-Mo-C'
+  88And3 'J.-O. Andersson, Metall. Trans A, 19A, 627-36(1988); Cr-Fe-C'
+  88And4 'J.-O. Andersson, N. Lange,
+          Metall. Trans. A, 19A, 1385-94(1988); Cr-Fe-Mo'
+  88Gus4 'P. Gustafson, Metall. Trans. A, 19A, 2531-46(1988); Cr-Fe-W'
+  88Gus5 'P. Gustafson, Metall. Trans. A, 19A, 2547-54(1988); Cr-Fe-W-C'
+  90Fri1 'K. Frisk, Metall. Trans. A, 21A, 2477-88(1990); Cr-Fe-N' 
+  90Hua2 'W. Huang, Metall. Trans. A, 21A, 2115-23(1990); Fe-Mn-C'
+  90Kaj  'M. Kajihara, M. Hillert,
+          Metall. Mater. Trans. A, 21A, 2777-87(1990); Cr-C'
+  91Din  'A.T. Dinsdale, Calphad, 15, 317-425(1991).'
+  91Du   'H. Du, M. Hillert, Z. Metallkd., 82, 310-16(1991); Fe-C-N'
+  91Hua  'W. Huang, Metall. Trans. A, 22A, 1911-20(1991); Fe-Mn-V-C'
+  92Fer  'A. Fernandez-Guillermet, G. Grimvall,
+          J. Phys. Chem. Solids, 53, 105-25(1992); Cr-C'
+  92Lee  'B.-J. Lee, Calphad, 16, 121-49(1992); Cr-C, Cr-Fe-C'
+  92Qiu  'C. Qiu, ISIJ Int., 32, 1117-27(1992); Cr-Fe-Mo-C'
+  93Lee1 'B.-J. Lee, Calphad, 17, 251-68(1993); Cr-Fe, Cr-Fe-C'
+  93Lee2 'B.-J. Lee, Metall. Trans. A, 24A, 1017-25(1993); Cr-Fe-Mn-C'
+  99Lee  'B.-J. Lee, unpublished, 1999'
+  00Wes  'S. Westman, unpublished, 2000; Cr-Fe'
+  04Bra  'J. Bratberg, K. Frisk, Metall. Mater. Trans. A,
+          35A, 3649-63(2004); Cr-Fe-V-C'
+  10Hal  'B. Hallstedt, D. Djurovic, J. von Appen, R. Dronskowski, A. Dick,
+          F. Koermann, T. Hickel, J. Neugebauer,
+          Calphad, 34, 129-33(2010); Fe-C'
+  11Dju  'D. Djurovic, B. Hallstedt, J. von Appen, R. Dronskowski,
+          Calphad, 35, 479-91(2011); Fe-Mn, Fe-Mn-C'
+  12Khv1 'A.V. Khvan, B. Hallstedt, K. Chang, Calphad, 39, 54-61(2012); Cr-C'
+  13Khv  'A.V. Khvan, B. Hallstedt, unpublished, 2013; Cr-Fe-C'
+!
 """

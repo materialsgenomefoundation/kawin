@@ -93,6 +93,7 @@ class GeneralThermodynamics:
 
         self.sampling_pDens = 2000      # Sampling density for driving force sampling method
         self.pDens = 500                # Sampling density for equilibrium
+        self.local_pDens = 10           # Sampling density for local equilibrium
 
         self.setDrivingForceMethod(drivingForceMethod)
         self._buildMobilityModels()
@@ -107,7 +108,6 @@ class GeneralThermodynamics:
         self._compset_cache_df = {}
         self._matrix_cs = None
         self._points_cache = {}          #Stored samples for precipitate phases at defined temperature
-
         self._diffusivity_cache = {}
 
     def _buildThermoModels(self):
@@ -213,13 +213,20 @@ class GeneralThermodynamics:
 
         For the Gibbs-Thomson effect to be applied, the ordered and disordered parts of the model will need to be kept separate
         As a fix, a new phase is added to the database that uses only the disordered part of the model
+        We keep the original name of the disordered phase, but the disorder contribution will be the DIS_<phase name> phase
         '''
         newPhase = 'DIS_' + phase
-        self.phases[0] = newPhase
         self.db.phases[newPhase] = copy.deepcopy(self.db.phases[phase])
         self.db.phases[newPhase].name = newPhase
-        del self.db.phases[newPhase].model_hints['ordered_phase']
-        del self.db.phases[newPhase].model_hints['disordered_phase']
+        
+        # Remove order/disorder model hints on original name
+        del self.db.phases[phase].model_hints['ordered_phase']
+        del self.db.phases[phase].model_hints['disordered_phase']
+
+        # Rename disordered phase contribution to new phase
+        self.db.phases[newPhase].model_hints['disordered_phase'] = newPhase
+        ordered_phase = self.db.phases[newPhase].model_hints['ordered_phase']
+        self.db.phases[ordered_phase].model_hints['disordered_phase'] = newPhase
 
         #Copy database parameters with new name
         param_query = where('phase_name') == phase
@@ -415,7 +422,6 @@ class GeneralThermodynamics:
         Workspace object
         '''
         cond = self._getConditions(x, T, gExtra+self.gOffset)
-        
         phases, sub_models = self._setupSubModels(precPhase)
         wks = Workspace(self.db, self.elements, phases, cond, 
                         models=sub_models, phase_record_factory=self.phase_records, 
@@ -462,7 +468,7 @@ class GeneralThermodynamics:
         cond = self._getConditions(x, T, gExtra)
         phases, sub_models = self._setupSubModels(precPhase)
         return local_equilibrium(self.db, self.elements, phases, cond, 
-                                 sub_models, self.phase_records, composition_sets=composition_sets)
+                                 sub_models, self.phase_records, composition_sets=composition_sets, pDens=self.local_pDens)
 
     def getInterdiffusivity(self, x, T, removeCache = True, phase = None):
         '''
@@ -881,7 +887,7 @@ class GeneralThermodynamics:
         phases, sub_models = self._setupSubModels([precPhase])
         prec_eq_results, prec_cs = local_equilibrium(self.db, self.elements, phases, cond,
                                                      sub_models, self.phase_records, 
-                                                     composition_sets=self._compset_cache_df[precPhase])
+                                                     composition_sets=self._compset_cache_df[precPhase], pDens=self.local_pDens)
         if any(np.isnan(prec_eq_results.chemical_potentials)):
             return None, None
         
@@ -987,7 +993,7 @@ class GeneralThermodynamics:
             phases, sub_models = self._setupSubModels([self.phases[0], precPhase])
             result, composition_sets = local_equilibrium(self.db, self.elements, phases, cond,
                                                          sub_models, self.phase_records,
-                                                         composition_sets=composition_sets)
+                                                         composition_sets=composition_sets, pDens=self.local_pDens)
             cs_matrix, cs_precip, miscibility_gap = _process_composition_sets(composition_sets)
             return result.chemical_potentials, cs_matrix, cs_precip, miscibility_gap
         

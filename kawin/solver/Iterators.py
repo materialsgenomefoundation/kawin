@@ -3,7 +3,7 @@ Built-in iterators
 
 Currently, this is explicit-euler and 4th order runga kutta
 ''' 
-def ExplicitEulerIterator(f, t, X_old, updateX):
+def explicitEulerIterator(f, t, X_old, updateX):
     '''
     Explicit euler iteration scheme
 
@@ -33,7 +33,7 @@ def ExplicitEulerIterator(f, t, X_old, updateX):
     dxdt, dt = f(t, X_old, True)
     return updateX(X_old, dxdt, dt), dt
 
-def RK4Iterator(f, t, X_old, updateX):
+def rk4Iterator(f, t, X_old, updateX):
     '''
     4th order Runga Kutta iteration scheme
 

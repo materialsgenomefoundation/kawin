@@ -72,18 +72,19 @@ class PrecipitationData:
 
 class TemperatureParameters:
     def __init__(self, *args):
-        self.setTemperatureParameters(*args)
-        self._isIsothermal = True
-
-    def setTemperatureParameters(self, *args):
         if len(args) == 2:
             self.setTemperatureArray(*args)
         elif len(args) == 1:
-            if callable(args[0]):
+            if isinstance(args[0], TemperatureParameters):
+                self._isIsothermal = args[0]._isIsothermal
+                self.Tparameters = args[0].Tparameters
+                self.Tfunction = args[0].Tfunction
+            elif callable(args[0]):
                 self.setTemperatureFunction(args[0])
             else:
                 self.setIsothermalTemperature(args[0])
         else:
+            self._isIsothermal = True
             self.Tparameters = None
             self.Tfunction = None
 

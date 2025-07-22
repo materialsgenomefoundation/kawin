@@ -4,7 +4,7 @@ import numpy as np
 
 from kawin.thermo.utils import _process_xT_arrays
 from kawin.thermo import GeneralThermodynamics
-from kawin.diffusion.DiffusionParameters import HashTable, _computeSingleMobility
+from kawin.diffusion.DiffusionParameters import HashTable, _computeSingleMobility, MobilityData
 
 def wienerUpper(mobility: np.array, phaseFracs: np.array, *args, **kwargs) -> np.array:
     '''
@@ -114,10 +114,10 @@ def hashinShtrikmanLower(mobility: np.array, phaseFracs: np.array, *args, **kwar
     min_mob = np.amin(modified_mob, axis=0)    # (p, e) -> (e,)
     return _hashinShtrikmanGeneral(modified_mob, phaseFracs, min_mob)
 
-def _postProcessDoNothing(therm: GeneralThermodynamics, mobility: np.array, phaseFracs: np.array, *args, **kwargs):
-    return mobility, phaseFracs
+def _postProcessDoNothing(mobData: MobilityData, *args, **kwargs):
+    return np.array(mobData.mobility), np.array(mobData.phase_fractions)
 
-def _postProcessPredefinedMatrixPhase(therm: GeneralThermodynamics, mobility: np.array, phaseFracs: np.array, *args, **kwargs):
+def _postProcessPredefinedMatrixPhase(mobData: MobilityData, *args, **kwargs):
     '''
     User will supply a predefined "alpha" phase, which the mobility is taken
     from for all undefined mobility
@@ -126,33 +126,40 @@ def _postProcessPredefinedMatrixPhase(therm: GeneralThermodynamics, mobility: np
     across the diffusion couple
     '''
     alpha_phase = args[0]
-    alpha_idx = therm.phases.index(alpha_phase)
-    alpha_mob = mobility[alpha_idx]
-    for i in range(mobility.shape[1]):
-        mobility[:,i][mobility[:,i] == -1] = alpha_mob[i]
-    return mobility, phaseFracs
+    mobility, phases, phase_fractions = np.array(mobData.mobility), np.array(mobData.phases), np.array(mobData.phase_fractions)
+    alpha_idx = np.squeeze(np.where(phases == alpha_phase)[0])
+    if len(alpha_idx.shape) > 0:
+        raise ValueError(f'{alpha_phase} must be stable as a single phase.')
+    for i in range(mobility.shape[0]):
+        if mobility[i][0] == -1:
+            mobility[i] = mobility[alpha_idx]
+    return mobility, phase_fractions
 
-def _postProcessMajorityPhase(therm: GeneralThermodynamics, mobility: np.array, phaseFracs: np.array, *args, **kwargs):
+def _postProcessMajorityPhase(mobData: MobilityData, *args, **kwargs):
     '''
     Takes the majority phase and applies the mobility for all other phases
     with undefined mobility
     '''
-    max_idx = np.argmax(phaseFracs)
-    for i in range(mobility.shape[1]):
-        mobility[:,i][mobility[:,i] == -1] = mobility[max_idx,i]
-    return mobility, phaseFracs
+    mobility, phases, phase_fractions = np.array(mobData.mobility), np.array(mobData.phases), np.array(mobData.phase_fractions)
+    max_idx = np.argmax(phase_fractions)
+    for i in range(mobility.shape[0]):
+        if mobility[i][0] == -1:
+            mobility[i] = mobility[max_idx]
+    return mobility, phase_fractions
 
-def _postProcessExcludePhases(therm: GeneralThermodynamics, mobility: np.array, phaseFracs: np.array, *args, **kwargs):
+def _postProcessExcludePhases(mobData: MobilityData, *args, **kwargs):
     '''
     For all excluded phases, the mobility and phase fraction will be set to 0
     This assumes that user knows the excluded phases to be minor or that the
     mobility is unknown
     '''
     excluded_phases = args[0]
-    phase_idxs = [therm.phases.index(p) for p in excluded_phases]
-    for p in phase_idxs:
-        phaseFracs[p] = 0
-    return mobility, phaseFracs
+    mobility, phases, phase_fractions = np.array(mobData.mobility), np.array(mobData.phases), np.array(mobData.phase_fractions)
+    for i in range(mobility.shape[0]):
+        if phases[i] in excluded_phases:
+            mobility[i] = 0
+            phase_fractions[i] = 0
+    return mobility, phase_fractions
 
 class HomogenizationParameters:
     '''
@@ -348,11 +355,9 @@ def computeHomogenizationFunction(therm : GeneralThermodynamics, x, T, homogeniz
     chemical_potentials = np.zeros((x.shape[0], len(therm.elements)-1))
     for i in range(len(x)):
         mobility_data = _computeSingleMobility(therm, x[i], T[i], unsortIndices, hashTable)
-        mob = mobility_data.mobility
-        phase_fracs = mobility_data.phase_fractions
         chemical_potentials[i,:] = mobility_data.chemical_potentials
 
-        mob, phase_fracs = homogenizationParameters.postProcessFunction(therm, mob, phase_fracs, *homogenizationParameters.postProcessParameters)
+        mob, phase_fracs = homogenizationParameters.postProcessFunction(mobility_data, *homogenizationParameters.postProcessParameters)
         avg_mob[i] = homogenizationParameters.homogenizationFunction(mob, phase_fracs, labyrinth_factor = homogenizationParameters.labyrinthFactor)
 
     return np.squeeze(avg_mob), np.squeeze(chemical_potentials)

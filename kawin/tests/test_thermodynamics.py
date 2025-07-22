@@ -5,6 +5,7 @@ from pycalphad import Database
 
 from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.tests.databases import *
+from kawin.thermo.Mobility import expand_x_frac, expand_u_frac, x_to_u_frac, u_to_x_frac
 
 #Default driving force method will be 'tangent'
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
@@ -13,6 +14,8 @@ NiCrAlThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'CR', 'AL
 NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
 NiAlCrThermDiff = MulticomponentThermodynamics(NICRAL_TDB_DIFF, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
 AlCrNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'CR', 'NI'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')
+AlNiTherm = MulticomponentThermodynamics(NICRAL_TDB, ['AL', 'NI'], ['BCC_A2', 'BCC_B2'])
+FeCTherm = BinaryThermodynamics(FECRC_DB, ['FE', 'C'], ['FCC_A1'])
 
 #Set constant sampling densities for each Thermodynamics object
 #pycalphad equilibrium results may change based off sampling density, so this is to make sure
@@ -449,3 +452,81 @@ def test_Diff_tracer_ternary_output():
     assert_allclose(tdarray, np.array([[8.03946597e-18, 5.46554241e-18, 1.52099350e-17],
                                        [9.33087557e-18, 6.51277012e-18, 1.78317544e-17]], dtype=np.float64), atol=0, rtol=1e-3)
 
+def test_Diff_order_disorder():
+    '''
+    Checks diffusivity on order/disorder models
+    This uses the BCC_A2/B2 in Al-Ni from Campbell, Acta Mat. 56 (2008) 4277.
+    '''
+    xNi = 0.55
+    T = 1273
+
+    wks = AlNiTherm.getEq(xNi, T, precPhase=['BCC_A2'])
+    AlNiTherm._diffusivity_cache['BCC_A2'] = wks.get_composition_sets()
+    tracer = AlNiTherm.getTracerDiffusivity(xNi, T, False, phase='BCC_A2')
+    inter = AlNiTherm.getInterdiffusivity(xNi, T, False, phase='BCC_A2')
+    assert_allclose(tracer, [2.060151e-10, 1.620472e-10], rtol=1e-3)
+    assert_allclose(inter, 1.552184e-9, rtol=1e-3)
+
+    wks = AlNiTherm.getEq(xNi, T, precPhase=['BCC_B2'])
+    AlNiTherm._diffusivity_cache['BCC_B2'] = wks.get_composition_sets()
+    tracer = AlNiTherm.getTracerDiffusivity(xNi, T, False, phase='BCC_B2')
+    inter = AlNiTherm.getInterdiffusivity(xNi, T, False, phase='BCC_B2')
+    assert_allclose(tracer, [3.935858e-16, 8.248783e-16], rtol=1e-3)
+    assert_allclose(inter, 5.275807e-15, rtol=1e-3)
+
+def test_Diff_interstitial():
+    '''
+    Tests that diffusivity can be computed for interstitial
+    And that making the vacancy poor assumption changes the
+    interdiffusivity by a factor of yva
+    '''
+    x_c = 0.04
+    T = 1073
+    d_va = FeCTherm.getInterdiffusivity(x_c, T)
+
+    # applying the vacancy poor sublattice assumption will not
+    # multiply yVa to the interstitial mobility
+    FeCTherm.vacancyPoorInterstitialSublattice['FCC_A1'] = True
+    d_no_va = FeCTherm.getInterdiffusivity(x_c, T)
+    FeCTherm.vacancyPoorInterstitialSublattice['FCC_A1'] = False
+
+    y_c = x_c / (1 - x_c)
+    y_va = 1 - y_c
+    assert_allclose([d_va, d_no_va], [4.325740e-12, 4.513815e-12], rtol=1e-3)
+    assert_allclose(d_va / d_no_va, y_va, rtol=1e-3)
+
+def test_u_fraction_conversion():
+    '''
+    Test that we can convert between composition and u-fraction
+
+    If all components are substitutional then composition = u-fraction
+    '''
+    # Substitutional case
+    comps = ['AL', 'CR', 'NI']
+    x = [0.2, 0.3]
+    x_ext = expand_x_frac(x)
+    assert np.allclose(x_ext, [0.5, 0.2, 0.3], rtol=1e-3)
+
+    # For substitutional, x = u
+    u_ext = x_to_u_frac(x_ext, comps, ['C'], False)
+    assert np.allclose(x_ext, u_ext, rtol=1e-3)
+
+    # Check that converting back to x gives the original value
+    x_ext_back = u_to_x_frac(u_ext, comps, ['C'])
+    assert np.allclose(x_ext, x_ext_back, rtol=1e-3)
+
+    # Interstitial case
+    comps = ['AL', 'CR', 'C']
+    x_ext = [0.5, 0.2, 0.3]
+    u_ext = x_to_u_frac(x_ext, comps, ['C'], False)
+    # Total u-sum is Al+Cr=0.7
+    assert np.allclose(u_ext, [0.5/0.7, 0.2/0.7, 0.3/0.7], rtol=1e-3)
+    
+    # Check that we can expand u-frac if we're missing the dependent component
+    u = u_ext[1:]
+    u_ext_2 = expand_u_frac(u, comps, ['C'])
+    assert np.allclose(u_ext, u_ext_2, rtol=1e-3)
+
+    # Check that converting back to x gives the original value
+    x_ext_back = u_to_x_frac(u_ext, comps, ['C'])
+    assert np.allclose(x_ext, x_ext_back, rtol=1e-3)

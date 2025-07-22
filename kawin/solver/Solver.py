@@ -1,10 +1,5 @@
-from kawin.solver.Iterators import ExplicitEulerIterator, RK4Iterator
-from enum import Enum
 import time
-
-class SolverType(Enum):
-    EXPLICITEULER = 0
-    RK4 = 1
+from kawin.solver.Iterators import explicitEulerIterator, rk4Iterator
 
 class DESolver:
     '''
@@ -14,7 +9,7 @@ class DESolver:
 
     Parameters
     ----------
-    iterator : SolverType or Iterator
+    iterator : Iterator function
         Defines what iteration scheme to use
     defaultDt : float (defaults to 0.1)
         Default time increment if no function is implement to estimate a good time increment
@@ -23,28 +18,13 @@ class DESolver:
     maxDtFrac : float (defaults to 1)
         Maximum time step as a fraction of simulation time
     '''
-    def __init__(self, iterator = SolverType.RK4, defaultDT = 0.1, minDtFrac = 1e-8, maxDtFrac = 1):
+    def __init__(self, iterator = rk4Iterator, defaultDT = 0.1, minDtFrac = 1e-8, maxDtFrac = 1):
         self.dtmin = minDtFrac       #Min and max dt fraction of simulation time
         self.dtmax = maxDtFrac
         self.dt = defaultDT
 
         self.setFunctions(self.defaultPreProcess, self.defaultPostProcess, self.defaultPrintHeader, self.defaultPrintStatus)
-
-        self.setIterator(iterator)
-
-    def setIterator(self, iterator):
-        '''
-        Parameters
-        ----------
-        iterator : SolverType or Iterator
-            Defines what iteration scheme to use
-        '''
-        if iterator == SolverType.EXPLICITEULER:
-            self.iterator = ExplicitEulerIterator
-        elif iterator == SolverType.RK4:
-            self.iterator = RK4Iterator
-        else:
-            self.iterator = iterator
+        self.iterator = iterator
 
     def setFunctions(self, preProcess = None, postProcess = None, printHeader = None, printStatus = None):
         '''

@@ -12,6 +12,32 @@ from kawin.thermo.FreeEnergyHessian import partialdMudX, dMudX
 #As a list here, hopefully this should be editable by a user outside of this module - may have to edit __init__.py
 interstitials = ['C', 'N', 'O', 'H', 'B']
 
+def expand_x_frac(x_frac):
+    '''
+    Converts x_frac (N,e-1) to x_full (N,e)
+    Assumes the first element is dependent
+        Where x[0] = 1-sum(x[1:])
+    '''
+    x_frac = np.atleast_2d(x_frac)
+    return np.squeeze(np.concatenate((1-np.sum(x_frac, axis=1)[:,np.newaxis], x_frac), axis=1))
+
+def expand_u_frac(u_frac, elements, interstitial_list):
+    '''
+    Converts u_frac (N,e-1) to u_full (N,e)
+    Assumes first element is dependent
+        Where u[0] = 1-sum(u[1:]_j) where j is substitutional
+    This also assumes the first element is substitutional
+    '''
+    u_frac = np.atleast_2d(u_frac)
+    u_sub = [u_frac[:,i] for i,e in enumerate(elements[1:]) if e not in interstitial_list]
+    # If all independent elements are interstitial, then u-frac of dependent is 1
+    if len(u_sub) == 0:
+        u_sum = np.ones((len(u_frac), 1))
+    # Otherwise, u-frac of dependent is 1-u_sub
+    else:
+        u_sum = 1-np.sum(u_sub, axis=0)[:,np.newaxis]
+    return np.squeeze(np.concatenate((u_sum, u_frac), axis=1))
+
 def x_to_u_frac(x_frac, elements, interstitial_list, return_usum = False):
     '''
     Converts mole fraction to u-fraction
@@ -27,6 +53,26 @@ def x_to_u_frac(x_frac, elements, interstitial_list, return_usum = False):
         return np.squeeze(u_frac), Usum
     else:
         return np.squeeze(u_frac)
+    
+def u_to_x_frac(u_frac, elements, interstitial_list):
+    u_frac = np.atleast_2d(u_frac)
+
+    # a_ij = (\delta_ij - u_i) if j is substitutional
+    # a_ij = \delta_ij if j is interstitial 
+    a = np.eye(len(elements))[np.newaxis,:,:] - u_frac[:,:,np.newaxis]
+    for i, e in enumerate(elements):
+        if e in interstitial_list:
+            a[:,:,i] = 0
+            a[:,i,i] = 1
+    
+    b = np.zeros((*u_frac.shape, 1))
+    # Summation constraint (sum(x) = 1)
+    # We can replace first row of a here
+    b[:,0] = 1
+    a[:,0] = 1
+
+    # (n,e,e) x (n,e,1) = (n,e,1) -> (1,n,e) -> squeeze
+    return np.squeeze(np.transpose(np.matmul(np.linalg.inv(a), b), axes=(2,0,1)))
 
 class MobilityModel(Model):
     '''

@@ -4,8 +4,8 @@ from numpy.testing import assert_allclose
 from pycalphad import Database
 
 from kawin.thermo import GeneralThermodynamics, BinaryThermodynamics, MulticomponentThermodynamics
+from kawin.tests.databases import *
 from kawin.thermo.Mobility import expand_x_frac, expand_u_frac, x_to_u_frac, u_to_x_frac
-from kawin.tests.datasets import *
 
 #Default driving force method will be 'tangent'
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')

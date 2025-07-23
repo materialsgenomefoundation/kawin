@@ -10,7 +10,7 @@ from kawin.diffusion.mesh import Cartesian1D, Cartesian2D, StepProfile1D, Bounde
 from kawin.precipitation.Plot import plotPrecipitateResults
 from kawin.diffusion.Plot import plot1D, plot1DFlux, plot1DPhases, plot1DTwoAxis, plot2D, plot2DFluxes, plot2DPhases
 
-from kawin.tests.datasets import NICRAL_TDB
+from kawin.tests.databases import NICRAL_TDB
 
 binPrecTherm = BinaryThermodynamics(NICRAL_TDB, ['NI', 'AL'], ['FCC_A1', 'FCC_L12', 'C14_LAVES', 'C15_LAVES'], drivingForceMethod='tangent')
 ternPrecTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12', 'C14_LAVES', 'C15_LAVES'], drivingForceMethod='tangent')

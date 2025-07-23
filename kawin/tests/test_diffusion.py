@@ -10,7 +10,7 @@ from kawin.diffusion.mesh import ProfileBuilder, StepProfile1D, LinearProfile1D,
 from kawin.diffusion.DiffusionParameters import computeMobility, _computeSingleMobility, TemperatureParameters, HashTable
 from kawin.diffusion.HomogenizationParameters import HomogenizationParameters, computeHomogenizationFunction
 from kawin.thermo import GeneralThermodynamics
-from kawin.tests.datasets import *
+from kawin.tests.databases import *
 
 NiCrTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR'], ['FCC_A1', 'BCC_A2'])
 NiCrAlTherm = GeneralThermodynamics(NICRAL_TDB, ['NI', 'CR', 'AL'], ['FCC_A1', 'BCC_A2'])

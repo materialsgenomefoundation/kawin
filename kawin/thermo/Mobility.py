@@ -95,8 +95,29 @@ class MobilityModel(Model):
         Dictionary of symbols in diffusivity functions for each element
     '''
     def __init__(self, dbe, comps, phase_name, parameters=None):
-        super().__init__(dbe, comps, phase_name, parameters)
+        self.diffusing_species = None
 
+        super().__init__(dbe, comps, phase_name, parameters)
+        self._setup_mobility_models(dbe)
+
+    def set_diffusing_species(self, dbe, diffusing_species):
+        '''
+        Allows user to override diffusing species
+
+        This will rebuild all the models, which is a bit
+        inefficient, but I can't seem to add a parameter to
+        the constructor due to the _dispatch_on function in
+        pycalphad.model.Model
+        '''
+        # diffusing_species is list[v.Species] to be similar to components
+        self.diffusing_species = [v.Species(s) for s in diffusing_species]
+
+        #We only need to rebuild the mobility models since we're just changing
+        #what mobility models we have
+        self.mobility, self.diffusivity = self.build_mobility(dbe)
+        self._setup_mobility_models(dbe)
+
+    def _setup_mobility_models(self, dbe):
         symbols = {Symbol(s): val for s, val in dbe.symbols.items()}
         if self._parameters_arg is not None:
             if isinstance(self._parameters_arg, dict):
@@ -113,10 +134,16 @@ class MobilityModel(Model):
             setattr(self, 'MOB_'+name, self.mobility[name])
             setattr(self, 'MQ_'+name, self.symbol_replace(getattr(self, 'MQ_'+name), symbols).xreplace(get_supported_variables()))
 
+            setattr(self, 'lnM0_'+name, getattr(self, 'MQ_'+name).diff(v.T)/v.R)
+            setattr(self, 'MQa_'+name, v.T*getattr(self, 'MQ_'+name).diff(v.T) - getattr(self, 'MQ_'+name))
+
         for name, value in self.diffusivity.items():
             self.diffusivity[name] = self.symbol_replace(value, symbols).xreplace(get_supported_variables())
             setattr(self, 'DIFF_'+name, self.diffusivity[name])
             setattr(self, 'DQ_'+name, self.symbol_replace(getattr(self, 'DQ_'+name), symbols).xreplace(get_supported_variables()))
+
+            setattr(self, 'lnD0_'+name, getattr(self, 'DQ_'+name).diff(v.T)/v.R)
+            setattr(self, 'DQa_'+name, v.T*getattr(self, 'DQ_'+name).diff(v.T) - getattr(self, 'DQ_'+name))
 
         self.mob_site_fractions = {c: sorted([x for x in self.mobility_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.mobility}
         self.diff_site_fractions = {c: sorted([x for x in self.diffusivity_variables[c] if isinstance(x, v.SiteFraction)], key=str) for c in self.diffusivity}
@@ -175,6 +202,9 @@ class MobilityModel(Model):
         ----------
         dbe : Database
         '''
+        if self.diffusing_species is None:
+            self.diffusing_species = self.components
+
         phase = dbe.phases[self.phase_name]
         param_search = dbe.search
 
@@ -184,7 +214,7 @@ class MobilityModel(Model):
 
         param_names = ['MF', 'MQ', 'DF', 'DQ']
 
-        for c in self.components:
+        for c in self.diffusing_species:
             if c.name != 'VA':
                 for name in param_names:
                     param_query = (
@@ -217,7 +247,7 @@ class MobilityModel(Model):
                     self.mob_models[p[1]][c.name] += rk
 
         self.checkOrderingContribution(dbe)
-        for c in self.components:
+        for c in self.diffusing_species:
             if c.name != 'VA':
                 #In thermo-calc, the mobility model is defined as exp(sum(MF)/RT) * exp(sum(MQ)/RT) / RT
                 #The diffusivity model is defined either as dilute - exp(sum(DF)/RT) * exp(sum(DQ)/RT)
@@ -258,6 +288,10 @@ class MobilityModel(Model):
         constituents = [sorted(set(c).intersection(self.components)) for c in ordered_phase.constituents]
         disordered_phase = dbe.phases[disordered_phase_name]
         disordered_model = self.__class__(dbe, sorted(self.components), disordered_phase_name)
+        
+        #If diffusing species are different, then set diffusing species for disordered model
+        if set(self.components).symmetric_difference(self.diffusing_species) != 0:
+            disordered_model.set_diffusing_species(dbe, self.diffusing_species)
 
         disordered_subl_constituents = disordered_phase.constituents[0]
         ordered_constituents = ordered_phase.constituents
@@ -323,13 +357,28 @@ class MobilityModel(Model):
 
         return
     
-def _get_mobility_arguments(composition_set, parameters):
+def _get_mobility_arguments(cs_dof, parameters):
     param_keys, param_values = extract_parameters(parameters)
     if len(param_values) > 0:
-        callableInput = np.concatenate((composition_set.dof, param_values[0]), dtype=np.float64)
+        callableInput = np.concatenate((cs_dof, param_values[0]), dtype=np.float64)
     else:
-        callableInput = composition_set.dof
+        callableInput = cs_dof
     return callableInput
+
+def mobility_from_dof(dof, elements, mobility_callables = None, mobility_correction = None, parameters = {}):
+    if mobility_callables is None:
+        raise ValueError('mobility_callables is required')
+
+    #Set mobility correction if not set
+    if mobility_correction is None:
+        mobility_correction = {A: 1 for A in elements}
+    else:
+        for A in elements:
+            if A not in mobility_correction:
+                mobility_correction[A] = 1
+
+    callableInput = _get_mobility_arguments(dof, parameters)
+    return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](callableInput) for A in range(len(elements))])
 
 def mobility_from_composition_set(composition_set, mobility_callables = None, mobility_correction = None, parameters = {}):
     '''
@@ -349,22 +398,104 @@ def mobility_from_composition_set(composition_set, mobility_callables = None, mo
     -------
     Array for floats for mobility of each element (alphabetical order)
     '''
-    if mobility_callables is None:
-        raise ValueError('mobility_callables is required')
-
     elements = list(composition_set.phase_record.nonvacant_elements)
+    return mobility_from_dof(composition_set.dof, elements, mobility_callables, mobility_correction, parameters)
 
-    #Set mobility correction if not set
-    if mobility_correction is None:
-        mobility_correction = {A: 1 for A in elements}
-    else:
-        for A in elements:
-            if A not in mobility_correction:
-                mobility_correction[A] = 1
+def compute_phase_record_func_from_dof(dof, prf, phase, symbol, parameters={}):
+    prop = prf.get_phase_property(phase, symbol, include_grad=False, include_hess=False)
+    callableInput = _get_mobility_arguments(dof, parameters)
+    return prop.func(callableInput)
 
-    callableInput = _get_mobility_arguments(composition_set, parameters)
-    return np.array([mobility_correction[elements[A]] * mobility_callables[elements[A]](callableInput) for A in range(len(elements))])
-    
+def mobility_from_dof_phase_record(dof, prf, phase, elements, parameters = {}):
+    return np.array([compute_phase_record_func_from_dof(dof, prf, phase, f'MOB_{e}', parameters) for e in elements], 
+                    dtype=np.float64)
+
+def activation_energy_from_dof_phase_record(dof, prf, phase, elements, parameters = {}):
+    return np.array([compute_phase_record_func_from_dof(dof, prf, phase, f'MQa_{e}', parameters) for e in elements], 
+                    dtype=np.float64)
+
+def prefactor_from_dof_phase_record(dof, prf, phase, elements, parameters = {}):
+    return np.array([compute_phase_record_func_from_dof(dof, prf, phase, f'lnM0_{e}', parameters) for e in elements], 
+                    dtype=np.float64)
+
+def compute_phase_record_func_from_composition_set(composition_set, prf, phase, symbol, parameters={}):
+    '''
+    Computes mobility symbol from equilibrium results using symbolic model
+
+    NOTE: We don't build the callables for activation energy so this is a directly substitution
+          into the symengine model. However, since this function isn't used often, the slower
+          performance of this shouldn't be much of an issue
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    symbol : str
+        Name of symbol as symbol_el in model
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    return compute_phase_record_func_from_composition_set(composition_set.dof, prf, phase, symbol, parameters)
+
+def mobility_from_composition_set_phase_record(composition_set, prf, phase, elements, parameters = {}):
+    '''
+    Computes mobility from equilibrium results using symbolic model
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    return mobility_from_dof_phase_record(composition_set.dof, prf, phase, elements, parameters)
+
+def activation_energy_from_composition_set_phase_record(composition_set, prf, phase, elements, parameters = {}):
+    '''
+    Computes activation energy for mobility from equilibrium results
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    return activation_energy_from_dof_phase_record(composition_set.dof, prf, phase, elements, parameters)
+
+def prefactor_from_composition_set_phase_record(composition_set, prf, phase, elements, parameters = {}):
+    '''
+    Computes prefactor term, ln(M0), for mobility from equilibrium results
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_model : MobilityModel object
+    parameters : dict {str : float}
+        List of parameters to override free symbols in the model
+
+    Returns
+    -------
+    Array for floats for activation energy of each element (alphabetical order)
+    '''
+    return prefactor_from_dof_phase_record(composition_set.dof, prf, phase, elements, parameters)
+
+def tracer_diffusivity_from_mobility(T, mob_value):
+    R = 8.314
+    return R*T*mob_value
+
 def tracer_diffusivity(composition_set, mobility_callables = None, mobility_correction = None, parameters = {}):
     '''
     Computes tracer diffusivity for given equilibrium results
@@ -384,10 +515,98 @@ def tracer_diffusivity(composition_set, mobility_callables = None, mobility_corr
     '''
     if mobility_callables is None:
         raise ValueError('mobility_callables is required')
-
-    R = 8.314
     T = composition_set.dof[composition_set.phase_record.state_variables.index(v.T)]
-    return R * T * mobility_from_composition_set(composition_set, mobility_callables, mobility_correction, parameters)
+    mob_values = mobility_from_composition_set(composition_set, mobility_callables, mobility_correction, parameters)
+    return tracer_diffusivity_from_mobility(T, mob_values)
+
+def mobility_matrix_from_dof(dof, composition, elements, mob_values, phase_record, vacancy_poor_interstitial_sublattice = False):
+    '''
+    Mobility matrix
+    Used to obtain diffusivity when multipled with free energy hessian
+
+    Parameters
+    ----------
+    composition_set : pycalphad.core.composition_set.CompositionSet
+    mobility_callables : dict (optional)
+        Pre-computed mobility callables for each element
+    mobility_correction : dict (optional)
+        Factor to multiply mobility by for each given element (defaults to 1)
+    vacancy_poor_interstitial_sublattice : bool (optional)
+        Denotes whether the interstitial sublattice is to be modeled assuming that vacancy fraction is near 0 (see notes below)
+        Defaults to False
+    parameters : dict (optional)
+        Maps free parameters names to parameter values
+
+    Notes
+    -----
+    - Substitutional and interstitial components are modeled differently based off the following assumptions:
+        1. Substitutional components contribute to the volume of the alloy while interstitials have zero volume
+        2. Vacancy fraction in substitutional sublattice is near 0 while vacancy fraction in interstitial sublattice is near 1
+    
+    - Assumption 1 is accounted by considering u-fraction of other components for substitutional and accounting for reference element
+      when computing interdiffusivity. Interstitials do not account for this since they do not contribute to the volume
+
+    - Assumption 2 is accounted for by multiplying the vacancy site fraction on interstitial mobility
+        - Mobility is defined in terms of a kinetic parameter (\Omega) that describes the rate of exchange for a component given that
+          it is near a vacancy
+            - For substitutionals, we define mobility M = y_VA * \Omega, so the mobility term itself includes the vacancy fraction
+              since in practice, the vacancy fraction is near 0
+            - For interstitials, we define mobility M = \Omega, so it does not factor in the vacancy fraction. Thus we have to
+              include the vacancy fraction to represent the probability that the component is near a vacancy
+        - We can override this assumption for interstitials using the vacancy_poor_interstitial_sublattice parameter. This can
+          be useful for compounds like carbides, where the interstitial sublattice is mostly carbon and the vacancy fraction is near 0
+
+    Returns
+    -------
+    Matrix of floats
+        Each index along an axis correspond to elements in alphabetical order
+    '''
+    U, Usum = x_to_u_frac(composition, elements, interstitials, return_usum=True)
+
+    #Multiply mobility by U-fraction for ease of use when constructing the mobility matrix
+    mob = np.array([U[A] * mob_values[A] for A in range(len(elements))])
+
+    #Find vacancy site fractions for multiplying with interstitials when making the mobility matrix
+    #If vacancies are not found on the same sublattice, we'll defualt to 1 so there's at least some mobility and not 0
+    #       A mobility of 0 would be quite unrealistic
+    #       In addition, as we're working with interstitals, the vacancies are going to be close to 1, so this assumption wouldn't hurt
+    vaTerms = {}            #Maps sublattice index to site fraction index for vacancies
+    interstitialTerms = {}  #Maps interstitial to sublattice index
+    index = len(phase_record.state_variables)
+    for i in range(len(phase_record.variables)):
+        if phase_record.variables[i].species.name == 'VA':
+            vaTerms[phase_record.variables[i].sublattice_index] = dof[index+i]
+        if phase_record.variables[i].species.name in interstitials:
+            interstitialTerms[phase_record.variables[i].species.name] = phase_record.variables[i].sublattice_index
+
+    # For interstitials
+    #    M_aa = y_Va * M_a
+    #    y_Va is taken from the same sublattice that a is on, where more vacancies on the sublattice implies faster diffusion
+    # For substitutionals
+    #    M_aa = (1-U_a) * U_a * M_a
+    #    M_ab = -U_a * U_b * M_b
+    # There are no entries for M_ab if one index is interstitial and the other is substitutional
+    mobMatrix = np.zeros((len(elements), len(elements)))
+    for a in range(len(elements)):
+        if elements[a] in interstitials:
+            if vacancy_poor_interstitial_sublattice:
+                mobMatrix[a, a] = mob[a]
+            else:
+                mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
+        else:
+            for b in range(len(elements)):
+                if elements[b] not in interstitials:
+                    if a == b:
+                        mobMatrix[a, b] = (1 - U[a]) * mob[b]
+                    else:
+                        mobMatrix[a, b] = -U[a] * mob[b]
+
+    #Diffusivity requires dmu_a/dU_b; however, the free energy curvature gives dmu_a/dX_b
+    #Assuming that Usum is constant and using chain-rule derivatives,
+    #    the conversion from dmu_a/dX_b to dmu_a/dU_b can be done by multiplying the sum(substitutionals)
+    mobMatrix *= Usum
+
+    return mobMatrix
 
 def mobility_matrix(composition_set, mobility_callables = None, mobility_correction = None, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
@@ -433,53 +652,17 @@ def mobility_matrix(composition_set, mobility_callables = None, mobility_correct
     '''
     elements = list(composition_set.phase_record.nonvacant_elements)
     X = composition_set.X
-    U, Usum = x_to_u_frac(X, elements, interstitials, return_usum=True)
-
-    #Multiply mobility by U-fraction for ease of use when constructing the mobility matrix
     computedMob = mobility_from_composition_set(composition_set, mobility_callables, mobility_correction, parameters)
-    mob = np.array([U[A] * computedMob[A] for A in range(len(elements))])
 
-    #Find vacancy site fractions for multiplying with interstitials when making the mobility matrix
-    #If vacancies are not found on the same sublattice, we'll defualt to 1 so there's at least some mobility and not 0
-    #       A mobility of 0 would be quite unrealistic
-    #       In addition, as we're working with interstitals, the vacancies are going to be close to 1, so this assumption wouldn't hurt
-    vaTerms = {}            #Maps sublattice index to site fraction index for vacancies
-    interstitialTerms = {}  #Maps interstitial to sublattice index
-    index = len(composition_set.phase_record.state_variables)
-    for i in range(len(composition_set.phase_record.variables)):
-        if composition_set.phase_record.variables[i].species.name == 'VA':
-            vaTerms[composition_set.phase_record.variables[i].sublattice_index] = composition_set.dof[index+i]
-        if composition_set.phase_record.variables[i].species.name in interstitials:
-            interstitialTerms[composition_set.phase_record.variables[i].species.name] = composition_set.phase_record.variables[i].sublattice_index
+    return mobility_matrix_from_dof(composition_set.dof, X, elements, computedMob, composition_set.phase_record, vacancy_poor_interstitial_sublattice)
 
-    #For interstitials
-    #    M_aa = y_Va * M_a
-    #    y_Va is taken from the same sublattice that a is on, where more vacancies on the sublattice implies faster diffusion
-    #For substitutionals
-    #    M_aa = (1-U_a) * U_a * M_a
-    #    M_ab = -U_a * U_b * M_b
-    #There are no entries for M_ab if one index is interstitial and the other is substitutional
-    mobMatrix = np.zeros((len(elements), len(elements)))
-    for a in range(len(elements)):
-        if elements[a] in interstitials:
-            if vacancy_poor_interstitial_sublattice:
-                mobMatrix[a, a] = mob[a]
-            else:
-                mobMatrix[a, a] = vaTerms.get(interstitialTerms[elements[a]], 1) * mob[a]
-        else:
-            for b in range(len(elements)):
-                if elements[b] not in interstitials:
-                    if a == b:
-                        mobMatrix[a, b] = (1 - U[a]) * mob[b]
-                    else:
-                        mobMatrix[a, b] = -U[a] * mob[b]
+def chemical_diffusivity_from_mob(dmudx, mob_matrix, returnHessian = False):
+    Dkj = np.matmul(mob_matrix, dmudx)
 
-    #Diffusivity requires dmu_a/dU_b; however, the free energy curvature gives dmu_a/dX_b
-    #Assuming that Usum is constant and using chain-rule derivatives,
-    #    the conversion from dmu_a/dX_b to dmu_a/dU_b can be done by multiplying the sum(substitutionals)
-    mobMatrix *= Usum
-
-    return mobMatrix
+    if returnHessian:
+        return Dkj, dmudx
+    else:
+        return Dkj, None
 
 def chemical_diffusivity(chemical_potentials, composition_set, mobility_callables, mobility_correction = None, returnHessian = False, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
@@ -510,12 +693,28 @@ def chemical_diffusivity(chemical_potentials, composition_set, mobility_callable
                                 mobility_correction=mobility_correction, 
                                 vacancy_poor_interstitial_sublattice=vacancy_poor_interstitial_sublattice, 
                                 parameters=parameters)
-    Dkj = np.matmul(mobMatrix, dmudx)
-    
-    if returnHessian:
-        return Dkj, dmudx
-    else:
-        return Dkj, None
+    return chemical_diffusivity_from_mob(dmudx, mobMatrix, returnHessian)
+
+def interdiffusivity_from_Dkj(Dkj, hessian, elements, refElement):
+
+    #Build Dnkj, skipping the reference element
+    refIndex = elements.index(refElement)
+    Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
+    c = 0
+    d = 0
+    for a in range(len(elements)):
+        if a != refIndex:
+            for b in range(len(elements)):
+                if b != refIndex:
+                    if elements[b] in interstitials:
+                        Dnkj[c, d] = Dkj[a, b]
+                    else:
+                        Dnkj[c, d] = Dkj[a, b] - Dkj[a, refIndex]
+                    d += 1
+            c += 1
+            d = 0
+            
+    return Dnkj, hessian
 
 def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_callables = None, mobility_correction = None, returnHessian = False, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
@@ -548,29 +747,11 @@ def interdiffusivity(chemical_potentials, composition_set, refElement, mobility_
                                         composition_set=composition_set, 
                                         mobility_callables=mobility_callables, 
                                         mobility_correction=mobility_correction, 
-                                        returnHessian=returnHessian, 
+                                        returnHessian=True, 
                                         vacancy_poor_interstitial_sublattice=vacancy_poor_interstitial_sublattice, 
                                         parameters=parameters)
     elements = list(composition_set.phase_record.nonvacant_elements)
-
-    #Build Dnkj, skipping the reference element
-    refIndex = elements.index(refElement)
-    Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
-    c = 0
-    d = 0
-    for a in range(len(elements)):
-        if a != refIndex:
-            for b in range(len(elements)):
-                if b != refIndex:
-                    if elements[b] in interstitials:
-                        Dnkj[c, d] = Dkj[a, b]
-                    else:
-                        Dnkj[c, d] = Dkj[a, b] - Dkj[a, refIndex]
-                    d += 1
-            c += 1
-            d = 0
-
-    return Dnkj, hessian
+    return interdiffusivity_from_Dkj(Dkj, hessian, elements, refElement)
 
 def inverseMobility(chemical_potentials, composition_set, refElement, mobility_callables, mobility_correction = None, returnOther = True, vacancy_poor_interstitial_sublattice = False, parameters = {}):
     '''
@@ -642,7 +823,7 @@ def tracer_diffusivity_from_diff(composition_set, diffusivity_callables = None, 
             if A not in diffusivity_correction:
                 diffusivity_correction[A] = 1
 
-    callableInput = _get_mobility_arguments(composition_set, parameters)
+    callableInput = _get_mobility_arguments(composition_set.dof, parameters)
     return np.array([diffusivity_correction[elements[A]] * diffusivity_callables[elements[A]](callableInput) for A in range(len(elements))])
 
 def interdiffusivity_from_diff(composition_set, refElement, diffusivity_callables, diffusivity_correction = None, parameters = {}):
@@ -678,7 +859,7 @@ def interdiffusivity_from_diff(composition_set, refElement, diffusivity_callable
             if A not in diffusivity_correction:
                 diffusivity_correction[A] = 1
 
-    callableInput = _get_mobility_arguments(composition_set, parameters)
+    callableInput = _get_mobility_arguments(composition_set.dof, parameters)
     Dnkj = np.zeros((len(elements) - 1, len(elements) - 1))
     eleIndex = 0
     for a in range(len(elements) - 1):

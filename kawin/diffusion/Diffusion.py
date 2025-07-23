@@ -204,8 +204,9 @@ class DiffusionModel(GenericModel):
         print('Iteration\tSim Time (h)\tRun time (s)')
 
     def printStatus(self, iteration, modelTime, simTimeElapsed):
+        print('{}\t\t{:.3e}\t\t{:.1f}'.format(iteration, modelTime/3600, simTimeElapsed))
         # Convert time to hours
-        super().printStatus(iteration, modelTime/3600, simTimeElapsed)
+        #super().printStatus(iteration, modelTime/3600, simTimeElapsed)
 
     def getCurrentX(self):
         return [self.data.currentY]

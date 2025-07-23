@@ -7,7 +7,7 @@ from kawin.diffusion.mesh import ProfileBuilder, Cartesian1D, LinearProfile1D
 from kawin.thermo import BinaryThermodynamics, MulticomponentThermodynamics
 from kawin.GenericModel import GenericModel, Coupler
 from kawin.solver import explicitEulerIterator, rk4Iterator
-from kawin.tests.datasets import *
+from kawin.tests.databases import *
 
 AlZrTherm = BinaryThermodynamics(ALZR_TDB, ['AL', 'ZR'], ['FCC_A1', 'AL3ZR'], drivingForceMethod='tangent')
 NiAlCrTherm = MulticomponentThermodynamics(NICRAL_TDB, ['NI', 'AL', 'CR'], ['FCC_A1', 'FCC_L12'], drivingForceMethod='tangent')

@@ -49,12 +49,14 @@ jobs:
     needs: [Tests]
     steps:
       # The source code _must_ be checked out for coverage to be processed at Codecov.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: coverage-*
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           fail_ci_if_error: true

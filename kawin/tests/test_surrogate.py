@@ -107,7 +107,7 @@ def test_Surr_binary_Diff_output():
     #Compare to Thermodynamics, high tolerance since we're just checking that functions are interchangeable
     assert_allclose(dnkj, dnkjT, atol=0, rtol=1e-1)
 
-def test_Surr_binary_save():
+def test_Surr_binary_save(tmpdir):
     '''
     Checks that binary surrogate can be saved and loaded to get same values
     '''
@@ -126,23 +126,21 @@ def test_Surr_binary_save():
     c, d = surr.getInterfacialComposition(T, 500)
     e = surr.getInterdiffusivity(0.1, T + 50)
 
-    surr.toJson('kawin/tests/alzr.json')
+    surr.toJson(tmpdir / 'alzr.json')
 
-    #surr2 = BinarySurrogate.load('kawin/tests/alzr')
+    #surr2 = BinarySurrogate.load(tmpdir / 'alzr')
     surr2 = BinarySurrogate(AlZrTherm)
-    surr2.fromJson('kawin/tests/alzr.json')
+    surr2.fromJson(tmpdir / 'alzr.json')
     a2, b2 = surr2.getDrivingForce(0.004, T)
     c2, d2 = surr2.getInterfacialComposition(T, 500)
     e2 = surr2.getInterdiffusivity(0.1, T + 50)
-
-    os.remove('kawin/tests/alzr.json')
 
     # assert that models will generated from json data
     assert 'FCC_A1' in surr2.diffusivityModels
     assert 'AL3ZR' in surr2.drivingForceModels
     assert_allclose([a, b, c, d, e], [a2, b2, c2, d2, e2], rtol=1e-3)
 
-def test_Surr_binary_save_missing():
+def test_Surr_binary_save_missing(tmpdir):
     '''
     Checks that load function will not fail if one of the three surrogates are not trained yet
     '''
@@ -153,14 +151,12 @@ def test_Surr_binary_save_missing():
 
     a, b = surr.getDrivingForce(0.004, T)
 
-    surr.toJson('kawin/tests/alzr.json')
+    surr.toJson(tmpdir / 'alzr.json')
 
-    #surr2 = BinarySurrogate.load('kawin/tests/alzr')
+    #surr2 = BinarySurrogate.load(tmpdir / 'alzr')
     surr2 = BinarySurrogate(AlZrTherm)
-    surr2.fromJson('kawin/tests/alzr.json')
+    surr2.fromJson(tmpdir / 'alzr.json')
     a2, b2 = surr2.getDrivingForce(0.004, T)
-
-    os.remove('kawin/tests/alzr.json')
 
     assert 'AL3ZR' in surr2.drivingForceModels
     assert_allclose(a, a2, atol=0, rtol=1e-3)
@@ -228,7 +224,7 @@ def test_Surr_ternary_IC_output():
     assert_allclose(ca, caT, atol=0, rtol=1e-1)
     assert_allclose(cb, cbT, atol=0, rtol=1e-1)
 
-def test_Surr_ternary_save():
+def test_Surr_ternary_save(tmpdir):
     '''
     Checks that multicomponent surrogate can be saved and loaded
     '''
@@ -243,22 +239,20 @@ def test_Surr_ternary_save():
     g, ca, cb, _, _ = surr.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
     beta = surr.impingementFactor([0.08, 0.1], T[0]+25)
 
-    surr.toJson('kawin/tests/nicral.json')
+    surr.toJson(tmpdir / 'nicral.json')
 
-    #surr2 = MulticomponentSurrogate.load('kawin/tests/nicral')
+    #surr2 = MulticomponentSurrogate.load(tmpdir / 'nicral')
     surr2 = MulticomponentSurrogate(NiCrAlTherm)
-    surr2.fromJson('kawin/tests/nicral.json')
+    surr2.fromJson(tmpdir / 'nicral.json')
     a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25)
     g2, ca2, cb2, _, _ = surr2.getGrowthAndInterfacialComposition([0.08, 0.1], T[0]+25, 900, 1e-9, 1000)
     beta2 = surr2.impingementFactor([0.08, 0.1], T[0]+25)
-
-    os.remove('kawin/tests/nicral.json')
 
     assert 'FCC_L12' in surr2.drivingForceModels
     assert 'FCC_L12' in surr2.curvatureModels
     assert_allclose([a, b[0], b[1], g, ca[0], ca[1], cb[0], cb[1], beta], [a2, b2[0], b2[1], g2, ca2[0], ca2[1], cb2[0], cb2[1], beta2], atol=0, rtol=1e-3)
 
-def test_Surr_ternary_save_missing():
+def test_Surr_ternary_save_missing(tmpdir):
     '''
     Checks that load function will not fail if one of the three surrogates are not trained yet
     '''
@@ -268,13 +262,12 @@ def test_Surr_ternary_save_missing():
     surr.trainDrivingForce(x, T)
 
     a, b = surr.getDrivingForce([0.08, 0.1], T[0]+25)
-    surr.toJson('kawin/tests/nicral.json')
+    surr.toJson(tmpdir / 'nicral.json')
 
-    #surr2 = MulticomponentSurrogate.load('kawin/tests/nicral')
+    #surr2 = MulticomponentSurrogate.load(tmpdir / 'nicral')
     surr2 = MulticomponentSurrogate(NiCrAlTherm)
-    surr2.fromJson('kawin/tests/nicral.json')
+    surr2.fromJson(tmpdir / 'nicral.json')
     a2, b2 = surr2.getDrivingForce([0.08, 0.1], T[0]+25)
-    os.remove('kawin/tests/nicral.json')
 
     assert 'FCC_L12' in surr2.drivingForceModels
     assert_allclose([a, b[0], b[1]], [a2, b2[0], b2[1]], atol=0, rtol=1e-3)

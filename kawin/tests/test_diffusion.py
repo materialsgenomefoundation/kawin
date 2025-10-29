@@ -21,8 +21,8 @@ FeCTherm = GeneralThermodynamics(FECRC_DB, ['FE', 'C'], ['FCC_A1'])
 def test_compositionInput():
     '''
     Tests that after setting up a model, all components are greater than 0
-    
-    In practice, this greatly speeds up simulation time without sacrificing accuracy since it avoids 
+
+    In practice, this greatly speeds up simulation time without sacrificing accuracy since it avoids
     performing equilibrium calculations with a composition of 0 for any given component
 
     The composition and setup functions for both models inherit from the
@@ -31,7 +31,7 @@ def test_compositionInput():
     N = 100
     profile = ProfileBuilder()
     profile.addBuildStep(StepProfile1D(0, [0.2, 0.8], [1, 0]), ['CR', 'AL'])
-    
+
     mesh = Cartesian1D(['CR', 'AL'], [-1e-3, 1e-3], N)
     mesh.setResponseProfile(profile)
     model = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], NiCrAlTherm, TemperatureParameters(1200+273.15))
@@ -93,7 +93,7 @@ def test_homogenizationMobility():
 
 def test_homogenizationSinglePhaseMobility():
     '''
-    Tests that in a single phase region, any of the mobility functions will give 
+    Tests that in a single phase region, any of the mobility functions will give
     the same mobility of the single phase itself
     '''
     x = [0.05, 0.05]
@@ -103,8 +103,8 @@ def test_homogenizationSinglePhaseMobility():
     homogenizationParameters.labyrinthFactor = 2
     mob_data = computeMobility(NiCrAlTherm, x, T)
 
-    mob_funcs = [HomogenizationParameters.WIENER_UPPER, HomogenizationParameters.WIENER_LOWER, 
-                 HomogenizationParameters.HASHIN_UPPER, HomogenizationParameters.HASHIN_LOWER, 
+    mob_funcs = [HomogenizationParameters.WIENER_UPPER, HomogenizationParameters.WIENER_LOWER,
+                 HomogenizationParameters.HASHIN_UPPER, HomogenizationParameters.HASHIN_LOWER,
                  HomogenizationParameters.LABYRINTH]
     for f in mob_funcs:
         homogenizationParameters.setHomogenizationFunction(f)
@@ -139,7 +139,7 @@ def test_homogenization_wiener_lower():
 
     homogenizationParameters = HomogenizationParameters()
     homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.WIENER_LOWER)
-    
+
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, homogenizationParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
@@ -156,7 +156,7 @@ def test_homogenization_hashin_upper():
 
     homogenizationParameters = HomogenizationParameters()
     homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.HASHIN_UPPER)
-    
+
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, homogenizationParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
@@ -173,7 +173,7 @@ def test_homogenization_hashin_lower():
 
     homogenizationParameters = HomogenizationParameters()
     homogenizationParameters.setHomogenizationFunction(HomogenizationParameters.HASHIN_LOWER)
-    
+
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, homogenizationParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
@@ -193,7 +193,7 @@ def test_homogenization_lab():
     # Labyrinth factor is clipped to [1,2]
     homogenizationParameters.setLabyrinthFactor(2.3)
     assert homogenizationParameters.labyrinthFactor == 2
-    
+
     mob, _ = computeHomogenizationFunction(NiCrAlTherm, x1, T, homogenizationParameters)
     assert_allclose(mob, [3.927302e-22, 2.323337e-23, 6.206029e-23], atol=0, rtol=1e-3)
 
@@ -210,7 +210,7 @@ def test_homogenization_post_process():
     '''
     x = [0.5, 0.18]
     T = 1073
-    
+
     homogenizationParameters = HomogenizationParameters()
     hashTable = HashTable()
 
@@ -234,7 +234,7 @@ def test_homogenization_post_process():
         fcc_index = np.squeeze(np.where(mob.phases == 'FCC_A1')[0])
         sigma_index = np.squeeze(np.where(mob.phases == 'SIGMA')[0])
         mob, phase_fracs = homogenizationParameters.postProcessFunction(mob, *homogenizationParameters.postProcessParameters)
-        
+
         assert_allclose(mob[fcc_index], p[2]['FCC_A1'], rtol=1e-3)
         assert_allclose(mob[sigma_index], p[2]['SIGMA'], rtol=1e-3)
 
@@ -285,7 +285,7 @@ def test_single_phase_dxdt():
         m.setup()
         dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
         dt = m.getDt(dxdt)
-        
+
         print(dxdt[0][5], dxdt[0][10], dxdt[0][15], dt)
         assert_allclose(dxdt[0][5], vals5[i], rtol=1e-3)
         assert_allclose(dxdt[0][10], vals10[i], rtol=1e-3)
@@ -313,7 +313,7 @@ def test_diffusion_x_shape():
 
     x = m.getCurrentX()
     origShape = x[0].shape
-    
+
     x_flat = m.flattenX(x)
     flatShape = x_flat.shape
 
@@ -330,8 +330,8 @@ def test_homogenization_dxdt():
     Check flux values of arbitrary homogenization model problem
 
     We spot check a few points on dxdt rather than checking the entire array
-    
-    We'll only test using the hashin lower homogenization function since there's already tests for 
+
+    We'll only test using the hashin lower homogenization function since there's already tests for
     the output of each homogenization function
 
     This uses the parameters from 07_Homogenization_Model example with the compositions
@@ -347,7 +347,7 @@ def test_homogenization_dxdt():
     mesh.setResponseProfile(profile)
     homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_LOWER, eps=0.01)
 
-    m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
+    m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'],
                             thermodynamics=FeCrNiTherm, temperature=TemperatureParameters(1373.15),
                             homogenizationParameters=homogenizationParameters)
     m.constraints.maxCompositionChange = 0.002
@@ -355,7 +355,7 @@ def test_homogenization_dxdt():
     m.setup()
     dxdt = m.getdXdt(m.currentTime, m.getCurrentX())
     dt = m.getDt(dxdt)
-    
+
     # #Index 5
     ind5, vals5 = 5, np.array([-1.41988464e-09, 1.23824350e-09])
 
@@ -375,7 +375,7 @@ def test_homogenization_dxdt():
     mesh = Cartesian1D(['CR', 'NI'], [-5e-4, 5e-4], 20)
     mesh.setResponseProfile(profile)
     homogenizationParameters = HomogenizationParameters(HomogenizationParameters.HASHIN_UPPER, eps=0.01)
-    m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'], 
+    m = HomogenizationModel(mesh,  ['FE', 'CR', 'NI'], ['FCC_A1', 'BCC_A2'],
                             thermodynamics=FeCrNiTherm, temperature=TemperatureParameters(1373.15),
                             homogenizationParameters=homogenizationParameters)
     m.constraints.maxCompositionChange = 0.002
@@ -387,7 +387,7 @@ def test_homogenization_dxdt():
 
     # The dxdt values are changed due to a correction in how the mobility for each phase is computed
     # Before, the mobilities were multiplied by the overall composition rather than the phase composition
-    
+
     #Index 5
     ind5, vals5 = 5, np.array([-2.8577719e-8, -4.66806883e-9])
 
@@ -396,14 +396,14 @@ def test_homogenization_dxdt():
 
     #Index 15
     ind15, vals15 = 15, np.array([-1.62720361e-8, -7.03752829e-9])
-    
+
     print(dxdt[0][ind5], dxdt[0][ind10], dxdt[0][ind15], dt)
     assert_allclose(dxdt[0][ind5], vals5, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind10], vals10, atol=0, rtol=1e-3)
     assert_allclose(dxdt[0][ind15], vals15, atol=0, rtol=1e-3)
     assert_allclose(dt, 3348.705601, rtol=1e-3)
 
-def test_diffusionSavingLoading():
+def test_diffusionSavingLoading(tmpdir):
     '''
     Tests saving/loading behavior of diffusion model
     '''
@@ -414,18 +414,17 @@ def test_diffusionSavingLoading():
     mesh.setResponseProfile(profile)
 
     #Define mesh spanning between -1mm to 1mm with 50 volume elements
-    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], 
+    m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'],
                          thermodynamics=NiCrAlTherm,
                          temperature=temperature, record=True)
 
     m.solve(10*3600, verbose=True, vIt=1)
-    m.save('kawin/tests/diff.npz')
+    m.save(tmpdir / 'diff.npz')
 
-    new_m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'], 
+    new_m = SinglePhaseModel(mesh, ['NI', 'CR', 'AL'], ['FCC_A1'],
                          thermodynamics=NiCrAlTherm,
                          temperature=temperature, record=True)
-    new_m.load('kawin/tests/diff.npz')
-    os.remove('kawin/tests/diff.npz')
+    new_m.load(tmpdir / 'diff.npz')
 
     #assert_allclose(m.mesh.y, new_m.mesh.y)
     assert_allclose(m.data.currentY, new_m.data.currentY)

@@ -74,7 +74,7 @@ def test_binary_precipitation_dxdt():
 
     #Set arbitrary final time, this is done during the solve function, but we do it here since we're not using the solve function
     #  the initial guess for the time step will be 0.01*(1.001) regardless of finalTime
-    model.finalTime = 1 
+    model.finalTime = 1
     dt = model.getDt(dxdt)
 
     indices = [10, 20, 30]
@@ -128,7 +128,7 @@ def test_multi_precipitation_dxdt():
 
     #Set arbitrary final time, this is done during the solve function, but we do it here since we're not using the solve function
     #  the initial guess for the time steo will be 0.01*(1.001) regardless of finalTime
-    model.finalTime = 1 
+    model.finalTime = 1
     dt = model.getDt(dxdt)
 
     indices = [10, 20, 30]
@@ -192,7 +192,7 @@ def test_multiphase_precipitation_x_shape():
     assert(len(x_restore) == origLen)
     assert(np.all(psd.shape == (bins,) for psd in x_restore))
 
-def test_precipitationSavingLoading():
+def test_precipitationSavingLoading(tmpdir):
     '''
     Test saving loading behavior
     '''
@@ -224,11 +224,10 @@ def test_precipitationSavingLoading():
     model = PrecipitateModel(matrix=matrix, precipitates=precipitates, thermodynamics=AlMgSitherm, temperature=temperature)
     model.solve(0.1, verbose=True, vIt=1)
 
-    model.save('kawin/tests/prec.npz')
+    model.save(tmpdir / 'prec.npz')
 
     new_model = PrecipitateModel(matrix=matrix, precipitates=precipitates, thermodynamics=AlMgSitherm, temperature=temperature)
-    new_model.load('kawin/tests/prec.npz')
-    os.remove('kawin/tests/prec.npz')
+    new_model.load(tmpdir / 'prec.npz')
 
     assert_allclose(model.data.Ravg, new_model.data.Ravg)
     assert_allclose(model.data.time, new_model.data.time)
@@ -257,7 +256,7 @@ def test_precipitationCoupling():
     model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=75, minBins=50, maxBins=100)
 
     grainModel = GrainGrowthModel(gbe=0.5, M=1e-14)
-    
+
     coh = CoherencyContribution(0.01, 'AL3ZR')
     dislocations = DislocationParameters(G=50e9, b=1e-9, nu=1/3)
     ss = SolidSolutionStrength({'ZR': 1e9})
@@ -378,7 +377,7 @@ def test_precipitationStopping():
     model.setup()
     _, stop = model.postProcess(0.1, [p.PSD for p in model.PBM])
     assert stop
-    
+
     # 'and' needs all conditions to be true to stop
     model.reset()
     model.clearStoppingConditions()
@@ -407,10 +406,8 @@ def test_ttp():
     model = PrecipitateModel(matrix, precipitate, AlZrTherm, T)
     model.setPBMParameters(cMin=1e-10, cMax=1e-8, bins=75, minBins=50, maxBins=100)
     volCond = VolumeFractionCondition(Inequality.GREATER_THAN, -1)
-    
+
     # Tests that the TTP can be ran and plotted
     ttp = TTPCalculator(model, volCond)
     ttp.calculateTTP(500, 600, 3, 10)
     plotTTP(ttp)
-
-

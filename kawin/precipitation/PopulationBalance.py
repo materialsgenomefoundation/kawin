@@ -1,4 +1,5 @@
 import copy
+from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -12,7 +13,7 @@ class PopulationBalanceModel:
     NOTE: more formally, the PSD is defined such that the number of particles of size R in a volume
         is the integral of the PSD from R-1/2 to R+1/2
         For the discrete PSD, n_i = PSD_i * (R+1/2 - R-1/2)
-        Here, we just store the PSD as the number of particles (n_i), but the formulation for 
+        Here, we just store the PSD as the number of particles (n_i), but the formulation for
         growth rates and moments are the same since the factor (R+1/2 - R-1/2) cancels out
 
     Parameters
@@ -59,11 +60,11 @@ class PopulationBalanceModel:
 
         self.originalBins = bins
         self.setBinConstraints(bins, minBins, maxBins)
-        
+
         self.reset()
 
         self._adaptiveBinSize = True
-        
+
         self._record = record
         self.resetRecordedData()
 
@@ -78,7 +79,7 @@ class PopulationBalanceModel:
             self.bins = self.originalBins
         self.PSDbounds = np.linspace(self.min, self.max, self.bins+1)
         self.PSDsize = 0.5 * (self.PSDbounds[:-1] + self.PSDbounds[1:])
-            
+
         self.PSD = np.zeros(self.bins)
 
         #Hidden variable for use in KWNEuler when adaptive time stepping is enabled
@@ -158,11 +159,11 @@ class PopulationBalanceModel:
             self._recordedPSD[-1][:self.PSD.shape[0]] = self.PSD
             self._recordedTime[-1] = time
 
-    def saveRecordedPSD(self, filename):
+    def saveRecordedPSD(self, filename: str | Path):
         '''
         Saves recorded data into npz format
 
-        Note: If recording is disabled, then this function will do nothing since 
+        Note: If recording is disabled, then this function will do nothing since
               there is nothing to save anyways
 
         Parameters
@@ -170,14 +171,15 @@ class PopulationBalanceModel:
         filename : str
             File name to save to
         '''
+        filename = str(filename)
         if self._record:
             np.savez_compressed(filename, time = self._recordedTime, bins = self._recordedBins, PSD = self._recordedPSD)
 
-    def loadRecordedPSD(self, filename):
+    def loadRecordedPSD(self, filename: str | Path):
         '''
         Loads recorded PSD
         '''
-        data = np.load(filename)
+        data = np.load(str(filename))
         self._record = True
         self._recordedTime = data['time']
         self._recordedBins = data['bins']
@@ -265,7 +267,7 @@ class PopulationBalanceModel:
 
     def setAdaptiveBinSize(self, adaptive):
         '''
-        For Euler implementation, sets whether to change the bin size when 
+        For Euler implementation, sets whether to change the bin size when
         the number of filled bins > maxBins or < minBins
 
         If False, the bins will still be if nucleated particles are greater than the max bin size
@@ -288,7 +290,7 @@ class PopulationBalanceModel:
     def loadDistribution(self, data):
         '''
         Creates a particle size distribution from a set of data
-        
+
         Parameters
         ----------
         data : array of floats
@@ -338,7 +340,7 @@ class PopulationBalanceModel:
         Due to differences in bin size (thus resolution of the PSD), the number density
             could be a little different. To correct for this, we get the 3rd moment of the
             previous PSD and the new PSD, and correct the new PSD to have the same 3rd moment
-        
+
         Parameters
         ----------
         cMin : float
@@ -427,18 +429,18 @@ class PopulationBalanceModel:
                     change = True
                     newIndices = None
         return change, newIndices
-        
+
     def normalize(self):
         '''
         Normalizes the PSD to 1
         '''
         total = self.weightedMoment(0, self.PSDbounds[1:] - self.PSDbounds[:-1])
         self.PSD /= total
-            
+
     def normalizeToMoment(self, order = 0):
         '''
         Normalizes the PSD with so that the moment of specified order will be 1
-        
+
         Parameters
         ----------
         order : int (optional)
@@ -450,7 +452,7 @@ class PopulationBalanceModel:
 
     def getDissolutionIndex(self, maxDissolution, minIndex = 0):
         '''
-        Finds indices when the volume fraction of particles below this index is 
+        Finds indices when the volume fraction of particles below this index is
         within the maximum amount (fraction-wise) that the PSD is allowed to dissolve
 
         So find R_max where int(0, R_max, R^3 * dr) < maxDissolution * int(0, infinity, R^3 * dr)
@@ -473,7 +475,7 @@ class PopulationBalanceModel:
         if dissIndex < 0:
             dissIndex = 0
         return np.amax([np.argmax(self.cumulativeMoment(3) > dissFrac), minIndex])
-        
+
 
     def getDTEuler(self, currDT, growth, dissolutionIndex, maxBinRatio = 0.4):
         '''
@@ -512,7 +514,7 @@ class PopulationBalanceModel:
                 return currDT
             else:
                 return self.maxRatio * (self.PSDbounds[1] - self.PSDbounds[0]) / np.amax(np.abs(growthFilter))
-    
+
     def getdXdtEuler(self, flux, nucRate, nucRadius, psd):
         '''
         dn_i/dt = d(G*n)/dr + nucRate
@@ -551,7 +553,7 @@ class PopulationBalanceModel:
         dXdt[nRad] += nucRate
 
         return dXdt
-    
+
     def correctdXdtEuler(self, dt, flux, nucRate, nucRadius, psd):
         '''
         Given dt, correct the net flux so PSD will not be negative
@@ -598,7 +600,7 @@ class PopulationBalanceModel:
         dXdt[nRad] += nucRate
 
         return dXdt
-    
+
     def updatePBMEuler(self, time, newN):
         '''
         Updates PBM with new values
@@ -635,7 +637,7 @@ class PopulationBalanceModel:
             return np.sum(N * self.PSDsize**order)
         else:
             return np.sum(weights * N * self.PSDsize**order)
-    
+
     def cumulativeMoment(self, order, N=None, weights=None):
         '''
         Given arbtrary PSD, return cumulative moment (from 0 to max)
@@ -657,25 +659,25 @@ class PopulationBalanceModel:
             return np.cumsum(N * self.PSDsize**order)
         else:
             return np.cumsum(weights * N * self.PSDsize**order)
-    
+
     def zeroMoment(self, N=None, weights=None):
         '''
         Sum of N
         '''
         return self.moment(0, N=N, weights=weights)
-    
+
     def firstMoment(self, N=None, weights=None):
         '''
         Length weighted moment of N
         '''
         return self.moment(1, N=N, weights=weights)
-        
+
     def secondMoment(self, N=None, weights=None):
         '''
         Area weighted moment of N
         '''
         return self.moment(2, N=N, weights=weights)
-        
+
     def thirdMoment(self, N=None, weights=None):
         '''
         Volume weighted moment of N
@@ -688,11 +690,11 @@ def _set_xlim(pbm: PopulationBalanceModel, x, ax):
         ax.set_xlim([0, x[-1]])
     else:
         ax.set_xlim([x[0], x[-1]])
-        
+
 def plotPSD(pbm: PopulationBalanceModel, scale=1, fill=False, ax=None, *args, **kwargs):
     '''
     Plots the N for each bin as a curve
-    
+
     Parameters
     ----------
     pbm: PopulationBalanceModel
@@ -715,14 +717,14 @@ def plotPSD(pbm: PopulationBalanceModel, scale=1, fill=False, ax=None, *args, **
         ax.plot(x, pbm.PSD, *args, **kwargs)
     _set_xlim(pbm, x, ax)
     ax.set_ylim(bottom=0)
-    ax.set_ylabel(r'Frequency (#$/m^3$)') 
+    ax.set_ylabel(r'Frequency (#$/m^3$)')
 
 def plotPDF(pbm: PopulationBalanceModel, scale=1, fill=False, ax=None, *args, **kwargs):
     '''
     Plots the distribution density as a curve
     Defined as f_i = N_i / (R_i+1/2 - R_i-1/2)
         This is such that N = \int(f dR)
-    
+
     Parameters
     ----------
     pbm: PopulationBalanceModel
@@ -747,12 +749,12 @@ def plotPDF(pbm: PopulationBalanceModel, scale=1, fill=False, ax=None, *args, **
 
     _set_xlim(pbm, x, ax)
     ax.set_ylim(bottom=0)
-    ax.set_ylabel(r'Distribution Density (#$/m^4$)') 
+    ax.set_ylabel(r'Distribution Density (#$/m^4$)')
 
 def plotCDF(pbm: PopulationBalanceModel, scale=1, order=0, ax=None, *args, **kwargs):
     '''
     Plots cumulative size distribution density
-    
+
     Parameters
     ----------
     axes : Axes
@@ -773,8 +775,4 @@ def plotCDF(pbm: PopulationBalanceModel, scale=1, order=0, ax=None, *args, **kwa
 
     _set_xlim(pbm, x, ax)
     ax.set_ylim([0,1])
-    ax.set_ylabel(r'Cumulative Frequency') 
-            
-                    
-        
-        
+    ax.set_ylabel(r'Cumulative Frequency')

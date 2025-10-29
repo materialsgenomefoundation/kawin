@@ -89,7 +89,7 @@ def test_DT():
     calcDT = pbm.getDTEuler(5, growth, dissIndex, maxBinRatio=ratio)
     assert_allclose(trueDT, calcDT, rtol=1e-6)
 
-def test_PBMrecording():
+def test_PBMrecording(tmpdir):
     pbm = PopulationBalanceModel(cMin=1e-10, cMax=1e-8, bins=100, minBins=50, maxBins=150, record=True)
 
     pbm.PSD[10:20] = 2
@@ -131,11 +131,10 @@ def test_PBMrecording():
 
     pbm.record(7)
 
-    pbm.saveRecordedPSD('kawin/tests/pbm.npz')
+    pbm.saveRecordedPSD(tmpdir / 'pbm.npz')
 
     new_pbm = PopulationBalanceModel(cMin=1e-10, cMax=1e-8, bins=100, minBins=50, maxBins=150, record=True)
-    new_pbm.loadRecordedPSD('kawin/tests/pbm.npz')
-    os.remove('kawin/tests/pbm.npz')
+    new_pbm.loadRecordedPSD(tmpdir / 'pbm.npz')
 
     # Interpolate between time when we first add bins, so last bin should be ~1.25 of original
     pbm.setPSDtoRecordedTime(2.5)

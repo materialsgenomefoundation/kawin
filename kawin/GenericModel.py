@@ -1,4 +1,5 @@
 import copy
+from pathlib import Path
 from typing import List
 import numpy as np
 from kawin.solver import DESolver, rk4Iterator
@@ -6,7 +7,7 @@ from kawin.solver import DESolver, rk4Iterator
 class GenericModel:
     '''
     Abstract model that new models can inherit from to interface with the Solver
-    
+
     The model is intended to be defined by an ordinary differential equation or a set of them
     The differential equations are defined by dX/dt = f(t,X)
         Where t is time and X is the set of time-dependent variables at time t
@@ -15,7 +16,7 @@ class GenericModel:
         getCurrentX(self)              - should return time and all time-dependent variables
         getdXdt(self, t, x)            - should return all time-dependent derivatives
         getDt(self, dXdt)              - should return a suitable time step
-        
+
 
     Functions that can be implemented but not necessary:
         _getVarDict(self) - returns a dictionary of {variable name : member name}
@@ -41,12 +42,12 @@ class GenericModel:
         TODO: eventually support saving model parameters. This is a bit tough with all the nested parameters right now
         '''
         return {}
-    
+
     @classmethod
     def fromDict(self, data):
         pass
-    
-    def save(self, filename: str):
+
+    def save(self, filename: str | Path):
         '''
         Saves model data into file
 
@@ -61,12 +62,14 @@ class GenericModel:
         compressed : bool (defaults to True)
             Whether to save in compressed format
         '''
+        filename = str(filename)
         data = self.toDict()
         if not filename.endswith('.npz'):
             filename += '.npz'
         np.savez_compressed(filename, **data)
 
-    def load(self, filename: str):
+    def load(self, filename: str | Path):
+        filename = str(filename)
         if not filename.endswith('.npz'):
             filename += '.npz'
         data = np.load(filename)
@@ -146,7 +149,7 @@ class GenericModel:
         dt : float
         '''
         raise NotImplementedError()
-    
+
     def getdXdt(self, t, x):
         '''
         Gets dXdt from current time and X
@@ -157,7 +160,7 @@ class GenericModel:
             Current time
         x : unformated list of floats
             Current values of time-dependent variables
-        
+
         Returns
         -------
         dXdt : unformated list of floats
@@ -176,13 +179,13 @@ class GenericModel:
         No return value, dXdt is to be modified directly
         '''
         pass
-    
+
     def preProcess(self):
         '''
         Performs any pre-processing before an iteration. This may include some calculations or storing temporary variables
         '''
         pass
-    
+
     def postProcess(self, time, x):
         '''
         Post processing done after an iteration
@@ -252,7 +255,7 @@ class GenericModel:
         X_flat : 1D numpy array
         '''
         return np.hstack(X)
-    
+
     def unflattenX(self, X_flat, X_ref):
         '''
         Converts flattened X array to original nested X
@@ -313,7 +316,7 @@ class GenericModel:
         solver = DESolver(iterator, minDtFrac = minDtFrac, maxDtFrac = maxDtFrac)
         solver.setFunctions(preProcess=self.preProcess, postProcess=self.postProcess, printHeader=self.printHeader, printStatus=self.printStatus)
         solver.setdXdtFunctions(self.getdXdt, self.correctdXdt, self.getDt, self.flattenX, self.unflattenX)
-        
+
         X0 = self.getCurrentX()
         self.setTimeInfo(self.currentTime, simTime)
         solver.solve(self.initialTime, X0, self.finalTime, verbose, vIt)
@@ -337,7 +340,7 @@ class Coupler(GenericModel):
                         ===
                         Modify dXdt here
                         ===
-            
+
             b)  Overriding getdXdt as
                     def getdXdt(self, t, x):
                         dXdt = super().getdXdt(t, x)
@@ -420,7 +423,7 @@ class Coupler(GenericModel):
             x = m.getCurrentX()
             xs.append(x)
         return xs
-    
+
     def getDt(self, dXdt):
         '''
         Get the minimum dt out of all models
@@ -429,7 +432,7 @@ class Coupler(GenericModel):
         for m, dxdtsub in zip(self.models, dXdt):
             dts.append(m.getDt(dxdtsub))
         return np.amin(dts)
-    
+
     def getdXdt(self, t, x):
         '''
         Get dXdt for each model
@@ -439,7 +442,7 @@ class Coupler(GenericModel):
             dxdts.append(m.getdXdt(t, xsub))
         self.coupledXdt(t, x, dxdts)
         return dxdts
-    
+
     def correctdXdt(self, dt, x, dXdt):
         '''
         Corrects dXdt for each model
@@ -472,35 +475,31 @@ class Coupler(GenericModel):
             xNew.append(xnew_sub)
         self.couplePostProcess()
         return xNew, stop
-    
+
     def coupledXdt(self, t, x, dXdt):
         '''
         Empty function where inherited classes can do extra operations on
         the time derivatives each models or between models
         '''
         return
-    
+
     def couplePreProcess(self):
         '''
         Empty function where inherited classes can do extra operations on
         each models or between models for an iteration
         '''
         return
-    
+
     def couplePostProcess(self):
         '''
         Empty function where inherited classes can do extra operations on
         each models or between models after an iteration
         '''
         return
-    
+
     def postSolve(self):
         '''
         Post solve function for each model
         '''
         for m in self.models:
             m.postSolve()
-
-
-
-        

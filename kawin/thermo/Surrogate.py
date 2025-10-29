@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import json
+from pathlib import Path
 
 import numpy as np
 import pickle
@@ -104,7 +105,7 @@ class RBFKernel(SurrogateKernel):
 
     def predict(self, x):
         return self.rbfModel((x - self.xoffset[np.newaxis,:]) / self.scale[np.newaxis,:])
-    
+
 class GeneralSurrogate:
     '''
     By default, the untrained surrogate will use the thermodynamic functions
@@ -112,7 +113,7 @@ class GeneralSurrogate:
     As we train a model, it will be added to the model and replace the underlying thermodynamics
     Then any untrained model will still go back to the thermodynamic functions
 
-    The intent of this is that the surrogate models API will be similar to the 
+    The intent of this is that the surrogate models API will be similar to the
     underlying thermodynamic modules
         Driving force
         Tracer diffusivity
@@ -130,8 +131,8 @@ class GeneralSurrogate:
         arguments for kernel
         Defaults to {'kernel': 'cubic', 'normalize': True}
     '''
-    def __init__(self, thermodynamics: GeneralThermodynamics, 
-                 kernel: SurrogateKernel = RBFKernel, 
+    def __init__(self, thermodynamics: GeneralThermodynamics,
+                 kernel: SurrogateKernel = RBFKernel,
                  kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
         self.therm = thermodynamics
         self.numElements = self.therm.numElements
@@ -173,7 +174,7 @@ class GeneralSurrogate:
             if len(x) != len(T):
                 raise ValueError("If broadcast is False, x and T must have the same length")
         return x, T, singleX, singleT
-    
+
     def _createInput(self, xs, singleXs):
         '''
         Create input data for the surrogate model by validating number of unique points in each dimension
@@ -186,7 +187,7 @@ class GeneralSurrogate:
             raise ValueError('Must have more than 1 datapoint for training')
         else:
             return np.concatenate(xIn, axis=1)
-        
+
     def trainDrivingForce(self, x, T, precPhase=None, logX = False, broadcast=True):
         '''
         Creates surrogate model for driving force
@@ -219,7 +220,7 @@ class GeneralSurrogate:
             'x': x, 'T': T, 'dg': dg, 'xp': xp, 'logX': logX, 'singleX': singleX, 'singleT': singleT
         }
         self._fitDrivingForce(precPhase)
-    
+
     def _fitDrivingForce(self, phase):
         '''
         Fits driving force data for phase
@@ -235,7 +236,7 @@ class GeneralSurrogate:
             xFit = np.log(xFit)
         TFit = np.atleast_2d(T).T
         xTrain = self._createInput([xFit, TFit], [data['singleX'], data['singleT']])
-        
+
         # Format driving force and precipitate composition arrays
         dg, xp = data['dg'], data['xp']
         dgFit = np.atleast_2d(dg).T
@@ -252,7 +253,7 @@ class GeneralSurrogate:
         Computes driving force
 
         If surrogate model for driving force has not been trained, this will use the underlying thermodynamics function
-        
+
         Parameters
         ----------
         x : float, np.array
@@ -277,7 +278,7 @@ class GeneralSurrogate:
             xIn = self._createInput([x, T], [trainingData['singleX'], trainingData['singleT']])
             output = self.drivingForceModels[precPhase].predict(xIn)
             return np.squeeze(output[:,0]), np.squeeze(output[:,1:])
-        
+
         # If precipitate phase has not been trained, used underlying thermodynamics function
         else:
             return self.therm.getDrivingForce(x, T, precPhase=precPhase, *args, **kwargs)
@@ -364,7 +365,7 @@ class GeneralSurrogate:
         Computes interdiffusivity
 
         If surrogate model for driving force has not been trained, this will use the underlying thermodynamics function
-        
+
         Parameters
         ----------
         x : float, np.array
@@ -392,7 +393,7 @@ class GeneralSurrogate:
         Computes tracer diffusivity
 
         If surrogate model for driving force has not been trained, this will use the underlying thermodynamics function
-        
+
         Parameters
         ----------
         x : float, np.array
@@ -416,7 +417,7 @@ class GeneralSurrogate:
         Creates dictionary of surrogate training data
         '''
         return {'drivingForce': self.drivingForceData, 'diffusivity': self.diffusivityData}
-    
+
     def _processSurrogateData(self, data):
         '''
         Stores surrogate training data from dict and trains models
@@ -428,20 +429,22 @@ class GeneralSurrogate:
         self.diffusivityData = data['diffusivity']
         for ph in self.diffusivityData:
             self._fitDiffusivity(ph)
-        
-    def toJson(self, filename):
+
+    def toJson(self, filename: str | Path):
         '''
         Saves surrogate data to json
         '''
+        filename = str(filename)
         if not filename.endswith('.json'):
             filename += '.json'
         with open(filename, 'w') as f:
             json.dump(self._collectSurrogateData(), f, cls=NumpyEncoder)
 
-    def fromJson(self, filename):
+    def fromJson(self, filename: str | Path):
         '''
         Loads surrogate data from json
         '''
+        filename = str(filename)
         if not filename.endswith('.json'):
             filename += '.json'
         with open(filename, 'r') as f:
@@ -452,8 +455,8 @@ class BinarySurrogate(GeneralSurrogate):
     '''
     Same as GeneralSurrogate but implements models for interfacial composition
     '''
-    def __init__(self, thermodynamics: BinaryThermodynamics, 
-                 kernel: SurrogateKernel = RBFKernel, 
+    def __init__(self, thermodynamics: BinaryThermodynamics,
+                 kernel: SurrogateKernel = RBFKernel,
                  kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
         super().__init__(thermodynamics, kernel, kernelKwargs)
         self.interfacialCompositionData = {}
@@ -472,7 +475,7 @@ class BinarySurrogate(GeneralSurrogate):
             T = np.tile(T, (gsize,1))
             gExtra = np.repeat(gExtra, Tsize, axis=0)
         return T, gExtra, singleT, singleG
-    
+
     def trainInterfacialComposition(self, T, gExtra, precPhase=None, logY = False, broadcast=True):
         '''
         Creates surrogate model for interfacial composition
@@ -556,11 +559,11 @@ class BinarySurrogate(GeneralSurrogate):
             if trainingData['logY']:
                 output[:,0] = np.exp(output[:,0])
             return np.squeeze(output[:,0]), np.squeeze(output[:,1])
-        
+
         # If precipitate phase has not been trained, used underlying thermodynamics function
         else:
             return self.therm.getInterfacialComposition(T, gExtra, precPhase=precPhase)
-        
+
     def _collectSurrogateData(self):
         '''
         Adds interfacial composition data to GeneralSurrogate surrogate data
@@ -568,7 +571,7 @@ class BinarySurrogate(GeneralSurrogate):
         data = super()._collectSurrogateData()
         data['interfacialComposition'] = self.interfacialCompositionData
         return data
-    
+
     def _processSurrogateData(self, data):
         '''
         Stores interfacial composition data and fits models along with models from GeneralSurrogate
@@ -577,14 +580,14 @@ class BinarySurrogate(GeneralSurrogate):
         self.interfacialCompositionData = data['interfacialComposition']
         for ph in self.interfacialCompositionData:
             self._fitInterfacialComposition(ph)
-        
+
 class MulticomponentSurrogate(GeneralSurrogate):
     '''
     Same as GeneralSurrogate but implements models for curvature factors
         Curvature factor can then be used for growth rate, interfacial composition and impingement rate
     '''
-    def __init__(self, thermodynamics: MulticomponentThermodynamics, 
-                 kernel: SurrogateKernel = RBFKernel, 
+    def __init__(self, thermodynamics: MulticomponentThermodynamics,
+                 kernel: SurrogateKernel = RBFKernel,
                  kernelKwargs = {'kernel': 'cubic', 'normalize': True}):
         super().__init__(thermodynamics, kernel, kernelKwargs)
         self.curvatureData = {}
@@ -668,7 +671,7 @@ class MulticomponentSurrogate(GeneralSurrogate):
     def _surrogateOutputToCurvature(self, output, numEle, logX):
         '''
         Converts surrogate output to CurvatureOutput
-        
+
         '''
         # dc has shape (numEle,)
         idx = 0
@@ -729,11 +732,11 @@ class MulticomponentSurrogate(GeneralSurrogate):
             xIn = self._createInput([x, T], [trainingData['singleX'], trainingData['singleT']])
             output = self.curvatureModels[precPhase].predict(xIn)
             return self._surrogateOutputToCurvature(output, x.shape[1], trainingData['logX'])
-        
+
         # If precipitate phase has not been trained, used underlying thermodynamics function
         else:
             return self.therm.curvatureFactor(x, T, precPhase=precPhase, *args, **kwargs)
-        
+
     def getGrowthAndInterfacialComposition(self, x, T, dG, R, gExtra, precPhase = None, *args, **kwargs):
         '''
         Computes growth rate and interfacial composition
@@ -759,7 +762,7 @@ class MulticomponentSurrogate(GeneralSurrogate):
             return _growthRateOutputFromCurvature(x, dG, R, gExtra, curvature)
         else:
             return self.therm.getGrowthAndInterfacialComposition(x, T, dG, R, gExtra, precPhase, *args, **kwargs)
-    
+
     def impingementFactor(self, x, T, precPhase = None, *args, **kwargs):
         '''
         Computes impingement factor
@@ -778,7 +781,7 @@ class MulticomponentSurrogate(GeneralSurrogate):
             return curvature.beta
         else:
             return self.therm.impingementFactor(x, T, precPhase, *args, **kwargs)
-        
+
     def _collectSurrogateData(self):
         '''
         Adds interfacial composition data to GeneralSurrogate surrogate data
@@ -786,7 +789,7 @@ class MulticomponentSurrogate(GeneralSurrogate):
         data = super()._collectSurrogateData()
         data['curvature'] = self.curvatureData
         return data
-    
+
     def _processSurrogateData(self, data):
         '''
         Stores interfacial composition data and fits models along with models from GeneralSurrogate

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # App settings
-    APP_NAME: str = "Al-Mg-Si Precipitation Simulation API"
+    APP_NAME: str = "Al-Mg-Si-Cu Precipitation Simulation API"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
 
@@ -24,6 +24,11 @@ class Settings(BaseSettings):
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "data",
         "AlMgSi.tdb",
+    )
+    ALCU_TDB_FILE: str = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data",
+        "AlCu.tdb",
     )
 
     class Config:

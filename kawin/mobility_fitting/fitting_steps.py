@@ -39,7 +39,7 @@ from espei.parameter_selection.fitting_steps import AbstractLinearPropertyStep, 
 from espei.utils import build_sitefractions
 
 Dataset = Dict[str, Any]
-    
+
 class StepD0(FittingStep):
     supported_reference_states: List[str] = [""]
     features: List[symengine.Expr] = [v.T]
@@ -52,66 +52,25 @@ class StepD0(FittingStep):
     def transform_feature(cls, expr: symengine.Expr, model: Optional[Model] = None) -> symengine.Expr:
         # Fitting to R ln(D0) = dMQ/dT
         return symengine.diff(expr, v.T)
-    
+
     @classmethod
-    def shift_reference_state(cls, desired_data: List[Dataset], fixed_model: Model, mole_atoms_per_mole_formula_unit: symengine.Expr) -> ArrayLike:  # np.object_
+    def shift_reference_state(cls, desired_data: List[Dataset], fixed_model: Model) -> ArrayLike:  # np.object_
         """
-        Shift _MIX or _FORM data to a common reference state in per mole-atom units.
+        Return the dataset values as flat arrays, one per dataset.
 
-        Parameters
-        ----------
-        desired_data : List[Dict[str, Any]]
-            ESPEI single phase dataset
-        fixed_model : pycalphad.Model
-            Model with all lower order (in composition) terms already fit. Pure
-            element reference state (GHSER functions) should be set to zero.
-        mole_atoms_per_mole_formula_unit : float
-            Number of moles of atoms in every mole atom unit.
-
-        Returns
-        -------
-        np.ndarray
-            Data for this feature in [qty]/mole-formula in a common reference state.
-
-        Raises
-        ------
-        ValueError
-
-        Notes
-        -----
-        pycalphad Model parameters are stored as per mole-formula quantites, but
-        the calculated properties and our data are all in [qty]/mole-atoms. We
-        multiply by mole-atoms/mole-formula to convert the units to
-        [qty]/mole-formula.
-
+        Mobility parameters (MQ) and tracer diffusivity data are both per mole
+        of the diffusing species, so no reference state shifting or
+        per-mole-formula conversion is needed. Only absolute (non-_MIX,
+        non-_FORM) data are supported.
         """
         total_response = []
         for dataset in desired_data:
-            values = np.asarray(dataset['values'], dtype=np.object_)*mole_atoms_per_mole_formula_unit
-            unique_excluded_contributions = set(dataset.get('excluded_model_contributions', []))
-            for config_idx in range(len(dataset['solver']['sublattice_configurations'])):
-                occupancy = dataset['solver'].get('sublattice_occupancies', None)
-                if dataset['output'].endswith('_FORM'):
-                    # we don't shift the reference state because we assume our
-                    # models are already in the formation reference state (by us
-                    # setting GHSERXX functions to zero explictly)
-                    pass
-                elif dataset['output'].endswith('_MIX'):
-                    if occupancy is None:
-                        raise ValueError('Cannot have a _MIX property without sublattice occupancies.')
-                    else:
-                        values[..., config_idx] += cls.transform_feature(fixed_model.models['ref'])*mole_atoms_per_mole_formula_unit
-                else:
-                    #raise ValueError(f'Unknown property to shift: {dataset["output"]}')
-                    pass
-                for excluded_contrib in unique_excluded_contributions:
-                    values[..., config_idx] += cls.transform_feature(fixed_model.models[excluded_contrib])*mole_atoms_per_mole_formula_unit
+            values = np.asarray(dataset['values'], dtype=np.object_)
             total_response.append(values.flatten())
         return total_response
 
     @classmethod
     def get_response_vector(cls, fixed_model: Model, fixed_portions: List[symengine.Basic], data: List[Dataset], sample_condition_dicts: list[dict[str, Any]]) -> ArrayLike:  # np.float64
-        mole_atoms_per_mole_formula_unit = fixed_model._site_ratio_normalization
         # Define site fraction symbols that will be reused
         phase_name = fixed_model.phase_name
 
@@ -123,12 +82,11 @@ class StepD0(FittingStep):
                 site_fractions.append(sf)
         site_fractions = list(itertools.chain(*site_fractions))
 
-        #data_qtys = np.concatenate(cls.shift_reference_state(data, fixed_model, mole_atoms_per_mole_formula_unit), axis=-1)
-        data_qtys = np.concatenate(cls.shift_reference_state(data, fixed_model, 1), axis=-1)
+        data_qtys = np.concatenate(cls.shift_reference_state(data, fixed_model), axis=-1)
         data_qtys = cls.transform_data(data_qtys, fixed_model)
-        # Remove existing partial model contributions from the data, convert to per mole-formula units
-        data_qtys = data_qtys - cls.transform_feature(getattr(fixed_model, cls.parameter_name))*mole_atoms_per_mole_formula_unit
-        # Subtract out high-order (in T) parameters we've already fit, already in per mole-formula units
+        # Remove existing partial model contributions from the data
+        data_qtys = data_qtys - cls.transform_feature(getattr(fixed_model, cls.parameter_name))
+        # Subtract out high-order (in T) parameters we've already fit
         data_qtys = data_qtys - cls.transform_feature(sum(fixed_portions))
         # If any site fractions show up in our rhs that aren't in these
         # datasets' site fractions, set them to zero. This can happen if we're
@@ -142,7 +100,7 @@ class StepD0(FittingStep):
         data_qtys = [fixed_model.symbol_replace(symengine.S(i).xreplace(sf), fixed_model._symbols).evalf() for i, sf in zip(data_qtys, site_fractions)]
         data_qtys = np.asarray(data_qtys, dtype=np.float64)
         return data_qtys
-    
+
 class StepQ(StepD0):
     features: List[symengine.Expr] = [symengine.S.One]
 
@@ -154,10 +112,12 @@ class StepQ(StepD0):
     def transform_feature(cls, expr: symengine.Expr, model: Optional[Model] = None) -> symengine.Expr:
         # Fitting to -Q = MQ - T dMQ/dT
         return expr - v.T*symengine.diff(expr, v.T)
-    
+
 class StepTracerDiffusivity(AbstractLinearPropertyStep):
     features: List[symengine.Expr] = [symengine.S.One, v.T]
-    
+    # MQ parameters are per mole of the diffusing species, not per mole-formula
+    normalize_parameter_per_mole_formula: bool = False
+
     @staticmethod
     def transform_data(d: ArrayLike, model: Optional[Model] = None) -> ArrayLike:  # np.object_
         # D* = exp(MQ/RT) -> RT D* = MQ

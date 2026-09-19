@@ -36,8 +36,9 @@ class ExtraGibbsModel(Model):
         GE represents any extra contribution to the Gibbs free energy
         such as the Gibbs-Thomson contribution
     '''
-    energy = GM = property(lambda self: self.ast + v.GE)
-    formulaenergy = G = property(lambda self: (self.ast + v.GE) * self._site_ratio_normalization)
+    # Model.ast is per mole-formula; GE is an extra energy per mole-atoms
+    energy = GM = property(lambda self: self.ast / self._site_ratio_normalization + v.GE)
+    formulaenergy = G = property(lambda self: self.ast + v.GE * self._site_ratio_normalization)
     orderingContribution = OCM = property(lambda self: self.models['ord'])
 
 class GeneralThermodynamics:
